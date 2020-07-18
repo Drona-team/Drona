@@ -1,2 +1,2 @@
 # Drona
-The official Repository of Drona.
+The official repository of Drona.
