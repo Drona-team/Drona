@@ -1,0 +1,271 @@
+package androidx.room.paging;
+
+import android.database.Cursor;
+import androidx.annotation.NonNull;
+import androidx.annotation.RestrictTo;
+import androidx.paging.PositionalDataSource;
+import androidx.paging.PositionalDataSource.LoadRangeCallback;
+import androidx.paging.PositionalDataSource.LoadRangeParams;
+import androidx.room.InvalidationTracker;
+import androidx.room.InvalidationTracker.Observer;
+import androidx.room.RoomDatabase;
+import androidx.room.RoomSQLiteQuery;
+import androidx.sqlite.db.SupportSQLiteQuery;
+import java.util.List;
+import java.util.Set;
+
+@RestrictTo({androidx.annotation.RestrictTo.Scope.LIBRARY_GROUP_PREFIX})
+public abstract class LimitOffsetDataSource<T>
+  extends PositionalDataSource<T>
+{
+  private final String mCountQuery;
+  private final RoomDatabase mDb;
+  private final boolean mInTransaction;
+  private final String mLimitOffsetQuery;
+  private final InvalidationTracker.Observer mObserver;
+  private final RoomSQLiteQuery mSourceQuery;
+  
+  protected LimitOffsetDataSource(RoomDatabase paramRoomDatabase, RoomSQLiteQuery paramRoomSQLiteQuery, boolean paramBoolean, String... paramVarArgs)
+  {
+    mDb = paramRoomDatabase;
+    mSourceQuery = paramRoomSQLiteQuery;
+    mInTransaction = paramBoolean;
+    paramRoomSQLiteQuery = new StringBuilder();
+    paramRoomSQLiteQuery.append("SELECT COUNT(*) FROM ( ");
+    paramRoomSQLiteQuery.append(mSourceQuery.getSql());
+    paramRoomSQLiteQuery.append(" )");
+    mCountQuery = paramRoomSQLiteQuery.toString();
+    paramRoomSQLiteQuery = new StringBuilder();
+    paramRoomSQLiteQuery.append("SELECT * FROM ( ");
+    paramRoomSQLiteQuery.append(mSourceQuery.getSql());
+    paramRoomSQLiteQuery.append(" ) LIMIT ? OFFSET ?");
+    mLimitOffsetQuery = paramRoomSQLiteQuery.toString();
+    mObserver = new InvalidationTracker.Observer(paramVarArgs)
+    {
+      public void onInvalidated(@NonNull Set<String> paramAnonymousSet)
+      {
+        invalidate();
+      }
+    };
+    paramRoomDatabase.getInvalidationTracker().addWeakObserver(mObserver);
+  }
+  
+  protected LimitOffsetDataSource(RoomDatabase paramRoomDatabase, SupportSQLiteQuery paramSupportSQLiteQuery, boolean paramBoolean, String... paramVarArgs)
+  {
+    this(paramRoomDatabase, RoomSQLiteQuery.copyFrom(paramSupportSQLiteQuery), paramBoolean, paramVarArgs);
+  }
+  
+  private RoomSQLiteQuery getSQLiteQuery(int paramInt1, int paramInt2)
+  {
+    RoomSQLiteQuery localRoomSQLiteQuery = RoomSQLiteQuery.acquire(mLimitOffsetQuery, mSourceQuery.getArgCount() + 2);
+    localRoomSQLiteQuery.copyArgumentsFrom(mSourceQuery);
+    localRoomSQLiteQuery.bindLong(localRoomSQLiteQuery.getArgCount() - 1, paramInt2);
+    localRoomSQLiteQuery.bindLong(localRoomSQLiteQuery.getArgCount(), paramInt1);
+    return localRoomSQLiteQuery;
+  }
+  
+  protected abstract List<T> convertRows(Cursor paramCursor);
+  
+  public int countItems()
+  {
+    RoomSQLiteQuery localRoomSQLiteQuery = RoomSQLiteQuery.acquire(mCountQuery, mSourceQuery.getArgCount());
+    localRoomSQLiteQuery.copyArgumentsFrom(mSourceQuery);
+    Cursor localCursor = mDb.query(localRoomSQLiteQuery);
+    try
+    {
+      if (localCursor.moveToFirst())
+      {
+        int i = localCursor.getInt(0);
+        return i;
+      }
+      return 0;
+    }
+    finally
+    {
+      localCursor.close();
+      localRoomSQLiteQuery.release();
+    }
+  }
+  
+  public boolean isInvalid()
+  {
+    mDb.getInvalidationTracker().refreshVersionsSync();
+    return super.isInvalid();
+  }
+  
+  /* Error */
+  public void loadInitial(@NonNull androidx.paging.PositionalDataSource.LoadInitialParams paramLoadInitialParams, @NonNull androidx.paging.PositionalDataSource.LoadInitialCallback<T> paramLoadInitialCallback)
+  {
+    // Byte code:
+    //   0: invokestatic 142	java/util/Collections:emptyList	()Ljava/util/List;
+    //   3: astore 5
+    //   5: aload_0
+    //   6: getfield 29	androidx/room/paging/LimitOffsetDataSource:mDb	Landroidx/room/RoomDatabase;
+    //   9: invokevirtual 145	androidx/room/RoomDatabase:beginTransaction	()V
+    //   12: aconst_null
+    //   13: astore 6
+    //   15: aconst_null
+    //   16: astore 7
+    //   18: aload_0
+    //   19: invokevirtual 147	androidx/room/paging/LimitOffsetDataSource:countItems	()I
+    //   22: istore 4
+    //   24: iload 4
+    //   26: ifeq +91 -> 117
+    //   29: aload_1
+    //   30: iload 4
+    //   32: invokestatic 151	androidx/room/paging/LimitOffsetDataSource:computeInitialLoadPosition	(Landroidx/paging/PositionalDataSource$LoadInitialParams;I)I
+    //   35: istore_3
+    //   36: aload_0
+    //   37: iload_3
+    //   38: aload_1
+    //   39: iload_3
+    //   40: iload 4
+    //   42: invokestatic 155	androidx/room/paging/LimitOffsetDataSource:computeInitialLoadSize	(Landroidx/paging/PositionalDataSource$LoadInitialParams;II)I
+    //   45: invokespecial 157	androidx/room/paging/LimitOffsetDataSource:getSQLiteQuery	(II)Landroidx/room/RoomSQLiteQuery;
+    //   48: astore_1
+    //   49: aload_0
+    //   50: getfield 29	androidx/room/paging/LimitOffsetDataSource:mDb	Landroidx/room/RoomDatabase;
+    //   53: aload_1
+    //   54: invokevirtual 111	androidx/room/RoomDatabase:query	(Landroidx/sqlite/db/SupportSQLiteQuery;)Landroid/database/Cursor;
+    //   57: astore 5
+    //   59: aload_0
+    //   60: aload 5
+    //   62: invokevirtual 159	androidx/room/paging/LimitOffsetDataSource:convertRows	(Landroid/database/Cursor;)Ljava/util/List;
+    //   65: astore 6
+    //   67: aload_0
+    //   68: getfield 29	androidx/room/paging/LimitOffsetDataSource:mDb	Landroidx/room/RoomDatabase;
+    //   71: invokevirtual 162	androidx/room/RoomDatabase:setTransactionSuccessful	()V
+    //   74: aload 5
+    //   76: astore 7
+    //   78: aload 6
+    //   80: astore 5
+    //   82: aload 7
+    //   84: astore 6
+    //   86: goto +39 -> 125
+    //   89: astore 6
+    //   91: aload 5
+    //   93: astore_2
+    //   94: aload_1
+    //   95: astore 5
+    //   97: aload 6
+    //   99: astore_1
+    //   100: goto +69 -> 169
+    //   103: astore 7
+    //   105: aload 6
+    //   107: astore_2
+    //   108: aload_1
+    //   109: astore 5
+    //   111: aload 7
+    //   113: astore_1
+    //   114: goto +55 -> 169
+    //   117: aconst_null
+    //   118: astore_1
+    //   119: iconst_0
+    //   120: istore_3
+    //   121: aload 7
+    //   123: astore 6
+    //   125: aload 6
+    //   127: ifnull +10 -> 137
+    //   130: aload 6
+    //   132: invokeinterface 124 1 0
+    //   137: aload_0
+    //   138: getfield 29	androidx/room/paging/LimitOffsetDataSource:mDb	Landroidx/room/RoomDatabase;
+    //   141: invokevirtual 165	androidx/room/RoomDatabase:endTransaction	()V
+    //   144: aload_1
+    //   145: ifnull +7 -> 152
+    //   148: aload_1
+    //   149: invokevirtual 127	androidx/room/RoomSQLiteQuery:release	()V
+    //   152: aload_2
+    //   153: aload 5
+    //   155: iload_3
+    //   156: iload 4
+    //   158: invokevirtual 171	androidx/paging/PositionalDataSource$LoadInitialCallback:onResult	(Ljava/util/List;II)V
+    //   161: return
+    //   162: astore_1
+    //   163: aconst_null
+    //   164: astore 5
+    //   166: aload 6
+    //   168: astore_2
+    //   169: aload_2
+    //   170: ifnull +9 -> 179
+    //   173: aload_2
+    //   174: invokeinterface 124 1 0
+    //   179: aload_0
+    //   180: getfield 29	androidx/room/paging/LimitOffsetDataSource:mDb	Landroidx/room/RoomDatabase;
+    //   183: invokevirtual 165	androidx/room/RoomDatabase:endTransaction	()V
+    //   186: aload 5
+    //   188: ifnull +8 -> 196
+    //   191: aload 5
+    //   193: invokevirtual 127	androidx/room/RoomSQLiteQuery:release	()V
+    //   196: aload_1
+    //   197: athrow
+    // Local variable table:
+    //   start	length	slot	name	signature
+    //   0	198	0	this	LimitOffsetDataSource
+    //   0	198	1	paramLoadInitialParams	androidx.paging.PositionalDataSource.LoadInitialParams
+    //   0	198	2	paramLoadInitialCallback	androidx.paging.PositionalDataSource.LoadInitialCallback<T>
+    //   35	121	3	i	int
+    //   22	135	4	j	int
+    //   3	189	5	localObject1	Object
+    //   13	72	6	localObject2	Object
+    //   89	17	6	localObject3	Object
+    //   123	44	6	localObject4	Object
+    //   16	67	7	localObject5	Object
+    //   103	19	7	localObject6	Object
+    // Exception table:
+    //   from	to	target	type
+    //   59	74	89	finally
+    //   49	59	103	finally
+    //   18	24	162	finally
+    //   29	49	162	finally
+  }
+  
+  @NonNull
+  public List<T> loadRange(int paramInt1, int paramInt2)
+  {
+    localRoomSQLiteQuery = getSQLiteQuery(paramInt1, paramInt2);
+    if (mInTransaction) {
+      mDb.beginTransaction();
+    }
+    try
+    {
+      Cursor localCursor = mDb.query(localRoomSQLiteQuery);
+      try
+      {
+        List localList1 = convertRows(localCursor);
+        mDb.setTransactionSuccessful();
+        if (localCursor != null) {
+          localCursor.close();
+        }
+        mDb.endTransaction();
+        localRoomSQLiteQuery.release();
+        return localList1;
+      }
+      finally {}
+      try
+      {
+        List localList2 = convertRows(localCursor);
+        return localList2;
+      }
+      finally
+      {
+        localCursor.close();
+        localRoomSQLiteQuery.release();
+      }
+    }
+    finally
+    {
+      localCursor = null;
+      if (localCursor != null) {
+        localCursor.close();
+      }
+      mDb.endTransaction();
+      localRoomSQLiteQuery.release();
+    }
+  }
+  
+  public void loadRange(@NonNull PositionalDataSource.LoadRangeParams paramLoadRangeParams, @NonNull PositionalDataSource.LoadRangeCallback<T> paramLoadRangeCallback)
+  {
+    paramLoadRangeCallback.onResult(loadRange(startPosition, loadSize));
+  }
+}

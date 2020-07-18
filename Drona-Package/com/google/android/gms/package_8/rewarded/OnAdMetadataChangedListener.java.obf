@@ -1,0 +1,6 @@
+package com.google.android.gms.ads.rewarded;
+
+public abstract interface OnAdMetadataChangedListener
+{
+  public abstract void onAdMetadataChanged();
+}

@@ -1,0 +1,88 @@
+package com.google.android.exoplayer2.video;
+
+import com.google.android.exoplayer2.ParserException;
+import com.google.android.exoplayer2.util.CodecSpecificDataUtil;
+import com.google.android.exoplayer2.util.NalUnitUtil;
+import com.google.android.exoplayer2.util.NalUnitUtil.SpsData;
+import com.google.android.exoplayer2.util.ParsableByteArray;
+import java.util.ArrayList;
+import java.util.List;
+
+public final class AvcConfig
+{
+  public final int height;
+  public final List<byte[]> initializationData;
+  public final int nalUnitLengthFieldLength;
+  public final float pixelWidthAspectRatio;
+  public final int width;
+  
+  private AvcConfig(List<byte[]> paramList, int paramInt1, int paramInt2, int paramInt3, float paramFloat)
+  {
+    initializationData = paramList;
+    nalUnitLengthFieldLength = paramInt1;
+    width = paramInt2;
+    height = paramInt3;
+    pixelWidthAspectRatio = paramFloat;
+  }
+  
+  private static byte[] buildNalUnitForChild(ParsableByteArray paramParsableByteArray)
+  {
+    int i = paramParsableByteArray.readUnsignedShort();
+    int j = paramParsableByteArray.getPosition();
+    paramParsableByteArray.skipBytes(i);
+    return CodecSpecificDataUtil.buildNalUnit(data, j, i);
+  }
+  
+  public static AvcConfig parse(ParsableByteArray paramParsableByteArray)
+    throws ParserException
+  {
+    for (;;)
+    {
+      try
+      {
+        paramParsableByteArray.skipBytes(4);
+        int k = (paramParsableByteArray.readUnsignedByte() & 0x3) + 1;
+        if (k != 3)
+        {
+          ArrayList localArrayList = new ArrayList();
+          j = paramParsableByteArray.readUnsignedByte() & 0x1F;
+          i = 0;
+          if (i < j)
+          {
+            localArrayList.add(buildNalUnitForChild(paramParsableByteArray));
+            i += 1;
+            continue;
+          }
+          int m = paramParsableByteArray.readUnsignedByte();
+          i = 0;
+          if (i < m)
+          {
+            localArrayList.add(buildNalUnitForChild(paramParsableByteArray));
+            i += 1;
+            continue;
+          }
+          if (j > 0)
+          {
+            paramParsableByteArray = (byte[])localArrayList.get(0);
+            paramParsableByteArray = NalUnitUtil.parseSpsNalUnit((byte[])localArrayList.get(0), k, paramParsableByteArray.length);
+            i = width;
+            j = height;
+            f = pixelWidthAspectRatio;
+            return new AvcConfig(localArrayList, k, i, j, f);
+          }
+        }
+        else
+        {
+          throw new IllegalStateException();
+        }
+      }
+      catch (ArrayIndexOutOfBoundsException paramParsableByteArray)
+      {
+        throw new ParserException("Error parsing AVC config", paramParsableByteArray);
+      }
+      int i = -1;
+      int j = -1;
+      float f = 1.0F;
+    }
+  }
+}

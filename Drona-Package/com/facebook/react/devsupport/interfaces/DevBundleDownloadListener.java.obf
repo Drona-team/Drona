@@ -1,0 +1,13 @@
+package com.facebook.react.devsupport.interfaces;
+
+import androidx.annotation.Nullable;
+import com.facebook.react.bridge.NativeDeltaClient;
+
+public abstract interface DevBundleDownloadListener
+{
+  public abstract void onFailure(Exception paramException);
+  
+  public abstract void onProgress(@Nullable String paramString, @Nullable Integer paramInteger1, @Nullable Integer paramInteger2);
+  
+  public abstract void onSuccess(@Nullable NativeDeltaClient paramNativeDeltaClient);
+}

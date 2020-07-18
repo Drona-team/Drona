@@ -1,0 +1,81 @@
+package com.bugsnag.android;
+
+import androidx.annotation.NonNull;
+import androidx.annotation.Nullable;
+import java.io.IOException;
+import java.util.Observable;
+
+class User
+  extends Observable
+  implements JsonStream.Streamable
+{
+  @Nullable
+  private String email;
+  @Nullable
+  private String id;
+  @Nullable
+  private String name;
+  
+  User() {}
+  
+  User(@NonNull User paramUser)
+  {
+    this(id, email, name);
+  }
+  
+  User(@Nullable String paramString1, @Nullable String paramString2, @Nullable String paramString3)
+  {
+    id = paramString1;
+    email = paramString2;
+    name = paramString3;
+  }
+  
+  @Nullable
+  public String getEmail()
+  {
+    return email;
+  }
+  
+  @Nullable
+  public String getId()
+  {
+    return id;
+  }
+  
+  @Nullable
+  public String getName()
+  {
+    return name;
+  }
+  
+  public void setEmail(@Nullable String paramString)
+  {
+    email = paramString;
+    setChanged();
+    notifyObservers(new NativeInterface.Message(NativeInterface.MessageType.UPDATE_USER_EMAIL, paramString));
+  }
+  
+  public void setId(@Nullable String paramString)
+  {
+    id = paramString;
+    setChanged();
+    notifyObservers(new NativeInterface.Message(NativeInterface.MessageType.UPDATE_USER_ID, paramString));
+  }
+  
+  public void setName(@Nullable String paramString)
+  {
+    name = paramString;
+    setChanged();
+    notifyObservers(new NativeInterface.Message(NativeInterface.MessageType.UPDATE_USER_NAME, paramString));
+  }
+  
+  public void toStream(@NonNull JsonStream paramJsonStream)
+    throws IOException
+  {
+    paramJsonStream.beginObject();
+    paramJsonStream.name("id").value(id);
+    paramJsonStream.name("email").value(email);
+    paramJsonStream.name("name").value(name);
+    paramJsonStream.endObject();
+  }
+}

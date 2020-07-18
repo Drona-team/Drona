@@ -1,0 +1,14 @@
+package bleshadow.dagger.releasablereferences;
+
+import bleshadow.dagger.internal.GwtIncompatible;
+import java.lang.annotation.Annotation;
+
+@GwtIncompatible
+public abstract interface ReleasableReferenceManager
+{
+  public abstract void releaseStrongReferences();
+  
+  public abstract void restoreStrongReferences();
+  
+  public abstract Class<? extends Annotation> scope();
+}

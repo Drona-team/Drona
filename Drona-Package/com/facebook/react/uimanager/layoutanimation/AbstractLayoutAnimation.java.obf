@@ -1,0 +1,107 @@
+package com.facebook.react.uimanager.layoutanimation;
+
+import android.view.View;
+import android.view.animation.AccelerateDecelerateInterpolator;
+import android.view.animation.AccelerateInterpolator;
+import android.view.animation.Animation;
+import android.view.animation.BaseInterpolator;
+import android.view.animation.DecelerateInterpolator;
+import android.view.animation.Interpolator;
+import android.view.animation.LinearInterpolator;
+import androidx.annotation.Nullable;
+import com.facebook.react.bridge.ReadableMap;
+import com.facebook.react.common.MapBuilder;
+import com.facebook.react.uimanager.IllegalViewOperationException;
+import java.util.Map;
+
+abstract class AbstractLayoutAnimation
+{
+  private static final Map<InterpolatorType, BaseInterpolator> INTERPOLATOR = MapBuilder.of(InterpolatorType.LINEAR, new LinearInterpolator(), InterpolatorType.EASE_IN, new AccelerateInterpolator(), InterpolatorType.EASE_OUT, new DecelerateInterpolator(), InterpolatorType.EASE_IN_EASE_OUT, new AccelerateDecelerateInterpolator());
+  private static final boolean SLOWDOWN_ANIMATION_MODE = false;
+  @Nullable
+  protected AnimatedPropertyType mAnimatedProperty;
+  private int mDelayMs;
+  protected int mDurationMs;
+  @Nullable
+  private Interpolator mInterpolator;
+  
+  AbstractLayoutAnimation() {}
+  
+  private static Interpolator getInterpolator(InterpolatorType paramInterpolatorType, ReadableMap paramReadableMap)
+  {
+    if (paramInterpolatorType.equals(InterpolatorType.SPRING)) {
+      paramReadableMap = new SimpleSpringInterpolator(SimpleSpringInterpolator.getSpringDamping(paramReadableMap));
+    } else {
+      paramReadableMap = (Interpolator)INTERPOLATOR.get(paramInterpolatorType);
+    }
+    if (paramReadableMap != null) {
+      return paramReadableMap;
+    }
+    paramReadableMap = new StringBuilder();
+    paramReadableMap.append("Missing interpolator for type : ");
+    paramReadableMap.append(paramInterpolatorType);
+    throw new IllegalArgumentException(paramReadableMap.toString());
+  }
+  
+  @Nullable
+  public final Animation createAnimation(View paramView, int paramInt1, int paramInt2, int paramInt3, int paramInt4)
+  {
+    if (!isValid()) {
+      return null;
+    }
+    paramView = createAnimationImpl(paramView, paramInt1, paramInt2, paramInt3, paramInt4);
+    if (paramView != null)
+    {
+      paramView.setDuration(mDurationMs * 1);
+      paramView.setStartOffset(mDelayMs * 1);
+      paramView.setInterpolator(mInterpolator);
+    }
+    return paramView;
+  }
+  
+  @Nullable
+  abstract Animation createAnimationImpl(View paramView, int paramInt1, int paramInt2, int paramInt3, int paramInt4);
+  
+  public void initializeFromConfig(ReadableMap paramReadableMap, int paramInt)
+  {
+    Object localObject;
+    if (paramReadableMap.hasKey("property")) {
+      localObject = AnimatedPropertyType.fromString(paramReadableMap.getString("property"));
+    } else {
+      localObject = null;
+    }
+    mAnimatedProperty = ((AnimatedPropertyType)localObject);
+    if (paramReadableMap.hasKey("duration")) {
+      paramInt = paramReadableMap.getInt("duration");
+    }
+    mDurationMs = paramInt;
+    if (paramReadableMap.hasKey("delay")) {
+      paramInt = paramReadableMap.getInt("delay");
+    } else {
+      paramInt = 0;
+    }
+    mDelayMs = paramInt;
+    if (paramReadableMap.hasKey("type"))
+    {
+      mInterpolator = getInterpolator(InterpolatorType.fromString(paramReadableMap.getString("type")), paramReadableMap);
+      if (isValid()) {
+        return;
+      }
+      localObject = new StringBuilder();
+      ((StringBuilder)localObject).append("Invalid layout animation : ");
+      ((StringBuilder)localObject).append(paramReadableMap);
+      throw new IllegalViewOperationException(((StringBuilder)localObject).toString());
+    }
+    throw new IllegalArgumentException("Missing interpolation type.");
+  }
+  
+  abstract boolean isValid();
+  
+  public void reset()
+  {
+    mAnimatedProperty = null;
+    mDurationMs = 0;
+    mDelayMs = 0;
+    mInterpolator = null;
+  }
+}

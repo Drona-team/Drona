@@ -1,0 +1,23 @@
+package com.facebook.react.bridge;
+
+import com.facebook.jni.HybridData;
+import com.facebook.proguard.annotations.DoNotStrip;
+
+@DoNotStrip
+class JSCJavaScriptExecutor
+  extends JavaScriptExecutor
+{
+  static {}
+  
+  JSCJavaScriptExecutor(ReadableNativeMap paramReadableNativeMap)
+  {
+    super(initHybrid(paramReadableNativeMap));
+  }
+  
+  private static native HybridData initHybrid(ReadableNativeMap paramReadableNativeMap);
+  
+  public String getName()
+  {
+    return "JSCJavaScriptExecutor";
+  }
+}

@@ -1,0 +1,253 @@
+package com.google.android.exoplayer2.source;
+
+import java.util.Arrays;
+import java.util.Random;
+
+public abstract interface ShuffleOrder
+{
+  public abstract ShuffleOrder cloneAndClear();
+  
+  public abstract ShuffleOrder cloneAndInsert(int paramInt1, int paramInt2);
+  
+  public abstract ShuffleOrder cloneAndRemove(int paramInt1, int paramInt2);
+  
+  public abstract int getFirstIndex();
+  
+  public abstract int getLastIndex();
+  
+  public abstract int getLength();
+  
+  public abstract int getNextIndex(int paramInt);
+  
+  public abstract int getPreviousIndex(int paramInt);
+  
+  public static class DefaultShuffleOrder
+    implements ShuffleOrder
+  {
+    private final int[] indexInShuffled;
+    private final Random random;
+    private final int[] shuffled;
+    
+    public DefaultShuffleOrder(int paramInt)
+    {
+      this(paramInt, new Random());
+    }
+    
+    public DefaultShuffleOrder(int paramInt, long paramLong)
+    {
+      this(paramInt, new Random(paramLong));
+    }
+    
+    private DefaultShuffleOrder(int paramInt, Random paramRandom)
+    {
+      this(createShuffledList(paramInt, paramRandom), paramRandom);
+    }
+    
+    public DefaultShuffleOrder(int[] paramArrayOfInt, long paramLong)
+    {
+      this(Arrays.copyOf(paramArrayOfInt, paramArrayOfInt.length), new Random(paramLong));
+    }
+    
+    private DefaultShuffleOrder(int[] paramArrayOfInt, Random paramRandom)
+    {
+      shuffled = paramArrayOfInt;
+      random = paramRandom;
+      indexInShuffled = new int[paramArrayOfInt.length];
+      int i = 0;
+      while (i < paramArrayOfInt.length)
+      {
+        indexInShuffled[paramArrayOfInt[i]] = i;
+        i += 1;
+      }
+    }
+    
+    private static int[] createShuffledList(int paramInt, Random paramRandom)
+    {
+      int[] arrayOfInt = new int[paramInt];
+      int j;
+      for (int i = 0; i < paramInt; i = j)
+      {
+        j = i + 1;
+        int k = paramRandom.nextInt(j);
+        arrayOfInt[i] = arrayOfInt[k];
+        arrayOfInt[k] = i;
+      }
+      return arrayOfInt;
+    }
+    
+    public ShuffleOrder cloneAndClear()
+    {
+      return new DefaultShuffleOrder(0, new Random(random.nextLong()));
+    }
+    
+    public ShuffleOrder cloneAndInsert(int paramInt1, int paramInt2)
+    {
+      int[] arrayOfInt1 = new int[paramInt2];
+      int[] arrayOfInt2 = new int[paramInt2];
+      int m = 0;
+      for (int i = 0; i < paramInt2; i = j)
+      {
+        arrayOfInt1[i] = random.nextInt(shuffled.length + 1);
+        localObject = random;
+        j = i + 1;
+        k = ((Random)localObject).nextInt(j);
+        arrayOfInt2[i] = arrayOfInt2[k];
+        arrayOfInt2[k] = (i + paramInt1);
+      }
+      Arrays.sort(arrayOfInt1);
+      Object localObject = new int[shuffled.length + paramInt2];
+      int k = 0;
+      int j = 0;
+      i = m;
+      while (i < shuffled.length + paramInt2)
+      {
+        if ((k < paramInt2) && (j == arrayOfInt1[k]))
+        {
+          localObject[i] = arrayOfInt2[k];
+          k += 1;
+        }
+        else
+        {
+          localObject[i] = shuffled[j];
+          if (localObject[i] >= paramInt1) {
+            localObject[i] += paramInt2;
+          }
+          j += 1;
+        }
+        i += 1;
+      }
+      return new DefaultShuffleOrder((int[])localObject, new Random(random.nextLong()));
+    }
+    
+    public ShuffleOrder cloneAndRemove(int paramInt1, int paramInt2)
+    {
+      int m = paramInt2 - paramInt1;
+      int[] arrayOfInt = new int[shuffled.length - m];
+      int i = 0;
+      int j = 0;
+      while (i < shuffled.length)
+      {
+        if ((shuffled[i] >= paramInt1) && (shuffled[i] < paramInt2))
+        {
+          j += 1;
+        }
+        else
+        {
+          int k;
+          if (shuffled[i] >= paramInt1) {
+            k = shuffled[i] - m;
+          } else {
+            k = shuffled[i];
+          }
+          arrayOfInt[(i - j)] = k;
+        }
+        i += 1;
+      }
+      return new DefaultShuffleOrder(arrayOfInt, new Random(random.nextLong()));
+    }
+    
+    public int getFirstIndex()
+    {
+      if (shuffled.length > 0) {
+        return shuffled[0];
+      }
+      return -1;
+    }
+    
+    public int getLastIndex()
+    {
+      if (shuffled.length > 0) {
+        return shuffled[(shuffled.length - 1)];
+      }
+      return -1;
+    }
+    
+    public int getLength()
+    {
+      return shuffled.length;
+    }
+    
+    public int getNextIndex(int paramInt)
+    {
+      paramInt = indexInShuffled[paramInt] + 1;
+      if (paramInt < shuffled.length) {
+        return shuffled[paramInt];
+      }
+      return -1;
+    }
+    
+    public int getPreviousIndex(int paramInt)
+    {
+      paramInt = indexInShuffled[paramInt] - 1;
+      if (paramInt >= 0) {
+        return shuffled[paramInt];
+      }
+      return -1;
+    }
+  }
+  
+  public static final class UnshuffledShuffleOrder
+    implements ShuffleOrder
+  {
+    private final int length;
+    
+    public UnshuffledShuffleOrder(int paramInt)
+    {
+      length = paramInt;
+    }
+    
+    public ShuffleOrder cloneAndClear()
+    {
+      return new UnshuffledShuffleOrder(0);
+    }
+    
+    public ShuffleOrder cloneAndInsert(int paramInt1, int paramInt2)
+    {
+      return new UnshuffledShuffleOrder(length + paramInt2);
+    }
+    
+    public ShuffleOrder cloneAndRemove(int paramInt1, int paramInt2)
+    {
+      return new UnshuffledShuffleOrder(length - paramInt2 + paramInt1);
+    }
+    
+    public int getFirstIndex()
+    {
+      if (length > 0) {
+        return 0;
+      }
+      return -1;
+    }
+    
+    public int getLastIndex()
+    {
+      if (length > 0) {
+        return length - 1;
+      }
+      return -1;
+    }
+    
+    public int getLength()
+    {
+      return length;
+    }
+    
+    public int getNextIndex(int paramInt)
+    {
+      paramInt += 1;
+      if (paramInt < length) {
+        return paramInt;
+      }
+      return -1;
+    }
+    
+    public int getPreviousIndex(int paramInt)
+    {
+      paramInt -= 1;
+      if (paramInt >= 0) {
+        return paramInt;
+      }
+      return -1;
+    }
+  }
+}

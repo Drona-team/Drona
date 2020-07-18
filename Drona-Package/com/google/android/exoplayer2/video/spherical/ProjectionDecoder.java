@@ -1,0 +1,262 @@
+package com.google.android.exoplayer2.video.spherical;
+
+import com.google.android.exoplayer2.util.ParsableBitArray;
+import com.google.android.exoplayer2.util.ParsableByteArray;
+import com.google.android.exoplayer2.util.Util;
+import java.util.ArrayList;
+import java.util.zip.Inflater;
+
+public final class ProjectionDecoder
+{
+  private static final int MAX_COORDINATE_COUNT = 10000;
+  private static final int MAX_TRIANGLE_INDICES = 128000;
+  private static final int MAX_VERTEX_COUNT = 32000;
+  private static final int TYPE_DFL8 = Util.getIntegerCodeForString("dfl8");
+  private static final int TYPE_MESH = Util.getIntegerCodeForString("mesh");
+  private static final int TYPE_MSHP;
+  private static final int TYPE_PROJ = Util.getIntegerCodeForString("proj");
+  private static final int TYPE_RAW;
+  private static final int TYPE_YTMP = Util.getIntegerCodeForString("ytmp");
+  
+  static
+  {
+    TYPE_MSHP = Util.getIntegerCodeForString("mshp");
+    TYPE_RAW = Util.getIntegerCodeForString("raw ");
+  }
+  
+  private ProjectionDecoder() {}
+  
+  public static Projection decode(byte[] paramArrayOfByte, int paramInt)
+  {
+    paramArrayOfByte = new ParsableByteArray(paramArrayOfByte);
+    try
+    {
+      boolean bool = isProj(paramArrayOfByte);
+      if (bool) {
+        paramArrayOfByte = parseProj(paramArrayOfByte);
+      } else {
+        paramArrayOfByte = parseMshp(paramArrayOfByte);
+      }
+    }
+    catch (ArrayIndexOutOfBoundsException paramArrayOfByte)
+    {
+      for (;;) {}
+    }
+    paramArrayOfByte = null;
+    if (paramArrayOfByte == null) {
+      return null;
+    }
+    switch (paramArrayOfByte.size())
+    {
+    default: 
+      return null;
+    case 2: 
+      return new Projection((Projection.Mesh)paramArrayOfByte.get(0), (Projection.Mesh)paramArrayOfByte.get(1), paramInt);
+    }
+    return new Projection((Projection.Mesh)paramArrayOfByte.get(0), paramInt);
+  }
+  
+  private static int decodeZigZag(int paramInt)
+  {
+    return -(paramInt & 0x1) ^ paramInt >> 1;
+  }
+  
+  private static boolean isProj(ParsableByteArray paramParsableByteArray)
+  {
+    paramParsableByteArray.skipBytes(4);
+    int i = paramParsableByteArray.readInt();
+    paramParsableByteArray.setPosition(0);
+    return i == TYPE_PROJ;
+  }
+  
+  private static Projection.Mesh parseMesh(ParsableByteArray paramParsableByteArray)
+  {
+    int n = paramParsableByteArray.readInt();
+    if (n > 10000) {
+      return null;
+    }
+    Object localObject1 = new float[n];
+    int i = 0;
+    while (i < n)
+    {
+      localObject1[i] = paramParsableByteArray.readFloat();
+      i += 1;
+    }
+    int m = paramParsableByteArray.readInt();
+    if (m > 32000) {
+      return null;
+    }
+    double d = Math.log(2.0D);
+    int i1 = (int)Math.ceil(Math.log(n * 2.0D) / d);
+    ParsableBitArray localParsableBitArray = new ParsableBitArray(data);
+    localParsableBitArray.setPosition(paramParsableByteArray.getPosition() * 8);
+    paramParsableByteArray = new float[m * 5];
+    Object localObject2 = new int[5];
+    i = 0;
+    int j = 0;
+    int k;
+    int i2;
+    while (i < m)
+    {
+      k = 0;
+      while (k < 5)
+      {
+        i2 = localObject2[k] + decodeZigZag(localParsableBitArray.readBits(i1));
+        if (i2 < n)
+        {
+          if (i2 < 0) {
+            return null;
+          }
+          paramParsableByteArray[j] = localObject1[i2];
+          localObject2[k] = i2;
+          k += 1;
+          j += 1;
+        }
+        else
+        {
+          return null;
+        }
+      }
+      i += 1;
+    }
+    localParsableBitArray.setPosition(localParsableBitArray.getPosition() + 7 & 0xFFFFFFF8);
+    n = localParsableBitArray.readBits(32);
+    localObject1 = new Projection.SubMesh[n];
+    i = 0;
+    while (i < n)
+    {
+      i1 = localParsableBitArray.readBits(8);
+      i2 = localParsableBitArray.readBits(8);
+      int i3 = localParsableBitArray.readBits(32);
+      if (i3 > 128000) {
+        return null;
+      }
+      int i4 = (int)Math.ceil(Math.log(m * 2.0D) / d);
+      localObject2 = new float[i3 * 3];
+      float[] arrayOfFloat = new float[i3 * 2];
+      j = 0;
+      k = 0;
+      while (j < i3)
+      {
+        k += decodeZigZag(localParsableBitArray.readBits(i4));
+        if (k >= 0)
+        {
+          if (k >= m) {
+            return null;
+          }
+          int i6 = j * 3;
+          int i5 = k * 5;
+          localObject2[i6] = paramParsableByteArray[i5];
+          localObject2[(i6 + 1)] = paramParsableByteArray[(i5 + 1)];
+          localObject2[(i6 + 2)] = paramParsableByteArray[(i5 + 2)];
+          i6 = j * 2;
+          arrayOfFloat[i6] = paramParsableByteArray[(i5 + 3)];
+          arrayOfFloat[(i6 + 1)] = paramParsableByteArray[(i5 + 4)];
+          j += 1;
+        }
+        else
+        {
+          return null;
+        }
+      }
+      localObject1[i] = new Projection.SubMesh(i1, (float[])localObject2, arrayOfFloat, i2);
+      i += 1;
+    }
+    return new Projection.Mesh((Projection.SubMesh[])localObject1);
+  }
+  
+  private static ArrayList parseMshp(ParsableByteArray paramParsableByteArray)
+  {
+    if (paramParsableByteArray.readUnsignedByte() != 0) {
+      return null;
+    }
+    paramParsableByteArray.skipBytes(7);
+    int i = paramParsableByteArray.readInt();
+    if (i == TYPE_DFL8)
+    {
+      ParsableByteArray localParsableByteArray = new ParsableByteArray();
+      Inflater localInflater = new Inflater(true);
+      try
+      {
+        boolean bool = Util.inflate(paramParsableByteArray, localParsableByteArray, localInflater);
+        if (!bool)
+        {
+          localInflater.end();
+          return null;
+        }
+        localInflater.end();
+        paramParsableByteArray = localParsableByteArray;
+      }
+      catch (Throwable paramParsableByteArray)
+      {
+        localInflater.end();
+        throw paramParsableByteArray;
+      }
+    }
+    if (i != TYPE_RAW) {
+      return null;
+    }
+    return parseRawMshpData(paramParsableByteArray);
+  }
+  
+  private static ArrayList parseProj(ParsableByteArray paramParsableByteArray)
+  {
+    paramParsableByteArray.skipBytes(8);
+    int i = paramParsableByteArray.getPosition();
+    int k = paramParsableByteArray.limit();
+    while (i < k)
+    {
+      int j = paramParsableByteArray.readInt() + i;
+      if (j > i)
+      {
+        if (j > k) {
+          return null;
+        }
+        i = paramParsableByteArray.readInt();
+        if ((i != TYPE_YTMP) && (i != TYPE_MSHP))
+        {
+          paramParsableByteArray.setPosition(j);
+          i = j;
+        }
+        else
+        {
+          paramParsableByteArray.setLimit(j);
+          return parseMshp(paramParsableByteArray);
+        }
+      }
+    }
+    return null;
+  }
+  
+  private static ArrayList parseRawMshpData(ParsableByteArray paramParsableByteArray)
+  {
+    ArrayList localArrayList = new ArrayList();
+    int i = paramParsableByteArray.getPosition();
+    int k = paramParsableByteArray.limit();
+    while (i < k)
+    {
+      int j = paramParsableByteArray.readInt() + i;
+      if (j > i)
+      {
+        if (j > k) {
+          return null;
+        }
+        if (paramParsableByteArray.readInt() == TYPE_MESH)
+        {
+          Projection.Mesh localMesh = parseMesh(paramParsableByteArray);
+          if (localMesh == null) {
+            return null;
+          }
+          localArrayList.add(localMesh);
+        }
+        paramParsableByteArray.setPosition(j);
+        i = j;
+      }
+      else
+      {
+        return null;
+      }
+    }
+    return localArrayList;
+  }
+}

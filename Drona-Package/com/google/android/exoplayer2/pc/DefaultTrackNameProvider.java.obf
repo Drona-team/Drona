@@ -1,0 +1,154 @@
+package com.google.android.exoplayer2.ui;
+
+import android.content.res.Resources;
+import android.text.TextUtils;
+import com.google.android.exoplayer2.Format;
+import com.google.android.exoplayer2.util.Assertions;
+import com.google.android.exoplayer2.util.MimeTypes;
+import com.google.android.exoplayer2.util.Util;
+import java.util.Locale;
+
+public class DefaultTrackNameProvider
+  implements TrackNameProvider
+{
+  private final Resources resources;
+  
+  public DefaultTrackNameProvider(Resources paramResources)
+  {
+    resources = ((Resources)Assertions.checkNotNull(paramResources));
+  }
+  
+  private String buildAudioChannelString(Format paramFormat)
+  {
+    int i = channelCount;
+    if ((i != -1) && (i >= 1))
+    {
+      switch (i)
+      {
+      case 3: 
+      case 4: 
+      case 5: 
+      default: 
+        return resources.getString(R.string.exo_track_surround);
+      case 8: 
+        return resources.getString(R.string.exo_track_surround_7_point_1);
+      case 6: 
+      case 7: 
+        return resources.getString(R.string.exo_track_surround_5_point_1);
+      case 2: 
+        return resources.getString(R.string.exo_track_stereo);
+      }
+      return resources.getString(R.string.exo_track_mono);
+    }
+    return "";
+  }
+  
+  private String buildBitrateString(Format paramFormat)
+  {
+    int i = bitrate;
+    if (i == -1) {
+      return "";
+    }
+    return resources.getString(R.string.exo_track_bitrate, new Object[] { Float.valueOf(i / 1000000.0F) });
+  }
+  
+  private String buildLabelString(Format paramFormat)
+  {
+    if (!TextUtils.isEmpty(label)) {
+      return label;
+    }
+    paramFormat = language;
+    if ((!TextUtils.isEmpty(paramFormat)) && (!"und".equals(paramFormat))) {
+      return buildLanguageString(paramFormat);
+    }
+    return "";
+  }
+  
+  private String buildLanguageString(String paramString)
+  {
+    if (Util.SDK_INT >= 21) {
+      paramString = Locale.forLanguageTag(paramString);
+    } else {
+      paramString = new Locale(paramString);
+    }
+    return paramString.getDisplayLanguage();
+  }
+  
+  private String buildResolutionString(Format paramFormat)
+  {
+    int i = width;
+    int j = height;
+    if ((i != -1) && (j != -1)) {
+      return resources.getString(R.string.exo_track_resolution, new Object[] { Integer.valueOf(i), Integer.valueOf(j) });
+    }
+    return "";
+  }
+  
+  private static int inferPrimaryTrackType(Format paramFormat)
+  {
+    int i = MimeTypes.getTrackType(sampleMimeType);
+    if (i != -1) {
+      return i;
+    }
+    if (MimeTypes.getVideoMediaMimeType(codecs) != null) {
+      return 2;
+    }
+    if (MimeTypes.getAudioMediaMimeType(codecs) != null) {
+      return 1;
+    }
+    if (width == -1)
+    {
+      if (height != -1) {
+        return 2;
+      }
+      if (channelCount == -1)
+      {
+        if (sampleRate != -1) {
+          return 1;
+        }
+        return -1;
+      }
+      return 1;
+    }
+    return 2;
+  }
+  
+  private String joinWithSeparator(String... paramVarArgs)
+  {
+    int j = paramVarArgs.length;
+    Object localObject2 = "";
+    int i = 0;
+    while (i < j)
+    {
+      String str = paramVarArgs[i];
+      Object localObject1 = localObject2;
+      if (str.length() > 0) {
+        if (TextUtils.isEmpty((CharSequence)localObject2)) {
+          localObject1 = str;
+        } else {
+          localObject1 = resources.getString(R.string.exo_item_list, new Object[] { localObject2, str });
+        }
+      }
+      i += 1;
+      localObject2 = localObject1;
+    }
+    return localObject2;
+  }
+  
+  public String getTrackName(Format paramFormat)
+  {
+    int i = inferPrimaryTrackType(paramFormat);
+    if (i == 2) {
+      paramFormat = joinWithSeparator(new String[] { buildResolutionString(paramFormat), buildBitrateString(paramFormat) });
+    } else if (i == 1) {
+      paramFormat = joinWithSeparator(new String[] { buildLabelString(paramFormat), buildAudioChannelString(paramFormat), buildBitrateString(paramFormat) });
+    } else {
+      paramFormat = buildLabelString(paramFormat);
+    }
+    Object localObject = paramFormat;
+    if (paramFormat.length() == 0) {
+      localObject = resources.getString(R.string.exo_track_unknown);
+    }
+    return localObject;
+  }
+}

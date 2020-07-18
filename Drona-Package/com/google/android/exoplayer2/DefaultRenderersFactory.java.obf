@@ -1,0 +1,374 @@
+package com.google.android.exoplayer2;
+
+import android.content.Context;
+import android.os.Handler;
+import android.os.Looper;
+import androidx.annotation.Nullable;
+import com.google.android.exoplayer2.audio.AudioProcessor;
+import com.google.android.exoplayer2.audio.AudioRendererEventListener;
+import com.google.android.exoplayer2.drm.DrmSessionManager;
+import com.google.android.exoplayer2.drm.FrameworkMediaCrypto;
+import com.google.android.exoplayer2.mediacodec.MediaCodecSelector;
+import com.google.android.exoplayer2.metadata.MetadataOutput;
+import com.google.android.exoplayer2.metadata.MetadataRenderer;
+import com.google.android.exoplayer2.text.TextOutput;
+import com.google.android.exoplayer2.text.TextRenderer;
+import com.google.android.exoplayer2.util.Log;
+import com.google.android.exoplayer2.video.MediaCodecVideoRenderer;
+import com.google.android.exoplayer2.video.VideoRendererEventListener;
+import com.google.android.exoplayer2.video.spherical.CameraMotionRenderer;
+import java.lang.annotation.Annotation;
+import java.lang.annotation.Documented;
+import java.lang.annotation.Retention;
+import java.lang.annotation.RetentionPolicy;
+import java.lang.reflect.Constructor;
+import java.util.ArrayList;
+
+public class DefaultRenderersFactory
+  implements RenderersFactory
+{
+  public static final long DEFAULT_ALLOWED_VIDEO_JOINING_TIME_MS = 5000L;
+  public static final int EXTENSION_RENDERER_MODE_OFF = 0;
+  public static final int EXTENSION_RENDERER_MODE_ON = 1;
+  public static final int EXTENSION_RENDERER_MODE_PREFER = 2;
+  protected static final int MAX_DROPPED_VIDEO_FRAME_COUNT_TO_NOTIFY = 50;
+  private static final String TAG = "DefaultRenderersFactory";
+  private final long allowedVideoJoiningTimeMs;
+  private final Context context;
+  @Nullable
+  private final DrmSessionManager<FrameworkMediaCrypto> drmSessionManager;
+  private final int extensionRendererMode;
+  
+  public DefaultRenderersFactory(Context paramContext)
+  {
+    this(paramContext, 0);
+  }
+  
+  public DefaultRenderersFactory(Context paramContext, int paramInt)
+  {
+    this(paramContext, paramInt, 5000L);
+  }
+  
+  public DefaultRenderersFactory(Context paramContext, int paramInt, long paramLong)
+  {
+    context = paramContext;
+    extensionRendererMode = paramInt;
+    allowedVideoJoiningTimeMs = paramLong;
+    drmSessionManager = null;
+  }
+  
+  @Deprecated
+  public DefaultRenderersFactory(Context paramContext, @Nullable DrmSessionManager<FrameworkMediaCrypto> paramDrmSessionManager)
+  {
+    this(paramContext, paramDrmSessionManager, 0);
+  }
+  
+  @Deprecated
+  public DefaultRenderersFactory(Context paramContext, @Nullable DrmSessionManager<FrameworkMediaCrypto> paramDrmSessionManager, int paramInt)
+  {
+    this(paramContext, paramDrmSessionManager, paramInt, 5000L);
+  }
+  
+  @Deprecated
+  public DefaultRenderersFactory(Context paramContext, @Nullable DrmSessionManager<FrameworkMediaCrypto> paramDrmSessionManager, int paramInt, long paramLong)
+  {
+    context = paramContext;
+    extensionRendererMode = paramInt;
+    allowedVideoJoiningTimeMs = paramLong;
+    drmSessionManager = paramDrmSessionManager;
+  }
+  
+  protected AudioProcessor[] buildAudioProcessors()
+  {
+    return new AudioProcessor[0];
+  }
+  
+  /* Error */
+  protected void buildAudioRenderers(Context paramContext, @Nullable DrmSessionManager<FrameworkMediaCrypto> paramDrmSessionManager, AudioProcessor[] paramArrayOfAudioProcessor, Handler paramHandler, AudioRendererEventListener paramAudioRendererEventListener, int paramInt, ArrayList<Renderer> paramArrayList)
+  {
+    // Byte code:
+    //   0: aload 7
+    //   2: new 80	com/google/android/exoplayer2/audio/MediaCodecAudioRenderer
+    //   5: dup
+    //   6: aload_1
+    //   7: getstatic 86	com/google/android/exoplayer2/mediacodec/MediaCodecSelector:DEFAULT	Lcom/google/android/exoplayer2/mediacodec/MediaCodecSelector;
+    //   10: aload_2
+    //   11: iconst_0
+    //   12: aload 4
+    //   14: aload 5
+    //   16: aload_1
+    //   17: invokestatic 92	com/google/android/exoplayer2/audio/AudioCapabilities:getCapabilities	(Landroid/content/Context;)Lcom/google/android/exoplayer2/audio/AudioCapabilities;
+    //   20: aload_3
+    //   21: invokespecial 95	com/google/android/exoplayer2/audio/MediaCodecAudioRenderer:<init>	(Landroid/content/Context;Lcom/google/android/exoplayer2/mediacodec/MediaCodecSelector;Lcom/google/android/exoplayer2/drm/DrmSessionManager;ZLandroid/os/Handler;Lcom/google/android/exoplayer2/audio/AudioRendererEventListener;Lcom/google/android/exoplayer2/audio/AudioCapabilities;[Lcom/google/android/exoplayer2/audio/AudioProcessor;)V
+    //   24: invokevirtual 101	java/util/ArrayList:add	(Ljava/lang/Object;)Z
+    //   27: pop
+    //   28: iload 6
+    //   30: ifne +4 -> 34
+    //   33: return
+    //   34: aload 7
+    //   36: invokevirtual 105	java/util/ArrayList:size	()I
+    //   39: istore 9
+    //   41: iload 9
+    //   43: istore 8
+    //   45: iload 6
+    //   47: iconst_2
+    //   48: if_icmpne +9 -> 57
+    //   51: iload 9
+    //   53: iconst_1
+    //   54: isub
+    //   55: istore 8
+    //   57: ldc 107
+    //   59: invokestatic 113	java/lang/Class:forName	(Ljava/lang/String;)Ljava/lang/Class;
+    //   62: iconst_3
+    //   63: anewarray 109	java/lang/Class
+    //   66: dup
+    //   67: iconst_0
+    //   68: ldc 115
+    //   70: aastore
+    //   71: dup
+    //   72: iconst_1
+    //   73: ldc 117
+    //   75: aastore
+    //   76: dup
+    //   77: iconst_2
+    //   78: ldc 119
+    //   80: aastore
+    //   81: invokevirtual 123	java/lang/Class:getConstructor	([Ljava/lang/Class;)Ljava/lang/reflect/Constructor;
+    //   84: iconst_3
+    //   85: anewarray 4	java/lang/Object
+    //   88: dup
+    //   89: iconst_0
+    //   90: aload 4
+    //   92: aastore
+    //   93: dup
+    //   94: iconst_1
+    //   95: aload 5
+    //   97: aastore
+    //   98: dup
+    //   99: iconst_2
+    //   100: aload_3
+    //   101: aastore
+    //   102: invokevirtual 129	java/lang/reflect/Constructor:newInstance	([Ljava/lang/Object;)Ljava/lang/Object;
+    //   105: checkcast 131	com/google/android/exoplayer2/Renderer
+    //   108: astore_1
+    //   109: iload 8
+    //   111: iconst_1
+    //   112: iadd
+    //   113: istore 6
+    //   115: aload 7
+    //   117: iload 8
+    //   119: aload_1
+    //   120: invokevirtual 134	java/util/ArrayList:add	(ILjava/lang/Object;)V
+    //   123: ldc 26
+    //   125: ldc -120
+    //   127: invokestatic 142	com/google/android/exoplayer2/util/Log:i	(Ljava/lang/String;Ljava/lang/String;)V
+    //   130: goto +19 -> 149
+    //   133: astore_1
+    //   134: new 144	java/lang/RuntimeException
+    //   137: dup
+    //   138: ldc -110
+    //   140: aload_1
+    //   141: invokespecial 149	java/lang/RuntimeException:<init>	(Ljava/lang/String;Ljava/lang/Throwable;)V
+    //   144: athrow
+    //   145: iload 8
+    //   147: istore 6
+    //   149: ldc -105
+    //   151: invokestatic 113	java/lang/Class:forName	(Ljava/lang/String;)Ljava/lang/Class;
+    //   154: iconst_3
+    //   155: anewarray 109	java/lang/Class
+    //   158: dup
+    //   159: iconst_0
+    //   160: ldc 115
+    //   162: aastore
+    //   163: dup
+    //   164: iconst_1
+    //   165: ldc 117
+    //   167: aastore
+    //   168: dup
+    //   169: iconst_2
+    //   170: ldc 119
+    //   172: aastore
+    //   173: invokevirtual 123	java/lang/Class:getConstructor	([Ljava/lang/Class;)Ljava/lang/reflect/Constructor;
+    //   176: iconst_3
+    //   177: anewarray 4	java/lang/Object
+    //   180: dup
+    //   181: iconst_0
+    //   182: aload 4
+    //   184: aastore
+    //   185: dup
+    //   186: iconst_1
+    //   187: aload 5
+    //   189: aastore
+    //   190: dup
+    //   191: iconst_2
+    //   192: aload_3
+    //   193: aastore
+    //   194: invokevirtual 129	java/lang/reflect/Constructor:newInstance	([Ljava/lang/Object;)Ljava/lang/Object;
+    //   197: checkcast 131	com/google/android/exoplayer2/Renderer
+    //   200: astore_1
+    //   201: iload 6
+    //   203: iconst_1
+    //   204: iadd
+    //   205: istore 8
+    //   207: aload 7
+    //   209: iload 6
+    //   211: aload_1
+    //   212: invokevirtual 134	java/util/ArrayList:add	(ILjava/lang/Object;)V
+    //   215: ldc 26
+    //   217: ldc -103
+    //   219: invokestatic 142	com/google/android/exoplayer2/util/Log:i	(Ljava/lang/String;Ljava/lang/String;)V
+    //   222: iload 8
+    //   224: istore 6
+    //   226: goto +15 -> 241
+    //   229: astore_1
+    //   230: new 144	java/lang/RuntimeException
+    //   233: dup
+    //   234: ldc -101
+    //   236: aload_1
+    //   237: invokespecial 149	java/lang/RuntimeException:<init>	(Ljava/lang/String;Ljava/lang/Throwable;)V
+    //   240: athrow
+    //   241: aload 7
+    //   243: iload 6
+    //   245: ldc -99
+    //   247: invokestatic 113	java/lang/Class:forName	(Ljava/lang/String;)Ljava/lang/Class;
+    //   250: iconst_3
+    //   251: anewarray 109	java/lang/Class
+    //   254: dup
+    //   255: iconst_0
+    //   256: ldc 115
+    //   258: aastore
+    //   259: dup
+    //   260: iconst_1
+    //   261: ldc 117
+    //   263: aastore
+    //   264: dup
+    //   265: iconst_2
+    //   266: ldc 119
+    //   268: aastore
+    //   269: invokevirtual 123	java/lang/Class:getConstructor	([Ljava/lang/Class;)Ljava/lang/reflect/Constructor;
+    //   272: iconst_3
+    //   273: anewarray 4	java/lang/Object
+    //   276: dup
+    //   277: iconst_0
+    //   278: aload 4
+    //   280: aastore
+    //   281: dup
+    //   282: iconst_1
+    //   283: aload 5
+    //   285: aastore
+    //   286: dup
+    //   287: iconst_2
+    //   288: aload_3
+    //   289: aastore
+    //   290: invokevirtual 129	java/lang/reflect/Constructor:newInstance	([Ljava/lang/Object;)Ljava/lang/Object;
+    //   293: checkcast 131	com/google/android/exoplayer2/Renderer
+    //   296: invokevirtual 134	java/util/ArrayList:add	(ILjava/lang/Object;)V
+    //   299: ldc 26
+    //   301: ldc -97
+    //   303: invokestatic 142	com/google/android/exoplayer2/util/Log:i	(Ljava/lang/String;Ljava/lang/String;)V
+    //   306: return
+    //   307: astore_1
+    //   308: new 144	java/lang/RuntimeException
+    //   311: dup
+    //   312: ldc -95
+    //   314: aload_1
+    //   315: invokespecial 149	java/lang/RuntimeException:<init>	(Ljava/lang/String;Ljava/lang/Throwable;)V
+    //   318: athrow
+    //   319: astore_1
+    //   320: goto -175 -> 145
+    //   323: astore_1
+    //   324: goto -175 -> 149
+    //   327: astore_1
+    //   328: goto -87 -> 241
+    //   331: astore_1
+    //   332: iload 8
+    //   334: istore 6
+    //   336: goto -95 -> 241
+    //   339: astore_1
+    //   340: return
+    // Local variable table:
+    //   start	length	slot	name	signature
+    //   0	341	0	this	DefaultRenderersFactory
+    //   0	341	1	paramContext	Context
+    //   0	341	2	paramDrmSessionManager	DrmSessionManager<FrameworkMediaCrypto>
+    //   0	341	3	paramArrayOfAudioProcessor	AudioProcessor[]
+    //   0	341	4	paramHandler	Handler
+    //   0	341	5	paramAudioRendererEventListener	AudioRendererEventListener
+    //   0	341	6	paramInt	int
+    //   0	341	7	paramArrayList	ArrayList<Renderer>
+    //   43	290	8	i	int
+    //   39	16	9	j	int
+    // Exception table:
+    //   from	to	target	type
+    //   57	109	133	java/lang/Exception
+    //   115	130	133	java/lang/Exception
+    //   149	201	229	java/lang/Exception
+    //   207	222	229	java/lang/Exception
+    //   241	306	307	java/lang/Exception
+    //   57	109	319	java/lang/ClassNotFoundException
+    //   115	130	323	java/lang/ClassNotFoundException
+    //   149	201	327	java/lang/ClassNotFoundException
+    //   207	222	331	java/lang/ClassNotFoundException
+    //   241	306	339	java/lang/ClassNotFoundException
+  }
+  
+  protected void buildCameraMotionRenderers(Context paramContext, int paramInt, ArrayList<Renderer> paramArrayList)
+  {
+    paramArrayList.add(new CameraMotionRenderer());
+  }
+  
+  protected void buildMetadataRenderers(Context paramContext, MetadataOutput paramMetadataOutput, Looper paramLooper, int paramInt, ArrayList<Renderer> paramArrayList)
+  {
+    paramArrayList.add(new MetadataRenderer(paramMetadataOutput, paramLooper));
+  }
+  
+  protected void buildMiscellaneousRenderers(Context paramContext, Handler paramHandler, int paramInt, ArrayList<Renderer> paramArrayList) {}
+  
+  protected void buildTextRenderers(Context paramContext, TextOutput paramTextOutput, Looper paramLooper, int paramInt, ArrayList<Renderer> paramArrayList)
+  {
+    paramArrayList.add(new TextRenderer(paramTextOutput, paramLooper));
+  }
+  
+  protected void buildVideoRenderers(Context paramContext, @Nullable DrmSessionManager<FrameworkMediaCrypto> paramDrmSessionManager, long paramLong, Handler paramHandler, VideoRendererEventListener paramVideoRendererEventListener, int paramInt, ArrayList<Renderer> paramArrayList)
+  {
+    paramArrayList.add(new MediaCodecVideoRenderer(paramContext, MediaCodecSelector.DEFAULT, paramLong, paramDrmSessionManager, false, paramHandler, paramVideoRendererEventListener, 50));
+    if (paramInt == 0) {
+      return;
+    }
+    int j = paramArrayList.size();
+    int i = j;
+    if (paramInt == 2) {
+      i = j - 1;
+    }
+    try
+    {
+      paramArrayList.add(i, (Renderer)Class.forName("com.google.android.exoplayer2.ext.vp9.LibvpxVideoRenderer").getConstructor(new Class[] { Boolean.TYPE, Long.TYPE, Handler.class, VideoRendererEventListener.class, Integer.TYPE }).newInstance(new Object[] { Boolean.valueOf(true), Long.valueOf(paramLong), paramHandler, paramVideoRendererEventListener, Integer.valueOf(50) }));
+      Log.i("DefaultRenderersFactory", "Loaded LibvpxVideoRenderer.");
+      return;
+    }
+    catch (Exception paramContext)
+    {
+      throw new RuntimeException("Error instantiating VP9 extension", paramContext);
+    }
+    catch (ClassNotFoundException paramContext) {}
+  }
+  
+  public Renderer[] createRenderers(Handler paramHandler, VideoRendererEventListener paramVideoRendererEventListener, AudioRendererEventListener paramAudioRendererEventListener, TextOutput paramTextOutput, MetadataOutput paramMetadataOutput, @Nullable DrmSessionManager<FrameworkMediaCrypto> paramDrmSessionManager)
+  {
+    if (paramDrmSessionManager == null) {
+      paramDrmSessionManager = drmSessionManager;
+    }
+    ArrayList localArrayList = new ArrayList();
+    buildVideoRenderers(context, paramDrmSessionManager, allowedVideoJoiningTimeMs, paramHandler, paramVideoRendererEventListener, extensionRendererMode, localArrayList);
+    buildAudioRenderers(context, paramDrmSessionManager, buildAudioProcessors(), paramHandler, paramAudioRendererEventListener, extensionRendererMode, localArrayList);
+    buildTextRenderers(context, paramTextOutput, paramHandler.getLooper(), extensionRendererMode, localArrayList);
+    buildMetadataRenderers(context, paramMetadataOutput, paramHandler.getLooper(), extensionRendererMode, localArrayList);
+    buildCameraMotionRenderers(context, extensionRendererMode, localArrayList);
+    buildMiscellaneousRenderers(context, paramHandler, extensionRendererMode, localArrayList);
+    return (Renderer[])localArrayList.toArray(new Renderer[localArrayList.size()]);
+  }
+  
+  @Documented
+  @Retention(RetentionPolicy.SOURCE)
+  public static @interface ExtensionRendererMode {}
+}

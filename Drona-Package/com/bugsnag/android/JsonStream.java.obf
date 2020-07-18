@@ -1,0 +1,117 @@
+package com.bugsnag.android;
+
+import androidx.annotation.NonNull;
+import androidx.annotation.Nullable;
+import java.io.IOException;
+import java.io.Writer;
+
+public class JsonStream
+  extends JsonWriter
+{
+  private final ObjectJsonStreamer objectJsonStreamer;
+  private final Writer out;
+  
+  public JsonStream(@NonNull Writer paramWriter)
+  {
+    super(paramWriter);
+    setSerializeNulls(false);
+    out = paramWriter;
+    objectJsonStreamer = new ObjectJsonStreamer();
+  }
+  
+  @NonNull
+  public JsonStream name(@Nullable String paramString)
+    throws IOException
+  {
+    super.name(paramString);
+    return this;
+  }
+  
+  public void value(@Nullable Streamable paramStreamable)
+    throws IOException
+  {
+    if (paramStreamable == null)
+    {
+      nullValue();
+      return;
+    }
+    paramStreamable.toStream(this);
+  }
+  
+  /* Error */
+  public void value(@NonNull java.io.File paramFile)
+    throws IOException
+  {
+    // Byte code:
+    //   0: aload_1
+    //   1: ifnull +82 -> 83
+    //   4: aload_1
+    //   5: invokevirtual 103	java/io/File:length	()J
+    //   8: lconst_0
+    //   9: lcmp
+    //   10: ifgt +4 -> 14
+    //   13: return
+    //   14: aload_0
+    //   15: invokespecial 53	com/bugsnag/android/JsonWriter:flush	()V
+    //   18: aload_0
+    //   19: invokevirtual 106	com/bugsnag/android/JsonStream:beforeValue	()V
+    //   22: aconst_null
+    //   23: astore_3
+    //   24: new 108	java/io/BufferedReader
+    //   27: dup
+    //   28: new 110	java/io/InputStreamReader
+    //   31: dup
+    //   32: new 112	java/io/FileInputStream
+    //   35: dup
+    //   36: aload_1
+    //   37: invokespecial 114	java/io/FileInputStream:<init>	(Ljava/io/File;)V
+    //   40: ldc 116
+    //   42: invokespecial 119	java/io/InputStreamReader:<init>	(Ljava/io/InputStream;Ljava/lang/String;)V
+    //   45: invokespecial 122	java/io/BufferedReader:<init>	(Ljava/io/Reader;)V
+    //   48: astore_1
+    //   49: aload_1
+    //   50: aload_0
+    //   51: getfield 22	com/bugsnag/android/JsonStream:out	Ljava/io/Writer;
+    //   54: invokestatic 128	com/bugsnag/android/IOUtils:copy	(Ljava/io/Reader;Ljava/io/Writer;)I
+    //   57: pop
+    //   58: aload_1
+    //   59: invokestatic 132	com/bugsnag/android/IOUtils:closeQuietly	(Ljava/io/Closeable;)V
+    //   62: aload_0
+    //   63: getfield 22	com/bugsnag/android/JsonStream:out	Ljava/io/Writer;
+    //   66: invokevirtual 135	java/io/Writer:flush	()V
+    //   69: return
+    //   70: astore_2
+    //   71: goto +6 -> 77
+    //   74: astore_2
+    //   75: aload_3
+    //   76: astore_1
+    //   77: aload_1
+    //   78: invokestatic 132	com/bugsnag/android/IOUtils:closeQuietly	(Ljava/io/Closeable;)V
+    //   81: aload_2
+    //   82: athrow
+    //   83: return
+    // Local variable table:
+    //   start	length	slot	name	signature
+    //   0	84	0	this	JsonStream
+    //   0	84	1	paramFile	java.io.File
+    //   70	1	2	localObject1	Object
+    //   74	8	2	localObject2	Object
+    //   23	53	3	localObject3	Object
+    // Exception table:
+    //   from	to	target	type
+    //   49	58	70	finally
+    //   24	49	74	finally
+  }
+  
+  public void value(@NonNull Object paramObject)
+    throws IOException
+  {
+    objectJsonStreamer.objectToStream(paramObject, this);
+  }
+  
+  public static abstract interface Streamable
+  {
+    public abstract void toStream(@NonNull JsonStream paramJsonStream)
+      throws IOException;
+  }
+}

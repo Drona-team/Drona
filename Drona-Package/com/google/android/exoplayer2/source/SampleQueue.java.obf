@@ -1,0 +1,507 @@
+package com.google.android.exoplayer2.source;
+
+import androidx.annotation.Nullable;
+import com.google.android.exoplayer2.Format;
+import com.google.android.exoplayer2.FormatHolder;
+import com.google.android.exoplayer2.decoder.CryptoInfo;
+import com.google.android.exoplayer2.decoder.DecoderInputBuffer;
+import com.google.android.exoplayer2.extractor.ExtractorInput;
+import com.google.android.exoplayer2.extractor.TrackOutput;
+import com.google.android.exoplayer2.extractor.TrackOutput.CryptoData;
+import com.google.android.exoplayer2.upstream.Allocation;
+import com.google.android.exoplayer2.upstream.Allocator;
+import com.google.android.exoplayer2.util.ParsableByteArray;
+import java.io.EOFException;
+import java.io.IOException;
+import java.nio.ByteBuffer;
+
+public class SampleQueue
+  implements TrackOutput
+{
+  public static final int ADVANCE_FAILED = -1;
+  private static final int INITIAL_SCRATCH_SIZE = 32;
+  private final int allocationLength;
+  private final Allocator allocator;
+  private Format downstreamFormat;
+  private final SampleMetadataQueue.SampleExtrasHolder extrasHolder;
+  private AllocationNode firstAllocationNode;
+  private Format lastUnadjustedFormat;
+  private final SampleMetadataQueue metadataQueue;
+  private boolean pendingFormatAdjustment;
+  private boolean pendingSplice;
+  private AllocationNode readAllocationNode;
+  private long sampleOffsetUs;
+  private final ParsableByteArray scratch;
+  private long totalBytesWritten;
+  private UpstreamFormatChangedListener upstreamFormatChangeListener;
+  private AllocationNode writeAllocationNode;
+  
+  public SampleQueue(Allocator paramAllocator)
+  {
+    allocator = paramAllocator;
+    allocationLength = paramAllocator.getIndividualAllocationLength();
+    metadataQueue = new SampleMetadataQueue();
+    extrasHolder = new SampleMetadataQueue.SampleExtrasHolder();
+    scratch = new ParsableByteArray(32);
+    firstAllocationNode = new AllocationNode(0L, allocationLength);
+    readAllocationNode = firstAllocationNode;
+    writeAllocationNode = firstAllocationNode;
+  }
+  
+  private void advanceReadTo(long paramLong)
+  {
+    while (paramLong >= readAllocationNode.endPosition) {
+      readAllocationNode = readAllocationNode.next;
+    }
+  }
+  
+  private void clearAllocationNodes(AllocationNode paramAllocationNode)
+  {
+    throw new Runtime("d2j fail translate: java.lang.RuntimeException: can not merge I and Z\n\tat com.googlecode.dex2jar.ir.TypeClass.merge(TypeClass.java:100)\n\tat com.googlecode.dex2jar.ir.ts.TypeTransformer$TypeRef.updateTypeClass(TypeTransformer.java:174)\n\tat com.googlecode.dex2jar.ir.ts.TypeTransformer$TypeAnalyze.provideAs(TypeTransformer.java:780)\n\tat com.googlecode.dex2jar.ir.ts.TypeTransformer$TypeAnalyze.e1expr(TypeTransformer.java:496)\n\tat com.googlecode.dex2jar.ir.ts.TypeTransformer$TypeAnalyze.exExpr(TypeTransformer.java:713)\n\tat com.googlecode.dex2jar.ir.ts.TypeTransformer$TypeAnalyze.exExpr(TypeTransformer.java:703)\n\tat com.googlecode.dex2jar.ir.ts.TypeTransformer$TypeAnalyze.e2expr(TypeTransformer.java:629)\n\tat com.googlecode.dex2jar.ir.ts.TypeTransformer$TypeAnalyze.exExpr(TypeTransformer.java:716)\n\tat com.googlecode.dex2jar.ir.ts.TypeTransformer$TypeAnalyze.exExpr(TypeTransformer.java:703)\n\tat com.googlecode.dex2jar.ir.ts.TypeTransformer$TypeAnalyze.e1expr(TypeTransformer.java:539)\n\tat com.googlecode.dex2jar.ir.ts.TypeTransformer$TypeAnalyze.exExpr(TypeTransformer.java:713)\n\tat com.googlecode.dex2jar.ir.ts.TypeTransformer$TypeAnalyze.exExpr(TypeTransformer.java:703)\n\tat com.googlecode.dex2jar.ir.ts.TypeTransformer$TypeAnalyze.s2stmt(TypeTransformer.java:820)\n\tat com.googlecode.dex2jar.ir.ts.TypeTransformer$TypeAnalyze.sxStmt(TypeTransformer.java:843)\n\tat com.googlecode.dex2jar.ir.ts.TypeTransformer$TypeAnalyze.analyze(TypeTransformer.java:206)\n\tat com.googlecode.dex2jar.ir.ts.TypeTransformer.transform(TypeTransformer.java:44)\n\tat com.googlecode.d2j.dex.Dex2jar$2.optimize(Dex2jar.java:162)\n\tat com.googlecode.d2j.dex.Dex2Asm.convertCode(Dex2Asm.java:414)\n\tat com.googlecode.d2j.dex.ExDex2Asm.convertCode(ExDex2Asm.java:42)\n\tat com.googlecode.d2j.dex.Dex2jar$2.convertCode(Dex2jar.java:128)\n\tat com.googlecode.d2j.dex.Dex2Asm.convertMethod(Dex2Asm.java:509)\n\tat com.googlecode.d2j.dex.Dex2Asm.convertClass(Dex2Asm.java:406)\n\tat com.googlecode.d2j.dex.Dex2Asm.convertDex(Dex2Asm.java:422)\n\tat com.googlecode.d2j.dex.Dex2jar.doTranslate(Dex2jar.java:172)\n\tat com.googlecode.d2j.dex.Dex2jar.to(Dex2jar.java:272)\n\tat com.googlecode.dex2jar.tools.Dex2jarCmd.doCommandLine(Dex2jarCmd.java:108)\n\tat com.googlecode.dex2jar.tools.BaseCmd.doMain(BaseCmd.java:288)\n\tat com.googlecode.dex2jar.tools.Dex2jarCmd.main(Dex2jarCmd.java:32)\n");
+  }
+  
+  private void discardDownstreamTo(long paramLong)
+  {
+    if (paramLong == -1L) {
+      return;
+    }
+    while (paramLong >= firstAllocationNode.endPosition)
+    {
+      allocator.release(firstAllocationNode.allocation);
+      firstAllocationNode = firstAllocationNode.clear();
+    }
+    if (readAllocationNode.startPosition < firstAllocationNode.startPosition) {
+      readAllocationNode = firstAllocationNode;
+    }
+  }
+  
+  private static Format getAdjustedSampleFormat(Format paramFormat, long paramLong)
+  {
+    if (paramFormat == null) {
+      return null;
+    }
+    Format localFormat = paramFormat;
+    if (paramLong != 0L)
+    {
+      localFormat = paramFormat;
+      if (subsampleOffsetUs != Long.MAX_VALUE) {
+        localFormat = paramFormat.copyWithSubsampleOffsetUs(subsampleOffsetUs + paramLong);
+      }
+    }
+    return localFormat;
+  }
+  
+  private void postAppend(int paramInt)
+  {
+    totalBytesWritten += paramInt;
+    if (totalBytesWritten == writeAllocationNode.endPosition) {
+      writeAllocationNode = writeAllocationNode.next;
+    }
+  }
+  
+  private int preAppend(int paramInt)
+  {
+    if (!writeAllocationNode.wasInitialized) {
+      writeAllocationNode.initialize(allocator.allocate(), new AllocationNode(writeAllocationNode.endPosition, allocationLength));
+    }
+    return Math.min(paramInt, (int)(writeAllocationNode.endPosition - totalBytesWritten));
+  }
+  
+  private void readData(long paramLong, ByteBuffer paramByteBuffer, int paramInt)
+  {
+    advanceReadTo(paramLong);
+    while (paramInt > 0)
+    {
+      int j = Math.min(paramInt, (int)(readAllocationNode.endPosition - paramLong));
+      paramByteBuffer.put(readAllocationNode.allocation.data, readAllocationNode.translateOffset(paramLong), j);
+      int i = paramInt - j;
+      long l = paramLong + j;
+      paramLong = l;
+      paramInt = i;
+      if (l == readAllocationNode.endPosition)
+      {
+        readAllocationNode = readAllocationNode.next;
+        paramLong = l;
+        paramInt = i;
+      }
+    }
+  }
+  
+  private void readData(long paramLong, byte[] paramArrayOfByte, int paramInt)
+  {
+    advanceReadTo(paramLong);
+    int i = paramInt;
+    while (i > 0)
+    {
+      int k = Math.min(i, (int)(readAllocationNode.endPosition - paramLong));
+      System.arraycopy(readAllocationNode.allocation.data, readAllocationNode.translateOffset(paramLong), paramArrayOfByte, paramInt - i, k);
+      int j = i - k;
+      long l = paramLong + k;
+      paramLong = l;
+      i = j;
+      if (l == readAllocationNode.endPosition)
+      {
+        readAllocationNode = readAllocationNode.next;
+        paramLong = l;
+        i = j;
+      }
+    }
+  }
+  
+  private void readEncryptionData(DecoderInputBuffer paramDecoderInputBuffer, SampleMetadataQueue.SampleExtrasHolder paramSampleExtrasHolder)
+  {
+    long l1 = offset;
+    scratch.reset(1);
+    readData(l1, scratch.data, 1);
+    l1 += 1L;
+    Object localObject1 = scratch.data;
+    int k = 0;
+    int j = localObject1[0];
+    if ((j & 0x80) != 0) {
+      i = 1;
+    } else {
+      i = 0;
+    }
+    j &= 0x7F;
+    if (cryptoInfo.iv == null) {
+      cryptoInfo.iv = new byte[16];
+    }
+    readData(l1, cryptoInfo.iv, j);
+    l1 += j;
+    if (i != 0)
+    {
+      scratch.reset(2);
+      readData(l1, scratch.data, 2);
+      l1 += 2L;
+      j = scratch.readUnsignedShort();
+    }
+    else
+    {
+      j = 1;
+    }
+    Object localObject2 = cryptoInfo.numBytesOfClearData;
+    if (localObject2 != null)
+    {
+      localObject1 = localObject2;
+      if (localObject2.length < j) {}
+    }
+    for (;;)
+    {
+      break;
+      localObject1 = new int[j];
+    }
+    Object localObject3 = cryptoInfo.numBytesOfEncryptedData;
+    if (localObject3 != null)
+    {
+      localObject2 = localObject3;
+      if (localObject3.length < j) {}
+    }
+    for (;;)
+    {
+      break;
+      localObject2 = new int[j];
+    }
+    if (i != 0)
+    {
+      i = j * 6;
+      scratch.reset(i);
+      readData(l1, scratch.data, i);
+      long l2 = l1 + i;
+      scratch.setPosition(0);
+      i = k;
+      for (;;)
+      {
+        l1 = l2;
+        if (i >= j) {
+          break;
+        }
+        localObject1[i] = scratch.readUnsignedShort();
+        localObject2[i] = scratch.readUnsignedIntToInt();
+        i += 1;
+      }
+    }
+    localObject1[0] = 0;
+    localObject2[0] = (size - (int)(l1 - offset));
+    localObject3 = cryptoData;
+    cryptoInfo.set(j, (int[])localObject1, (int[])localObject2, encryptionKey, cryptoInfo.iv, cryptoMode, encryptedBlocks, clearBlocks);
+    int i = (int)(l1 - offset);
+    offset += i;
+    size -= i;
+  }
+  
+  public int advanceTo(long paramLong, boolean paramBoolean1, boolean paramBoolean2)
+  {
+    return metadataQueue.advanceTo(paramLong, paramBoolean1, paramBoolean2);
+  }
+  
+  public int advanceToEnd()
+  {
+    return metadataQueue.advanceToEnd();
+  }
+  
+  public void discardTo(long paramLong, boolean paramBoolean1, boolean paramBoolean2)
+  {
+    discardDownstreamTo(metadataQueue.discardTo(paramLong, paramBoolean1, paramBoolean2));
+  }
+  
+  public void discardToEnd()
+  {
+    discardDownstreamTo(metadataQueue.discardToEnd());
+  }
+  
+  public void discardToRead()
+  {
+    discardDownstreamTo(metadataQueue.discardToRead());
+  }
+  
+  public void discardUpstreamSamples(int paramInt)
+  {
+    totalBytesWritten = metadataQueue.discardUpstreamSamples(paramInt);
+    if ((totalBytesWritten != 0L) && (totalBytesWritten != firstAllocationNode.startPosition))
+    {
+      for (AllocationNode localAllocationNode1 = firstAllocationNode; totalBytesWritten > endPosition; localAllocationNode1 = next) {}
+      AllocationNode localAllocationNode3 = next;
+      clearAllocationNodes(localAllocationNode3);
+      next = new AllocationNode(endPosition, allocationLength);
+      AllocationNode localAllocationNode2;
+      if (totalBytesWritten == endPosition) {
+        localAllocationNode2 = next;
+      } else {
+        localAllocationNode2 = localAllocationNode1;
+      }
+      writeAllocationNode = localAllocationNode2;
+      if (readAllocationNode == localAllocationNode3) {
+        readAllocationNode = next;
+      }
+    }
+    else
+    {
+      clearAllocationNodes(firstAllocationNode);
+      firstAllocationNode = new AllocationNode(totalBytesWritten, allocationLength);
+      readAllocationNode = firstAllocationNode;
+      writeAllocationNode = firstAllocationNode;
+    }
+  }
+  
+  public void format(Format paramFormat)
+  {
+    Format localFormat = getAdjustedSampleFormat(paramFormat, sampleOffsetUs);
+    boolean bool = metadataQueue.format(localFormat);
+    lastUnadjustedFormat = paramFormat;
+    pendingFormatAdjustment = false;
+    if ((upstreamFormatChangeListener != null) && (bool)) {
+      upstreamFormatChangeListener.onUpstreamFormatChanged(localFormat);
+    }
+  }
+  
+  public int getFirstIndex()
+  {
+    return metadataQueue.getFirstIndex();
+  }
+  
+  public long getFirstTimestampUs()
+  {
+    return metadataQueue.getFirstTimestampUs();
+  }
+  
+  public long getLargestQueuedTimestampUs()
+  {
+    return metadataQueue.getLargestQueuedTimestampUs();
+  }
+  
+  public int getReadIndex()
+  {
+    return metadataQueue.getReadIndex();
+  }
+  
+  public Format getUpstreamFormat()
+  {
+    return metadataQueue.getUpstreamFormat();
+  }
+  
+  public int getWriteIndex()
+  {
+    return metadataQueue.getWriteIndex();
+  }
+  
+  public boolean hasNextSample()
+  {
+    return metadataQueue.hasNextSample();
+  }
+  
+  public int peekSourceId()
+  {
+    return metadataQueue.peekSourceId();
+  }
+  
+  public int read(FormatHolder paramFormatHolder, DecoderInputBuffer paramDecoderInputBuffer, boolean paramBoolean1, boolean paramBoolean2, long paramLong)
+  {
+    switch (metadataQueue.read(paramFormatHolder, paramDecoderInputBuffer, paramBoolean1, paramBoolean2, downstreamFormat, extrasHolder))
+    {
+    default: 
+      throw new IllegalStateException();
+    case -3: 
+      return -3;
+    case -4: 
+      if (!paramDecoderInputBuffer.isEndOfStream())
+      {
+        if (timeUs < paramLong) {
+          paramDecoderInputBuffer.addFlag(Integer.MIN_VALUE);
+        }
+        if (paramDecoderInputBuffer.isEncrypted()) {
+          readEncryptionData(paramDecoderInputBuffer, extrasHolder);
+        }
+        paramDecoderInputBuffer.ensureSpaceForWrite(extrasHolder.size);
+        readData(extrasHolder.offset, data, extrasHolder.size);
+      }
+      return -4;
+    }
+    downstreamFormat = format;
+    return -5;
+  }
+  
+  public void reset()
+  {
+    reset(false);
+  }
+  
+  public void reset(boolean paramBoolean)
+  {
+    metadataQueue.reset(paramBoolean);
+    clearAllocationNodes(firstAllocationNode);
+    firstAllocationNode = new AllocationNode(0L, allocationLength);
+    readAllocationNode = firstAllocationNode;
+    writeAllocationNode = firstAllocationNode;
+    totalBytesWritten = 0L;
+    allocator.trim();
+  }
+  
+  public void rewind()
+  {
+    metadataQueue.rewind();
+    readAllocationNode = firstAllocationNode;
+  }
+  
+  public int sampleData(ExtractorInput paramExtractorInput, int paramInt, boolean paramBoolean)
+    throws IOException, InterruptedException
+  {
+    paramInt = preAppend(paramInt);
+    paramInt = paramExtractorInput.read(writeAllocationNode.allocation.data, writeAllocationNode.translateOffset(totalBytesWritten), paramInt);
+    if (paramInt == -1)
+    {
+      if (paramBoolean) {
+        return -1;
+      }
+      throw new EOFException();
+    }
+    postAppend(paramInt);
+    return paramInt;
+  }
+  
+  public void sampleData(ParsableByteArray paramParsableByteArray, int paramInt)
+  {
+    while (paramInt > 0)
+    {
+      int i = preAppend(paramInt);
+      paramParsableByteArray.readBytes(writeAllocationNode.allocation.data, writeAllocationNode.translateOffset(totalBytesWritten), i);
+      paramInt -= i;
+      postAppend(i);
+    }
+  }
+  
+  public void sampleMetadata(long paramLong, int paramInt1, int paramInt2, int paramInt3, @Nullable TrackOutput.CryptoData paramCryptoData)
+  {
+    if (pendingFormatAdjustment) {
+      format(lastUnadjustedFormat);
+    }
+    paramLong += sampleOffsetUs;
+    if (pendingSplice) {
+      if ((paramInt1 & 0x1) != 0)
+      {
+        if (!metadataQueue.attemptSplice(paramLong)) {
+          return;
+        }
+        pendingSplice = false;
+      }
+      else
+      {
+        return;
+      }
+    }
+    long l1 = totalBytesWritten;
+    long l2 = paramInt2;
+    long l3 = paramInt3;
+    metadataQueue.commitSample(paramLong, paramInt1, l1 - l2 - l3, paramInt2, paramCryptoData);
+  }
+  
+  public boolean setReadPosition(int paramInt)
+  {
+    return metadataQueue.setReadPosition(paramInt);
+  }
+  
+  public void setSampleOffsetUs(long paramLong)
+  {
+    if (sampleOffsetUs != paramLong)
+    {
+      sampleOffsetUs = paramLong;
+      pendingFormatAdjustment = true;
+    }
+  }
+  
+  public void setUpstreamFormatChangeListener(UpstreamFormatChangedListener paramUpstreamFormatChangedListener)
+  {
+    upstreamFormatChangeListener = paramUpstreamFormatChangedListener;
+  }
+  
+  public void sourceId(int paramInt)
+  {
+    metadataQueue.sourceId(paramInt);
+  }
+  
+  public void splice()
+  {
+    pendingSplice = true;
+  }
+  
+  private static final class AllocationNode
+  {
+    @Nullable
+    public Allocation allocation;
+    public final long endPosition;
+    @Nullable
+    public AllocationNode next;
+    public final long startPosition;
+    public boolean wasInitialized;
+    
+    public AllocationNode(long paramLong, int paramInt)
+    {
+      startPosition = paramLong;
+      endPosition = (paramLong + paramInt);
+    }
+    
+    public AllocationNode clear()
+    {
+      allocation = null;
+      AllocationNode localAllocationNode = next;
+      next = null;
+      return localAllocationNode;
+    }
+    
+    public void initialize(Allocation paramAllocation, AllocationNode paramAllocationNode)
+    {
+      allocation = paramAllocation;
+      next = paramAllocationNode;
+      wasInitialized = true;
+    }
+    
+    public int translateOffset(long paramLong)
+    {
+      return (int)(paramLong - startPosition) + allocation.offset;
+    }
+  }
+  
+  public static abstract interface UpstreamFormatChangedListener
+  {
+    public abstract void onUpstreamFormatChanged(Format paramFormat);
+  }
+}

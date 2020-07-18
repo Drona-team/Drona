@@ -1,0 +1,327 @@
+package client.testing.model;
+
+import client.testing.util.ParametersConverter;
+import client.testing.util.StringUtils;
+import com.google.gson.JsonElement;
+import com.google.gson.JsonObject;
+import com.google.gson.JsonPrimitive;
+import com.google.gson.annotations.SerializedName;
+import java.io.Serializable;
+import java.text.ParseException;
+import java.util.Date;
+import java.util.HashMap;
+import java.util.Iterator;
+import java.util.LinkedList;
+import java.util.List;
+import java.util.Set;
+
+public class Result
+  implements Serializable
+{
+  private static final String DATE_FORMAT_ERROR_MESSAGE = "'%s' parameter has value '%s' and can't be parsed as a Date or Time";
+  private static final long serialVersionUID = 1L;
+  @SerializedName("action")
+  private String action;
+  @SerializedName("actionIncomplete")
+  private boolean actionIncomplete;
+  @SerializedName("contexts")
+  private List<ai.api.model.AIOutputContext> contexts;
+  @SerializedName("fulfillment")
+  private Fulfillment fulfillment;
+  @SerializedName("metadata")
+  private Metadata metadata;
+  @SerializedName("parameters")
+  private HashMap<String, JsonElement> parameters;
+  @SerializedName("resolvedQuery")
+  private String resolvedQuery;
+  @SerializedName("score")
+  private float score;
+  @SerializedName("source")
+  private String source;
+  
+  public Result() {}
+  
+  public String getAction()
+  {
+    if (action == null) {
+      return "";
+    }
+    return action;
+  }
+  
+  public JsonObject getComplexParameter(String paramString)
+  {
+    return getComplexParameter(paramString, null);
+  }
+  
+  public JsonObject getComplexParameter(String paramString, JsonObject paramJsonObject)
+  {
+    if (parameters.containsKey(paramString))
+    {
+      paramString = ((JsonElement)parameters.get(paramString)).getAsJsonObject();
+      if (paramString == null) {
+        return paramJsonObject;
+      }
+      return paramString;
+    }
+    return paramJsonObject;
+  }
+  
+  public AIOutputContext getContext(String paramString)
+  {
+    if (!StringUtils.isEmpty(paramString))
+    {
+      if (contexts == null) {
+        return null;
+      }
+      Iterator localIterator = contexts.iterator();
+      while (localIterator.hasNext())
+      {
+        AIOutputContext localAIOutputContext = (AIOutputContext)localIterator.next();
+        if (paramString.equalsIgnoreCase(localAIOutputContext.getName())) {
+          return localAIOutputContext;
+        }
+      }
+      return null;
+    }
+    throw new IllegalArgumentException("name argument must be not empty");
+  }
+  
+  public List getContexts()
+  {
+    return contexts;
+  }
+  
+  public Date getDateParameter(String paramString)
+    throws IllegalArgumentException
+  {
+    return getDateParameter(paramString, null);
+  }
+  
+  public Date getDateParameter(String paramString, Date paramDate)
+    throws IllegalArgumentException
+  {
+    if (parameters.containsKey(paramString))
+    {
+      String str = ((JsonElement)parameters.get(paramString)).getAsString();
+      if (StringUtils.isEmpty(str)) {
+        return paramDate;
+      }
+      try
+      {
+        paramDate = ParametersConverter.parseDate(str);
+        return paramDate;
+      }
+      catch (ParseException paramDate)
+      {
+        throw new IllegalArgumentException(String.format("'%s' parameter has value '%s' and can't be parsed as a Date or Time", new Object[] { paramString, str }), paramDate);
+      }
+    }
+    return paramDate;
+  }
+  
+  public Date getDateTimeParameter(String paramString)
+    throws IllegalArgumentException
+  {
+    return getDateTimeParameter(paramString, null);
+  }
+  
+  public Date getDateTimeParameter(String paramString, Date paramDate)
+    throws IllegalArgumentException
+  {
+    if (parameters.containsKey(paramString))
+    {
+      String str = ((JsonElement)parameters.get(paramString)).getAsString();
+      if (StringUtils.isEmpty(str)) {
+        return paramDate;
+      }
+      try
+      {
+        paramDate = ParametersConverter.parseDateTime(str);
+        return paramDate;
+      }
+      catch (ParseException paramDate)
+      {
+        throw new IllegalArgumentException(String.format("'%s' parameter has value '%s' and can't be parsed as a Date or Time", new Object[] { paramString, str }), paramDate);
+      }
+    }
+    return paramDate;
+  }
+  
+  public float getFloatParameter(String paramString)
+  {
+    return getFloatParameter(paramString, 0.0F);
+  }
+  
+  public float getFloatParameter(String paramString, float paramFloat)
+  {
+    float f = paramFloat;
+    if (parameters.containsKey(paramString))
+    {
+      paramString = ((JsonElement)parameters.get(paramString)).getAsString();
+      if (StringUtils.isEmpty(paramString)) {
+        return paramFloat;
+      }
+      f = ParametersConverter.parseFloat(paramString);
+    }
+    return f;
+  }
+  
+  public Fulfillment getFulfillment()
+  {
+    return fulfillment;
+  }
+  
+  public int getIntParameter(String paramString)
+  {
+    return getIntParameter(paramString, 0);
+  }
+  
+  public int getIntParameter(String paramString, int paramInt)
+  {
+    int i = paramInt;
+    if (parameters.containsKey(paramString))
+    {
+      paramString = ((JsonElement)parameters.get(paramString)).getAsString();
+      if (StringUtils.isEmpty(paramString)) {
+        return paramInt;
+      }
+      i = ParametersConverter.parseInteger(paramString);
+    }
+    return i;
+  }
+  
+  public Metadata getMetadata()
+  {
+    return metadata;
+  }
+  
+  public HashMap getParameters()
+  {
+    return parameters;
+  }
+  
+  public String getResolvedQuery()
+  {
+    return resolvedQuery;
+  }
+  
+  public float getScore()
+  {
+    return score;
+  }
+  
+  public String getSource()
+  {
+    return source;
+  }
+  
+  public String getStringParameter(String paramString)
+  {
+    return getStringParameter(paramString, "");
+  }
+  
+  public String getStringParameter(String paramString1, String paramString2)
+  {
+    if (parameters.containsKey(paramString1)) {
+      return ((JsonElement)parameters.get(paramString1)).getAsString();
+    }
+    return paramString2;
+  }
+  
+  public Date getTimeParameter(String paramString)
+    throws IllegalArgumentException
+  {
+    return getTimeParameter(paramString, null);
+  }
+  
+  public Date getTimeParameter(String paramString, Date paramDate)
+    throws IllegalArgumentException
+  {
+    if (parameters.containsKey(paramString))
+    {
+      String str = ((JsonElement)parameters.get(paramString)).getAsString();
+      if (StringUtils.isEmpty(str)) {
+        return paramDate;
+      }
+      try
+      {
+        paramDate = ParametersConverter.parseTime(str);
+        return paramDate;
+      }
+      catch (ParseException paramDate)
+      {
+        throw new IllegalArgumentException(String.format("'%s' parameter has value '%s' and can't be parsed as a Date or Time", new Object[] { paramString, str }), paramDate);
+      }
+    }
+    return paramDate;
+  }
+  
+  public boolean isActionIncomplete()
+  {
+    return actionIncomplete;
+  }
+  
+  public void setAction(String paramString)
+  {
+    action = paramString;
+  }
+  
+  public void setActionIncomplete(boolean paramBoolean)
+  {
+    actionIncomplete = paramBoolean;
+  }
+  
+  public void setFulfillment(Fulfillment paramFulfillment)
+  {
+    fulfillment = paramFulfillment;
+  }
+  
+  public void setMetadata(Metadata paramMetadata)
+  {
+    metadata = paramMetadata;
+  }
+  
+  public void setResolvedQuery(String paramString)
+  {
+    resolvedQuery = paramString;
+  }
+  
+  public void setScore(float paramFloat)
+  {
+    score = paramFloat;
+  }
+  
+  public void setSource(String paramString)
+  {
+    source = paramString;
+  }
+  
+  public String toString()
+  {
+    return String.format("Result {action='%s', resolvedQuery='%s'}", new Object[] { action, resolvedQuery });
+  }
+  
+  void trimParameters()
+  {
+    if (parameters != null)
+    {
+      Object localObject1 = new LinkedList();
+      Object localObject2 = parameters.keySet().iterator();
+      while (((Iterator)localObject2).hasNext())
+      {
+        String str = (String)((Iterator)localObject2).next();
+        JsonElement localJsonElement = (JsonElement)parameters.get(str);
+        if ((localJsonElement != null) && (localJsonElement.isJsonPrimitive()) && (((JsonPrimitive)localJsonElement).isString()) && (StringUtils.isEmpty(localJsonElement.getAsString()))) {
+          ((List)localObject1).add(str);
+        }
+      }
+      localObject1 = ((List)localObject1).iterator();
+      while (((Iterator)localObject1).hasNext())
+      {
+        localObject2 = (String)((Iterator)localObject1).next();
+        parameters.remove(localObject2);
+      }
+    }
+  }
+}

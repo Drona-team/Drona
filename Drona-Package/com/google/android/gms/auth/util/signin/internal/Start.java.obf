@@ -1,0 +1,45 @@
+package com.google.android.gms.auth.api.signin.internal;
+
+import android.os.IBinder;
+import android.os.Parcel;
+import android.os.RemoteException;
+import com.google.android.gms.auth.api.signin.GoogleSignInOptions;
+import com.google.android.gms.internal.auth-api.zzc;
+import com.google.android.gms.internal.auth-api.zze;
+
+public final class zzv
+  extends zzc
+  implements zzu
+{
+  zzv(IBinder paramIBinder)
+  {
+    super(paramIBinder, "com.google.android.gms.auth.api.signin.internal.ISignInService");
+  }
+  
+  public final void zzc(zzs paramZzs, GoogleSignInOptions paramGoogleSignInOptions)
+    throws RemoteException
+  {
+    Parcel localParcel = obtainAndWriteInterfaceToken();
+    zze.zzc(localParcel, paramZzs);
+    zze.zzc(localParcel, paramGoogleSignInOptions);
+    transactAndReadExceptionReturnVoid(101, localParcel);
+  }
+  
+  public final void zzd(zzs paramZzs, GoogleSignInOptions paramGoogleSignInOptions)
+    throws RemoteException
+  {
+    Parcel localParcel = obtainAndWriteInterfaceToken();
+    zze.zzc(localParcel, paramZzs);
+    zze.zzc(localParcel, paramGoogleSignInOptions);
+    transactAndReadExceptionReturnVoid(102, localParcel);
+  }
+  
+  public final void zze(zzs paramZzs, GoogleSignInOptions paramGoogleSignInOptions)
+    throws RemoteException
+  {
+    Parcel localParcel = obtainAndWriteInterfaceToken();
+    zze.zzc(localParcel, paramZzs);
+    zze.zzc(localParcel, paramGoogleSignInOptions);
+    transactAndReadExceptionReturnVoid(103, localParcel);
+  }
+}

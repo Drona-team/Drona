@@ -1,0 +1,290 @@
+package com.google.android.exoplayer2;
+
+import com.google.android.exoplayer2.source.ClippingMediaPeriod;
+import com.google.android.exoplayer2.source.EmptySampleStream;
+import com.google.android.exoplayer2.source.MediaPeriod;
+import com.google.android.exoplayer2.source.MediaSource;
+import com.google.android.exoplayer2.source.MediaSource.MediaPeriodId;
+import com.google.android.exoplayer2.source.SampleStream;
+import com.google.android.exoplayer2.source.TrackGroupArray;
+import com.google.android.exoplayer2.trackselection.TrackSelection;
+import com.google.android.exoplayer2.trackselection.TrackSelectionArray;
+import com.google.android.exoplayer2.trackselection.TrackSelector;
+import com.google.android.exoplayer2.trackselection.TrackSelectorResult;
+import com.google.android.exoplayer2.upstream.Allocator;
+import com.google.android.exoplayer2.util.Assertions;
+import com.google.android.exoplayer2.util.Log;
+
+final class MediaPeriodHolder
+{
+  private static final String TAG = "MediaPeriodHolder";
+  public boolean hasEnabledTracks;
+  public MediaPeriodInfo info;
+  public final boolean[] mayRetainStreamFlags;
+  public final MediaPeriod mediaPeriod;
+  private final MediaSource mediaSource;
+  public MediaPeriodHolder next;
+  private TrackSelectorResult periodTrackSelectorResult;
+  public boolean prepared;
+  private final RendererCapabilities[] rendererCapabilities;
+  private long rendererPositionOffsetUs;
+  public final SampleStream[] sampleStreams;
+  public TrackGroupArray trackGroups;
+  private final TrackSelector trackSelector;
+  public TrackSelectorResult trackSelectorResult;
+  public final Object uid;
+  
+  public MediaPeriodHolder(RendererCapabilities[] paramArrayOfRendererCapabilities, long paramLong, TrackSelector paramTrackSelector, Allocator paramAllocator, MediaSource paramMediaSource, MediaPeriodInfo paramMediaPeriodInfo)
+  {
+    rendererCapabilities = paramArrayOfRendererCapabilities;
+    rendererPositionOffsetUs = (paramLong - startPositionUs);
+    trackSelector = paramTrackSelector;
+    mediaSource = paramMediaSource;
+    uid = Assertions.checkNotNull(id.periodUid);
+    info = paramMediaPeriodInfo;
+    sampleStreams = new SampleStream[paramArrayOfRendererCapabilities.length];
+    mayRetainStreamFlags = new boolean[paramArrayOfRendererCapabilities.length];
+    paramArrayOfRendererCapabilities = paramMediaSource.createPeriod(id, paramAllocator);
+    if (id.endPositionUs != Long.MIN_VALUE) {
+      paramArrayOfRendererCapabilities = new ClippingMediaPeriod(paramArrayOfRendererCapabilities, true, 0L, id.endPositionUs);
+    }
+    mediaPeriod = paramArrayOfRendererCapabilities;
+  }
+  
+  private void associateNoSampleRenderersWithEmptySampleStream(SampleStream[] paramArrayOfSampleStream)
+  {
+    int i = 0;
+    while (i < rendererCapabilities.length)
+    {
+      if ((rendererCapabilities[i].getTrackType() == 6) && (trackSelectorResult.isRendererEnabled(i))) {
+        paramArrayOfSampleStream[i] = new EmptySampleStream();
+      }
+      i += 1;
+    }
+  }
+  
+  private void disableTrackSelectionsInResult(TrackSelectorResult paramTrackSelectorResult)
+  {
+    int i = 0;
+    while (i < length)
+    {
+      boolean bool = paramTrackSelectorResult.isRendererEnabled(i);
+      TrackSelection localTrackSelection = selections.get(i);
+      if ((bool) && (localTrackSelection != null)) {
+        localTrackSelection.disable();
+      }
+      i += 1;
+    }
+  }
+  
+  private void disassociateNoSampleRenderersWithEmptySampleStream(SampleStream[] paramArrayOfSampleStream)
+  {
+    int i = 0;
+    while (i < rendererCapabilities.length)
+    {
+      if (rendererCapabilities[i].getTrackType() == 6) {
+        paramArrayOfSampleStream[i] = null;
+      }
+      i += 1;
+    }
+  }
+  
+  private void enableTrackSelectionsInResult(TrackSelectorResult paramTrackSelectorResult)
+  {
+    int i = 0;
+    while (i < length)
+    {
+      boolean bool = paramTrackSelectorResult.isRendererEnabled(i);
+      TrackSelection localTrackSelection = selections.get(i);
+      if ((bool) && (localTrackSelection != null)) {
+        localTrackSelection.enable();
+      }
+      i += 1;
+    }
+  }
+  
+  private void updatePeriodTrackSelectorResult(TrackSelectorResult paramTrackSelectorResult)
+  {
+    if (periodTrackSelectorResult != null) {
+      disableTrackSelectionsInResult(periodTrackSelectorResult);
+    }
+    periodTrackSelectorResult = paramTrackSelectorResult;
+    if (periodTrackSelectorResult != null) {
+      enableTrackSelectionsInResult(periodTrackSelectorResult);
+    }
+  }
+  
+  public long applyTrackSelection(long paramLong, boolean paramBoolean)
+  {
+    return applyTrackSelection(paramLong, paramBoolean, new boolean[rendererCapabilities.length]);
+  }
+  
+  public long applyTrackSelection(long paramLong, boolean paramBoolean, boolean[] paramArrayOfBoolean)
+  {
+    int i = 0;
+    for (;;)
+    {
+      int j = trackSelectorResult.length;
+      int k = 1;
+      if (i >= j) {
+        break;
+      }
+      localObject = mayRetainStreamFlags;
+      if ((paramBoolean) || (!trackSelectorResult.isEquivalent(periodTrackSelectorResult, i))) {
+        k = 0;
+      }
+      localObject[i] = k;
+      i += 1;
+    }
+    disassociateNoSampleRenderersWithEmptySampleStream(sampleStreams);
+    updatePeriodTrackSelectorResult(trackSelectorResult);
+    Object localObject = trackSelectorResult.selections;
+    paramLong = mediaPeriod.selectTracks(((TrackSelectionArray)localObject).getAll(), mayRetainStreamFlags, sampleStreams, paramArrayOfBoolean, paramLong);
+    associateNoSampleRenderersWithEmptySampleStream(sampleStreams);
+    hasEnabledTracks = false;
+    i = 0;
+    while (i < sampleStreams.length)
+    {
+      if (sampleStreams[i] != null)
+      {
+        Assertions.checkState(trackSelectorResult.isRendererEnabled(i));
+        if (rendererCapabilities[i].getTrackType() != 6) {
+          hasEnabledTracks = true;
+        }
+      }
+      else
+      {
+        if (((TrackSelectionArray)localObject).get(i) == null) {
+          paramBoolean = true;
+        } else {
+          paramBoolean = false;
+        }
+        Assertions.checkState(paramBoolean);
+      }
+      i += 1;
+    }
+    return paramLong;
+  }
+  
+  public void continueLoading(long paramLong)
+  {
+    paramLong = toPeriodTime(paramLong);
+    mediaPeriod.continueLoading(paramLong);
+  }
+  
+  public long getBufferedPositionUs()
+  {
+    if (!prepared) {
+      return info.startPositionUs;
+    }
+    long l1;
+    if (hasEnabledTracks) {
+      l1 = mediaPeriod.getBufferedPositionUs();
+    } else {
+      l1 = Long.MIN_VALUE;
+    }
+    long l2 = l1;
+    if (l1 == Long.MIN_VALUE) {
+      l2 = info.durationUs;
+    }
+    return l2;
+  }
+  
+  public long getDurationUs()
+  {
+    return info.durationUs;
+  }
+  
+  public long getNextLoadPositionUs()
+  {
+    if (!prepared) {
+      return 0L;
+    }
+    return mediaPeriod.getNextLoadPositionUs();
+  }
+  
+  public long getRendererOffset()
+  {
+    return rendererPositionOffsetUs;
+  }
+  
+  public long getStartPositionRendererTime()
+  {
+    return info.startPositionUs + rendererPositionOffsetUs;
+  }
+  
+  public void handlePrepared(float paramFloat)
+    throws ExoPlaybackException
+  {
+    prepared = true;
+    trackGroups = mediaPeriod.getTrackGroups();
+    selectTracks(paramFloat);
+    long l = applyTrackSelection(info.startPositionUs, false);
+    rendererPositionOffsetUs += info.startPositionUs - l;
+    info = info.copyWithStartPositionUs(l);
+  }
+  
+  public boolean isFullyBuffered()
+  {
+    return (prepared) && ((!hasEnabledTracks) || (mediaPeriod.getBufferedPositionUs() == Long.MIN_VALUE));
+  }
+  
+  public void reevaluateBuffer(long paramLong)
+  {
+    if (prepared) {
+      mediaPeriod.reevaluateBuffer(toPeriodTime(paramLong));
+    }
+  }
+  
+  public void release()
+  {
+    updatePeriodTrackSelectorResult(null);
+    try
+    {
+      if (info.id.endPositionUs != Long.MIN_VALUE)
+      {
+        mediaSource.releasePeriod(mediaPeriod).mediaPeriod);
+        return;
+      }
+      mediaSource.releasePeriod(mediaPeriod);
+      return;
+    }
+    catch (RuntimeException localRuntimeException)
+    {
+      Log.e("MediaPeriodHolder", "Period release failed.", localRuntimeException);
+    }
+  }
+  
+  public boolean selectTracks(float paramFloat)
+    throws ExoPlaybackException
+  {
+    Object localObject1 = trackSelector.selectTracks(rendererCapabilities, trackGroups);
+    boolean bool = ((TrackSelectorResult)localObject1).isEquivalent(periodTrackSelectorResult);
+    int i = 0;
+    if (bool) {
+      return false;
+    }
+    trackSelectorResult = ((TrackSelectorResult)localObject1);
+    localObject1 = trackSelectorResult.selections.getAll();
+    int j = localObject1.length;
+    while (i < j)
+    {
+      Object localObject2 = localObject1[i];
+      if (localObject2 != null) {
+        localObject2.onPlaybackSpeed(paramFloat);
+      }
+      i += 1;
+    }
+    return true;
+  }
+  
+  public long toPeriodTime(long paramLong)
+  {
+    return paramLong - getRendererOffset();
+  }
+  
+  public long toRendererTime(long paramLong)
+  {
+    return paramLong + getRendererOffset();
+  }
+}

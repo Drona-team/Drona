@@ -1,0 +1,255 @@
+package com.google.android.exoplayer2.text.pgs;
+
+import android.graphics.Bitmap;
+import android.graphics.Bitmap.Config;
+import com.google.android.exoplayer2.text.Cue;
+import com.google.android.exoplayer2.text.SimpleSubtitleDecoder;
+import com.google.android.exoplayer2.text.Subtitle;
+import com.google.android.exoplayer2.text.SubtitleDecoderException;
+import com.google.android.exoplayer2.util.ParsableByteArray;
+import com.google.android.exoplayer2.util.Util;
+import java.util.ArrayList;
+import java.util.Arrays;
+import java.util.Collections;
+import java.util.zip.Inflater;
+
+public final class PgsDecoder
+  extends SimpleSubtitleDecoder
+{
+  private static final byte INFLATE_HEADER = 120;
+  private static final int SECTION_TYPE_BITMAP_PICTURE = 21;
+  private static final int SECTION_TYPE_END = 128;
+  private static final int SECTION_TYPE_IDENTIFIER = 22;
+  private static final int SECTION_TYPE_PALETTE = 20;
+  private final ParsableByteArray buffer = new ParsableByteArray();
+  private final CueBuilder cueBuilder = new CueBuilder();
+  private final ParsableByteArray inflatedBuffer = new ParsableByteArray();
+  private Inflater inflater;
+  
+  public PgsDecoder()
+  {
+    super("PgsDecoder");
+  }
+  
+  private void maybeInflateData(ParsableByteArray paramParsableByteArray)
+  {
+    if ((paramParsableByteArray.bytesLeft() > 0) && (paramParsableByteArray.peekUnsignedByte() == 120))
+    {
+      if (inflater == null) {
+        inflater = new Inflater();
+      }
+      if (Util.inflate(paramParsableByteArray, inflatedBuffer, inflater)) {
+        paramParsableByteArray.reset(inflatedBuffer.data, inflatedBuffer.limit());
+      }
+    }
+  }
+  
+  private static Cue readNextSection(ParsableByteArray paramParsableByteArray, CueBuilder paramCueBuilder)
+  {
+    int i = paramParsableByteArray.limit();
+    int j = paramParsableByteArray.readUnsignedByte();
+    int k = paramParsableByteArray.readUnsignedShort();
+    int m = paramParsableByteArray.getPosition() + k;
+    Cue localCue = null;
+    if (m > i)
+    {
+      paramParsableByteArray.setPosition(i);
+      return null;
+    }
+    if (j != 128)
+    {
+      switch (j)
+      {
+      default: 
+        paramCueBuilder = localCue;
+        break;
+      case 22: 
+        paramCueBuilder.parseIdentifierSection(paramParsableByteArray, k);
+        paramCueBuilder = localCue;
+        break;
+      case 21: 
+        paramCueBuilder.parseBitmapSection(paramParsableByteArray, k);
+        paramCueBuilder = localCue;
+        break;
+      case 20: 
+        paramCueBuilder.parsePaletteSection(paramParsableByteArray, k);
+        paramCueBuilder = localCue;
+        break;
+      }
+    }
+    else
+    {
+      localCue = paramCueBuilder.build();
+      paramCueBuilder.reset();
+      paramCueBuilder = localCue;
+    }
+    paramParsableByteArray.setPosition(m);
+    return paramCueBuilder;
+  }
+  
+  protected Subtitle decode(byte[] paramArrayOfByte, int paramInt, boolean paramBoolean)
+    throws SubtitleDecoderException
+  {
+    buffer.reset(paramArrayOfByte, paramInt);
+    maybeInflateData(buffer);
+    cueBuilder.reset();
+    paramArrayOfByte = new ArrayList();
+    while (buffer.bytesLeft() >= 3)
+    {
+      Cue localCue = readNextSection(buffer, cueBuilder);
+      if (localCue != null) {
+        paramArrayOfByte.add(localCue);
+      }
+    }
+    return new PgsSubtitle(Collections.unmodifiableList(paramArrayOfByte));
+  }
+  
+  private static final class CueBuilder
+  {
+    private final ParsableByteArray bitmapData = new ParsableByteArray();
+    private int bitmapHeight;
+    private int bitmapWidth;
+    private int bitmapX;
+    private int bitmapY;
+    private final int[] colors = new int['?'];
+    private boolean colorsSet;
+    private int planeHeight;
+    private int planeWidth;
+    
+    public CueBuilder() {}
+    
+    private void parseBitmapSection(ParsableByteArray paramParsableByteArray, int paramInt)
+    {
+      if (paramInt < 4) {
+        return;
+      }
+      paramParsableByteArray.skipBytes(3);
+      if ((paramParsableByteArray.readUnsignedByte() & 0x80) != 0) {
+        i = 1;
+      } else {
+        i = 0;
+      }
+      int j = paramInt - 4;
+      paramInt = j;
+      if (i != 0)
+      {
+        if (j < 7) {
+          return;
+        }
+        paramInt = paramParsableByteArray.readUnsignedInt24();
+        if (paramInt < 4) {
+          return;
+        }
+        bitmapWidth = paramParsableByteArray.readUnsignedShort();
+        bitmapHeight = paramParsableByteArray.readUnsignedShort();
+        bitmapData.reset(paramInt - 4);
+        paramInt = j - 7;
+      }
+      int i = bitmapData.getPosition();
+      j = bitmapData.limit();
+      if ((i < j) && (paramInt > 0))
+      {
+        paramInt = Math.min(paramInt, j - i);
+        paramParsableByteArray.readBytes(bitmapData.data, i, paramInt);
+        bitmapData.setPosition(i + paramInt);
+      }
+    }
+    
+    private void parseIdentifierSection(ParsableByteArray paramParsableByteArray, int paramInt)
+    {
+      if (paramInt < 19) {
+        return;
+      }
+      planeWidth = paramParsableByteArray.readUnsignedShort();
+      planeHeight = paramParsableByteArray.readUnsignedShort();
+      paramParsableByteArray.skipBytes(11);
+      bitmapX = paramParsableByteArray.readUnsignedShort();
+      bitmapY = paramParsableByteArray.readUnsignedShort();
+    }
+    
+    private void parsePaletteSection(ParsableByteArray paramParsableByteArray, int paramInt)
+    {
+      if (paramInt % 5 != 2) {
+        return;
+      }
+      paramParsableByteArray.skipBytes(2);
+      Arrays.fill(colors, 0);
+      int i = paramInt / 5;
+      paramInt = 0;
+      while (paramInt < i)
+      {
+        int j = paramParsableByteArray.readUnsignedByte();
+        int n = paramParsableByteArray.readUnsignedByte();
+        int i1 = paramParsableByteArray.readUnsignedByte();
+        int m = paramParsableByteArray.readUnsignedByte();
+        int k = paramParsableByteArray.readUnsignedByte();
+        double d1 = n;
+        double d2 = i1 - 128;
+        n = (int)(1.402D * d2 + d1);
+        double d3 = m - 128;
+        i1 = (int)(d1 - 0.34414D * d3 - d2 * 0.71414D);
+        m = (int)(d1 + d3 * 1.772D);
+        int[] arrayOfInt = colors;
+        n = Util.constrainValue(n, 0, 255);
+        i1 = Util.constrainValue(i1, 0, 255);
+        arrayOfInt[j] = (Util.constrainValue(m, 0, 255) | i1 << 8 | k << 24 | n << 16);
+        paramInt += 1;
+      }
+      colorsSet = true;
+    }
+    
+    public Cue build()
+    {
+      if ((planeWidth != 0) && (planeHeight != 0) && (bitmapWidth != 0) && (bitmapHeight != 0) && (bitmapData.limit() != 0) && (bitmapData.getPosition() == bitmapData.limit()) && (colorsSet))
+      {
+        bitmapData.setPosition(0);
+        int[] arrayOfInt = new int[bitmapWidth * bitmapHeight];
+        int i = 0;
+        if (i < arrayOfInt.length)
+        {
+          int k = bitmapData.readUnsignedByte();
+          int j;
+          if (k != 0)
+          {
+            j = i + 1;
+            arrayOfInt[i] = colors[k];
+          }
+          for (i = j;; i = j)
+          {
+            break;
+            k = bitmapData.readUnsignedByte();
+            if (k == 0) {
+              break;
+            }
+            if ((k & 0x40) == 0) {
+              j = k & 0x3F;
+            } else {
+              j = (k & 0x3F) << 8 | bitmapData.readUnsignedByte();
+            }
+            if ((k & 0x80) == 0) {
+              k = 0;
+            } else {
+              k = colors[bitmapData.readUnsignedByte()];
+            }
+            j += i;
+            Arrays.fill(arrayOfInt, i, j, k);
+          }
+        }
+        return new Cue(Bitmap.createBitmap(arrayOfInt, bitmapWidth, bitmapHeight, Bitmap.Config.ARGB_8888), bitmapX / planeWidth, 0, bitmapY / planeHeight, 0, bitmapWidth / planeWidth, bitmapHeight / planeHeight);
+      }
+      return null;
+    }
+    
+    public void reset()
+    {
+      planeWidth = 0;
+      planeHeight = 0;
+      bitmapX = 0;
+      bitmapY = 0;
+      bitmapWidth = 0;
+      bitmapHeight = 0;
+      bitmapData.reset(0);
+      colorsSet = false;
+    }
+  }
+}

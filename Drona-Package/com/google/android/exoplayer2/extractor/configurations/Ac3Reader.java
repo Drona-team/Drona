@@ -1,0 +1,157 @@
+package com.google.android.exoplayer2.extractor.configurations;
+
+import com.google.android.exoplayer2.Format;
+import com.google.android.exoplayer2.audio.Ac3Util;
+import com.google.android.exoplayer2.audio.Ac3Util.SyncFrameInfo;
+import com.google.android.exoplayer2.extractor.ExtractorOutput;
+import com.google.android.exoplayer2.extractor.TrackOutput;
+import com.google.android.exoplayer2.util.ParsableBitArray;
+import com.google.android.exoplayer2.util.ParsableByteArray;
+
+public final class Ac3Reader
+  implements ElementaryStreamReader
+{
+  private static final int HEADER_SIZE = 128;
+  private static final int STATE_FINDING_SYNC = 0;
+  private static final int STATE_READING_HEADER = 1;
+  private static final int STATE_READING_SAMPLE = 2;
+  private int bytesRead;
+  private Format format;
+  private final ParsableBitArray headerScratchBits = new ParsableBitArray(new byte['?']);
+  private final ParsableByteArray headerScratchBytes = new ParsableByteArray(headerScratchBits.data);
+  private final String language;
+  private boolean lastByteWas0B;
+  private TrackOutput output;
+  private long sampleDurationUs;
+  private int sampleSize;
+  private int state = 0;
+  private long timeUs;
+  private String trackFormatId;
+  
+  public Ac3Reader()
+  {
+    this(null);
+  }
+  
+  public Ac3Reader(String paramString)
+  {
+    language = paramString;
+  }
+  
+  private boolean continueRead(ParsableByteArray paramParsableByteArray, byte[] paramArrayOfByte, int paramInt)
+  {
+    int i = Math.min(paramParsableByteArray.bytesLeft(), paramInt - bytesRead);
+    paramParsableByteArray.readBytes(paramArrayOfByte, bytesRead, i);
+    bytesRead += i;
+    return bytesRead == paramInt;
+  }
+  
+  private void parseHeader()
+  {
+    headerScratchBits.setPosition(0);
+    Ac3Util.SyncFrameInfo localSyncFrameInfo = Ac3Util.parseAc3SyncframeInfo(headerScratchBits);
+    if ((format == null) || (channelCount != format.channelCount) || (sampleRate != format.sampleRate) || (mimeType != format.sampleMimeType))
+    {
+      format = Format.createAudioSampleFormat(trackFormatId, mimeType, null, -1, -1, channelCount, sampleRate, null, null, 0, language);
+      output.format(format);
+    }
+    sampleSize = frameSize;
+    sampleDurationUs = (sampleCount * 1000000L / format.sampleRate);
+  }
+  
+  private boolean skipToNextSync(ParsableByteArray paramParsableByteArray)
+  {
+    for (;;)
+    {
+      int i = paramParsableByteArray.bytesLeft();
+      boolean bool2 = false;
+      boolean bool1 = false;
+      if (i <= 0) {
+        break;
+      }
+      if (!lastByteWas0B)
+      {
+        if (paramParsableByteArray.readUnsignedByte() == 11) {
+          bool1 = true;
+        }
+        lastByteWas0B = bool1;
+      }
+      else
+      {
+        i = paramParsableByteArray.readUnsignedByte();
+        if (i == 119)
+        {
+          lastByteWas0B = false;
+          return true;
+        }
+        bool1 = bool2;
+        if (i == 11) {
+          bool1 = true;
+        }
+        lastByteWas0B = bool1;
+      }
+    }
+    return false;
+  }
+  
+  public void consume(ParsableByteArray paramParsableByteArray)
+  {
+    while (paramParsableByteArray.bytesLeft() > 0) {
+      switch (state)
+      {
+      default: 
+        break;
+      case 2: 
+        int i = Math.min(paramParsableByteArray.bytesLeft(), sampleSize - bytesRead);
+        output.sampleData(paramParsableByteArray, i);
+        bytesRead += i;
+        if (bytesRead == sampleSize)
+        {
+          output.sampleMetadata(timeUs, 1, sampleSize, 0, null);
+          timeUs += sampleDurationUs;
+          state = 0;
+        }
+        break;
+      case 1: 
+        if (continueRead(paramParsableByteArray, headerScratchBytes.data, 128))
+        {
+          parseHeader();
+          headerScratchBytes.setPosition(0);
+          output.sampleData(headerScratchBytes, 128);
+          state = 2;
+        }
+        break;
+      case 0: 
+        if (skipToNextSync(paramParsableByteArray))
+        {
+          state = 1;
+          headerScratchBytes.data[0] = 11;
+          headerScratchBytes.data[1] = 119;
+          bytesRead = 2;
+        }
+        break;
+      }
+    }
+  }
+  
+  public void createTracks(ExtractorOutput paramExtractorOutput, TsPayloadReader.TrackIdGenerator paramTrackIdGenerator)
+  {
+    paramTrackIdGenerator.generateNewId();
+    trackFormatId = paramTrackIdGenerator.getFormatId();
+    output = paramExtractorOutput.track(paramTrackIdGenerator.getTrackId(), 1);
+  }
+  
+  public void packetFinished() {}
+  
+  public void packetStarted(long paramLong, boolean paramBoolean)
+  {
+    timeUs = paramLong;
+  }
+  
+  public void seek()
+  {
+    state = 0;
+    bytesRead = 0;
+    lastByteWas0B = false;
+  }
+}

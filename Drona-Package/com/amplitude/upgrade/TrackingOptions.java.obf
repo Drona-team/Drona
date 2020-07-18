@@ -1,0 +1,228 @@
+package com.amplitude.api;
+
+import java.util.HashSet;
+import java.util.Set;
+import org.json.JSONException;
+import org.json.JSONObject;
+
+public class TrackingOptions
+{
+  private static String[] SERVER_SIDE_PROPERTIES = { "city", "country", "dma", "ip_address", "lat_lng", "region" };
+  public static final String TAG = "com.amplitude.api.TrackingOptions";
+  Set<String> disabledFields = new HashSet();
+  
+  public TrackingOptions() {}
+  
+  private void disableTrackingField(String paramString)
+  {
+    disabledFields.add(paramString);
+  }
+  
+  private boolean shouldTrackField(String paramString)
+  {
+    return disabledFields.contains(paramString) ^ true;
+  }
+  
+  public TrackingOptions disableAdid()
+  {
+    disableTrackingField("adid");
+    return this;
+  }
+  
+  public TrackingOptions disableCarrier()
+  {
+    disableTrackingField("carrier");
+    return this;
+  }
+  
+  public TrackingOptions disableCity()
+  {
+    disableTrackingField("city");
+    return this;
+  }
+  
+  public TrackingOptions disableCountry()
+  {
+    disableTrackingField("country");
+    return this;
+  }
+  
+  public TrackingOptions disableDeviceBrand()
+  {
+    disableTrackingField("device_brand");
+    return this;
+  }
+  
+  public TrackingOptions disableDeviceManufacturer()
+  {
+    disableTrackingField("device_manufacturer");
+    return this;
+  }
+  
+  public TrackingOptions disableDeviceModel()
+  {
+    disableTrackingField("device_model");
+    return this;
+  }
+  
+  public TrackingOptions disableDma()
+  {
+    disableTrackingField("dma");
+    return this;
+  }
+  
+  public TrackingOptions disableIpAddress()
+  {
+    disableTrackingField("ip_address");
+    return this;
+  }
+  
+  public TrackingOptions disableLanguage()
+  {
+    disableTrackingField("language");
+    return this;
+  }
+  
+  public TrackingOptions disableLatLng()
+  {
+    disableTrackingField("lat_lng");
+    return this;
+  }
+  
+  public TrackingOptions disableOsName()
+  {
+    disableTrackingField("os_name");
+    return this;
+  }
+  
+  public TrackingOptions disableOsVersion()
+  {
+    disableTrackingField("os_version");
+    return this;
+  }
+  
+  public TrackingOptions disablePlatform()
+  {
+    disableTrackingField("platform");
+    return this;
+  }
+  
+  public TrackingOptions disableRegion()
+  {
+    disableTrackingField("region");
+    return this;
+  }
+  
+  public TrackingOptions disableVersionName()
+  {
+    disableTrackingField("version_name");
+    return this;
+  }
+  
+  protected JSONObject getApiPropertiesTrackingOptions()
+  {
+    JSONObject localJSONObject = new JSONObject();
+    if (disabledFields.isEmpty()) {
+      return localJSONObject;
+    }
+    String[] arrayOfString = SERVER_SIDE_PROPERTIES;
+    int j = arrayOfString.length;
+    int i = 0;
+    while (i < j)
+    {
+      String str = arrayOfString[i];
+      if (disabledFields.contains(str)) {
+        try
+        {
+          localJSONObject.put(str, false);
+        }
+        catch (JSONException localJSONException)
+        {
+          AmplitudeLog.getLogger().e("com.amplitude.api.TrackingOptions", localJSONException.toString());
+        }
+      }
+      i += 1;
+    }
+    return localJSONObject;
+  }
+  
+  boolean shouldTrackAdid()
+  {
+    return shouldTrackField("adid");
+  }
+  
+  boolean shouldTrackCarrier()
+  {
+    return shouldTrackField("carrier");
+  }
+  
+  boolean shouldTrackCity()
+  {
+    return shouldTrackField("city");
+  }
+  
+  boolean shouldTrackCountry()
+  {
+    return shouldTrackField("country");
+  }
+  
+  boolean shouldTrackDeviceBrand()
+  {
+    return shouldTrackField("device_brand");
+  }
+  
+  boolean shouldTrackDeviceManufacturer()
+  {
+    return shouldTrackField("device_manufacturer");
+  }
+  
+  boolean shouldTrackDeviceModel()
+  {
+    return shouldTrackField("device_model");
+  }
+  
+  boolean shouldTrackDma()
+  {
+    return shouldTrackField("dma");
+  }
+  
+  boolean shouldTrackIpAddress()
+  {
+    return shouldTrackField("ip_address");
+  }
+  
+  boolean shouldTrackLanguage()
+  {
+    return shouldTrackField("language");
+  }
+  
+  boolean shouldTrackLatLng()
+  {
+    return shouldTrackField("lat_lng");
+  }
+  
+  boolean shouldTrackOsName()
+  {
+    return shouldTrackField("os_name");
+  }
+  
+  boolean shouldTrackOsVersion()
+  {
+    return shouldTrackField("os_version");
+  }
+  
+  boolean shouldTrackPlatform()
+  {
+    return shouldTrackField("platform");
+  }
+  
+  boolean shouldTrackRegion()
+  {
+    return shouldTrackField("region");
+  }
+  
+  boolean shouldTrackVersionName()
+  {
+    return shouldTrackField("version_name");
+  }
+}

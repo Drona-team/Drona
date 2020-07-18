@@ -1,0 +1,567 @@
+package com.bumptech.glide.load.resource.bitmap;
+
+import android.util.Log;
+import com.bumptech.glide.load.ImageHeaderParser;
+import com.bumptech.glide.load.ImageHeaderParser.ImageType;
+import com.bumptech.glide.load.engine.bitmap_recycle.ArrayPool;
+import com.bumptech.glide.util.Preconditions;
+import java.io.IOException;
+import java.io.InputStream;
+import java.nio.ByteBuffer;
+import java.nio.ByteOrder;
+import java.nio.charset.Charset;
+
+public final class DefaultImageHeaderParser
+  implements ImageHeaderParser
+{
+  private static final int[] BYTES_PER_FORMAT = { 0, 1, 1, 2, 4, 8, 1, 1, 2, 4, 8, 4, 8 };
+  static final int EXIF_MAGIC_NUMBER = 65496;
+  static final int EXIF_SEGMENT_TYPE = 225;
+  private static final int GIF_HEADER = 4671814;
+  private static final int INTEL_TIFF_MAGIC_NUMBER = 18761;
+  private static final String JPEG_EXIF_SEGMENT_PREAMBLE = "Exif\000\000";
+  static final byte[] JPEG_EXIF_SEGMENT_PREAMBLE_BYTES = "Exif\000\000".getBytes(Charset.forName("UTF-8"));
+  private static final int MARKER_EOI = 217;
+  private static final int MOTOROLA_TIFF_MAGIC_NUMBER = 19789;
+  private static final int ORIENTATION_TAG_TYPE = 274;
+  private static final String PAGE_KEY = "DfltImageHeaderParser";
+  private static final int PNG_HEADER = -1991225785;
+  private static final int RIFF_HEADER = 1380533830;
+  private static final int SEGMENT_SOS = 218;
+  static final int SEGMENT_START_ID = 255;
+  private static final int VP8_HEADER = 1448097792;
+  private static final int VP8_HEADER_MASK = -256;
+  private static final int VP8_HEADER_TYPE_EXTENDED = 88;
+  private static final int VP8_HEADER_TYPE_LOSSLESS = 76;
+  private static final int VP8_HEADER_TYPE_MASK = 255;
+  private static final int WEBP_EXTENDED_ALPHA_FLAG = 16;
+  private static final int WEBP_HEADER = 1464156752;
+  private static final int WEBP_LOSSLESS_ALPHA_FLAG = 8;
+  
+  public DefaultImageHeaderParser() {}
+  
+  private static int calcTagOffset(int paramInt1, int paramInt2)
+  {
+    return paramInt1 + 2 + paramInt2 * 12;
+  }
+  
+  private int getOrientation(Reader paramReader, ArrayPool paramArrayPool)
+    throws IOException
+  {
+    int i = paramReader.getUInt16();
+    if (!handles(i))
+    {
+      if (Log.isLoggable("DfltImageHeaderParser", 3))
+      {
+        paramReader = new StringBuilder();
+        paramReader.append("Parser doesn't handle magic number: ");
+        paramReader.append(i);
+        Log.d("DfltImageHeaderParser", paramReader.toString());
+        return -1;
+      }
+    }
+    else
+    {
+      i = moveToExifSegmentAndGetLength(paramReader);
+      if (i == -1)
+      {
+        if (Log.isLoggable("DfltImageHeaderParser", 3))
+        {
+          Log.d("DfltImageHeaderParser", "Failed to parse exif segment length, or exif segment not found");
+          return -1;
+        }
+      }
+      else
+      {
+        byte[] arrayOfByte = (byte[])paramArrayPool.w(i, [B.class);
+        try
+        {
+          i = parseExifSegment(paramReader, arrayOfByte, i);
+          paramArrayPool.put(arrayOfByte);
+          return i;
+        }
+        catch (Throwable paramReader)
+        {
+          paramArrayPool.put(arrayOfByte);
+          throw paramReader;
+        }
+      }
+    }
+    return -1;
+  }
+  
+  private ImageHeaderParser.ImageType getType(Reader paramReader)
+    throws IOException
+  {
+    int i = paramReader.getUInt16();
+    if (i == 65496) {
+      return ImageHeaderParser.ImageType.JPEG;
+    }
+    i = i << 16 & 0xFFFF0000 | paramReader.getUInt16() & 0xFFFF;
+    if (i == -1991225785)
+    {
+      paramReader.skip(21L);
+      if (paramReader.getByte() >= 3) {
+        return ImageHeaderParser.ImageType.PNG_A;
+      }
+      return ImageHeaderParser.ImageType.PNG;
+    }
+    if (i >> 8 == 4671814) {
+      return ImageHeaderParser.ImageType.GIF;
+    }
+    if (i != 1380533830) {
+      return ImageHeaderParser.ImageType.UNKNOWN;
+    }
+    paramReader.skip(4L);
+    if ((paramReader.getUInt16() << 16 & 0xFFFF0000 | paramReader.getUInt16() & 0xFFFF) != 1464156752) {
+      return ImageHeaderParser.ImageType.UNKNOWN;
+    }
+    i = paramReader.getUInt16() << 16 & 0xFFFF0000 | paramReader.getUInt16() & 0xFFFF;
+    if ((i & 0xFF00) != 1448097792) {
+      return ImageHeaderParser.ImageType.UNKNOWN;
+    }
+    i &= 0xFF;
+    if (i == 88)
+    {
+      paramReader.skip(4L);
+      if ((paramReader.getByte() & 0x10) != 0) {
+        return ImageHeaderParser.ImageType.WEBP_A;
+      }
+      return ImageHeaderParser.ImageType.WEBP;
+    }
+    if (i == 76)
+    {
+      paramReader.skip(4L);
+      if ((paramReader.getByte() & 0x8) != 0) {
+        return ImageHeaderParser.ImageType.WEBP_A;
+      }
+      return ImageHeaderParser.ImageType.WEBP;
+    }
+    return ImageHeaderParser.ImageType.WEBP;
+  }
+  
+  private static boolean handles(int paramInt)
+  {
+    return ((paramInt & 0xFFD8) == 65496) || (paramInt == 19789) || (paramInt == 18761);
+  }
+  
+  private boolean hasJpegExifPreamble(byte[] paramArrayOfByte, int paramInt)
+  {
+    boolean bool;
+    if ((paramArrayOfByte != null) && (paramInt > JPEG_EXIF_SEGMENT_PREAMBLE_BYTES.length)) {
+      bool = true;
+    } else {
+      bool = false;
+    }
+    if (bool)
+    {
+      paramInt = 0;
+      while (paramInt < JPEG_EXIF_SEGMENT_PREAMBLE_BYTES.length)
+      {
+        if (paramArrayOfByte[paramInt] != JPEG_EXIF_SEGMENT_PREAMBLE_BYTES[paramInt]) {
+          return false;
+        }
+        paramInt += 1;
+      }
+    }
+    return bool;
+  }
+  
+  private int moveToExifSegmentAndGetLength(Reader paramReader)
+    throws IOException
+  {
+    int i;
+    int j;
+    long l1;
+    long l2;
+    do
+    {
+      i = paramReader.getUInt8();
+      if (i != 255)
+      {
+        if (!Log.isLoggable("DfltImageHeaderParser", 3)) {
+          break label207;
+        }
+        paramReader = new StringBuilder();
+        paramReader.append("Unknown segmentId=");
+        paramReader.append(i);
+        Log.d("DfltImageHeaderParser", paramReader.toString());
+        return -1;
+      }
+      i = paramReader.getUInt8();
+      if (i == 218) {
+        return -1;
+      }
+      if (i == 217)
+      {
+        if (!Log.isLoggable("DfltImageHeaderParser", 3)) {
+          break label207;
+        }
+        Log.d("DfltImageHeaderParser", "Found MARKER_EOI in exif segment");
+        return -1;
+      }
+      j = paramReader.getUInt16() - 2;
+      if (i == 225) {
+        break;
+      }
+      l1 = j;
+      l2 = paramReader.skip(l1);
+    } while (l2 == l1);
+    if (Log.isLoggable("DfltImageHeaderParser", 3))
+    {
+      paramReader = new StringBuilder();
+      paramReader.append("Unable to skip enough data, type: ");
+      paramReader.append(i);
+      paramReader.append(", wanted to skip: ");
+      paramReader.append(j);
+      paramReader.append(", but actually skipped: ");
+      paramReader.append(l2);
+      Log.d("DfltImageHeaderParser", paramReader.toString());
+      return -1;
+      return j;
+    }
+    label207:
+    return -1;
+  }
+  
+  private static int parseExifSegment(RandomAccessReader paramRandomAccessReader)
+  {
+    int i = "Exif\000\000".length();
+    int j = paramRandomAccessReader.getInt16(i);
+    Object localObject;
+    if (j != 18761)
+    {
+      if (j != 19789)
+      {
+        if (Log.isLoggable("DfltImageHeaderParser", 3))
+        {
+          localObject = new StringBuilder();
+          ((StringBuilder)localObject).append("Unknown endianness = ");
+          ((StringBuilder)localObject).append(j);
+          Log.d("DfltImageHeaderParser", ((StringBuilder)localObject).toString());
+        }
+        localObject = ByteOrder.BIG_ENDIAN;
+      }
+      else
+      {
+        localObject = ByteOrder.BIG_ENDIAN;
+      }
+    }
+    else {
+      localObject = ByteOrder.LITTLE_ENDIAN;
+    }
+    paramRandomAccessReader.order((ByteOrder)localObject);
+    j = paramRandomAccessReader.getInt32(i + 4) + i;
+    int k = paramRandomAccessReader.getInt16(j);
+    i = 0;
+    while (i < k)
+    {
+      int n = calcTagOffset(j, i);
+      int m = paramRandomAccessReader.getInt16(n);
+      if (m == 274)
+      {
+        int i1 = paramRandomAccessReader.getInt16(n + 2);
+        if ((i1 >= 1) && (i1 <= 12))
+        {
+          int i2 = paramRandomAccessReader.getInt32(n + 4);
+          if (i2 < 0)
+          {
+            if (Log.isLoggable("DfltImageHeaderParser", 3)) {
+              Log.d("DfltImageHeaderParser", "Negative tiff component count");
+            }
+          }
+          else
+          {
+            if (Log.isLoggable("DfltImageHeaderParser", 3))
+            {
+              localObject = new StringBuilder();
+              ((StringBuilder)localObject).append("Got tagIndex=");
+              ((StringBuilder)localObject).append(i);
+              ((StringBuilder)localObject).append(" tagType=");
+              ((StringBuilder)localObject).append(m);
+              ((StringBuilder)localObject).append(" formatCode=");
+              ((StringBuilder)localObject).append(i1);
+              ((StringBuilder)localObject).append(" componentCount=");
+              ((StringBuilder)localObject).append(i2);
+              Log.d("DfltImageHeaderParser", ((StringBuilder)localObject).toString());
+            }
+            i2 += BYTES_PER_FORMAT[i1];
+            if (i2 > 4)
+            {
+              if (Log.isLoggable("DfltImageHeaderParser", 3))
+              {
+                localObject = new StringBuilder();
+                ((StringBuilder)localObject).append("Got byte count > 4, not orientation, continuing, formatCode=");
+                ((StringBuilder)localObject).append(i1);
+                Log.d("DfltImageHeaderParser", ((StringBuilder)localObject).toString());
+              }
+            }
+            else
+            {
+              n += 8;
+              if ((n >= 0) && (n <= paramRandomAccessReader.length()))
+              {
+                if ((i2 >= 0) && (i2 + n <= paramRandomAccessReader.length())) {
+                  return paramRandomAccessReader.getInt16(n);
+                }
+                if (Log.isLoggable("DfltImageHeaderParser", 3))
+                {
+                  localObject = new StringBuilder();
+                  ((StringBuilder)localObject).append("Illegal number of bytes for TI tag data tagType=");
+                  ((StringBuilder)localObject).append(m);
+                  Log.d("DfltImageHeaderParser", ((StringBuilder)localObject).toString());
+                }
+              }
+              else if (Log.isLoggable("DfltImageHeaderParser", 3))
+              {
+                localObject = new StringBuilder();
+                ((StringBuilder)localObject).append("Illegal tagValueOffset=");
+                ((StringBuilder)localObject).append(n);
+                ((StringBuilder)localObject).append(" tagType=");
+                ((StringBuilder)localObject).append(m);
+                Log.d("DfltImageHeaderParser", ((StringBuilder)localObject).toString());
+              }
+            }
+          }
+        }
+        else if (Log.isLoggable("DfltImageHeaderParser", 3))
+        {
+          localObject = new StringBuilder();
+          ((StringBuilder)localObject).append("Got invalid format code = ");
+          ((StringBuilder)localObject).append(i1);
+          Log.d("DfltImageHeaderParser", ((StringBuilder)localObject).toString());
+        }
+      }
+      i += 1;
+    }
+    return -1;
+  }
+  
+  private int parseExifSegment(Reader paramReader, byte[] paramArrayOfByte, int paramInt)
+    throws IOException
+  {
+    int i = paramReader.read(paramArrayOfByte, paramInt);
+    if (i != paramInt)
+    {
+      if (Log.isLoggable("DfltImageHeaderParser", 3))
+      {
+        paramReader = new StringBuilder();
+        paramReader.append("Unable to read exif segment data, length: ");
+        paramReader.append(paramInt);
+        paramReader.append(", actually read: ");
+        paramReader.append(i);
+        Log.d("DfltImageHeaderParser", paramReader.toString());
+        return -1;
+      }
+    }
+    else
+    {
+      if (hasJpegExifPreamble(paramArrayOfByte, paramInt)) {
+        return parseExifSegment(new RandomAccessReader(paramArrayOfByte, paramInt));
+      }
+      if (Log.isLoggable("DfltImageHeaderParser", 3)) {
+        Log.d("DfltImageHeaderParser", "Missing jpeg exif preamble");
+      }
+    }
+    return -1;
+  }
+  
+  public int getOrientation(InputStream paramInputStream, ArrayPool paramArrayPool)
+    throws IOException
+  {
+    return getOrientation(new StreamReader((InputStream)Preconditions.checkNotNull(paramInputStream)), (ArrayPool)Preconditions.checkNotNull(paramArrayPool));
+  }
+  
+  public int getOrientation(ByteBuffer paramByteBuffer, ArrayPool paramArrayPool)
+    throws IOException
+  {
+    return getOrientation(new ByteBufferReader((ByteBuffer)Preconditions.checkNotNull(paramByteBuffer)), (ArrayPool)Preconditions.checkNotNull(paramArrayPool));
+  }
+  
+  public ImageHeaderParser.ImageType getType(InputStream paramInputStream)
+    throws IOException
+  {
+    return getType(new StreamReader((InputStream)Preconditions.checkNotNull(paramInputStream)));
+  }
+  
+  public ImageHeaderParser.ImageType getType(ByteBuffer paramByteBuffer)
+    throws IOException
+  {
+    return getType(new ByteBufferReader((ByteBuffer)Preconditions.checkNotNull(paramByteBuffer)));
+  }
+  
+  private static final class ByteBufferReader
+    implements DefaultImageHeaderParser.Reader
+  {
+    private final ByteBuffer byteBuffer;
+    
+    ByteBufferReader(ByteBuffer paramByteBuffer)
+    {
+      byteBuffer = paramByteBuffer;
+      paramByteBuffer.order(ByteOrder.BIG_ENDIAN);
+    }
+    
+    public int getByte()
+    {
+      if (byteBuffer.remaining() < 1) {
+        return -1;
+      }
+      return byteBuffer.get();
+    }
+    
+    public int getUInt16()
+    {
+      return getByte() << 8 & 0xFF00 | getByte() & 0xFF;
+    }
+    
+    public short getUInt8()
+    {
+      return (short)(getByte() & 0xFF);
+    }
+    
+    public int read(byte[] paramArrayOfByte, int paramInt)
+    {
+      paramInt = Math.min(paramInt, byteBuffer.remaining());
+      if (paramInt == 0) {
+        return -1;
+      }
+      byteBuffer.get(paramArrayOfByte, 0, paramInt);
+      return paramInt;
+    }
+    
+    public long skip(long paramLong)
+    {
+      int i = (int)Math.min(byteBuffer.remaining(), paramLong);
+      byteBuffer.position(byteBuffer.position() + i);
+      return i;
+    }
+  }
+  
+  private static final class RandomAccessReader
+  {
+    private final ByteBuffer data;
+    
+    RandomAccessReader(byte[] paramArrayOfByte, int paramInt)
+    {
+      data = ((ByteBuffer)ByteBuffer.wrap(paramArrayOfByte).order(ByteOrder.BIG_ENDIAN).limit(paramInt));
+    }
+    
+    private boolean isAvailable(int paramInt1, int paramInt2)
+    {
+      return data.remaining() - paramInt1 >= paramInt2;
+    }
+    
+    short getInt16(int paramInt)
+    {
+      if (isAvailable(paramInt, 2)) {
+        return data.getShort(paramInt);
+      }
+      return -1;
+    }
+    
+    int getInt32(int paramInt)
+    {
+      if (isAvailable(paramInt, 4)) {
+        return data.getInt(paramInt);
+      }
+      return -1;
+    }
+    
+    int length()
+    {
+      return data.remaining();
+    }
+    
+    void order(ByteOrder paramByteOrder)
+    {
+      data.order(paramByteOrder);
+    }
+  }
+  
+  private static abstract interface Reader
+  {
+    public abstract int getByte()
+      throws IOException;
+    
+    public abstract int getUInt16()
+      throws IOException;
+    
+    public abstract short getUInt8()
+      throws IOException;
+    
+    public abstract int read(byte[] paramArrayOfByte, int paramInt)
+      throws IOException;
+    
+    public abstract long skip(long paramLong)
+      throws IOException;
+  }
+  
+  private static final class StreamReader
+    implements DefaultImageHeaderParser.Reader
+  {
+    private final InputStream is;
+    
+    StreamReader(InputStream paramInputStream)
+    {
+      is = paramInputStream;
+    }
+    
+    public int getByte()
+      throws IOException
+    {
+      return is.read();
+    }
+    
+    public int getUInt16()
+      throws IOException
+    {
+      return is.read() << 8 & 0xFF00 | is.read() & 0xFF;
+    }
+    
+    public short getUInt8()
+      throws IOException
+    {
+      return (short)(is.read() & 0xFF);
+    }
+    
+    public int read(byte[] paramArrayOfByte, int paramInt)
+      throws IOException
+    {
+      int i = paramInt;
+      while (i > 0)
+      {
+        int j = is.read(paramArrayOfByte, paramInt - i, i);
+        if (j == -1) {
+          break;
+        }
+        i -= j;
+      }
+      return paramInt - i;
+    }
+    
+    public long skip(long paramLong)
+      throws IOException
+    {
+      if (paramLong < 0L) {
+        return 0L;
+      }
+      long l1 = paramLong;
+      while (l1 > 0L)
+      {
+        long l2 = is.skip(l1);
+        if (l2 > 0L)
+        {
+          l1 -= l2;
+        }
+        else
+        {
+          if (is.read() == -1) {
+            break;
+          }
+          l1 -= 1L;
+        }
+      }
+      return paramLong - l1;
+    }
+  }
+}

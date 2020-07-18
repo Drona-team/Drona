@@ -1,0 +1,65 @@
+package com.bumptech.glide.load.engine;
+
+import androidx.annotation.NonNull;
+import com.bumptech.glide.load.Key;
+import java.security.MessageDigest;
+
+final class DataCacheKey
+  implements Key
+{
+  private final Key signature;
+  private final Key sourceKey;
+  
+  DataCacheKey(Key paramKey1, Key paramKey2)
+  {
+    sourceKey = paramKey1;
+    signature = paramKey2;
+  }
+  
+  public boolean equals(Object paramObject)
+  {
+    boolean bool1 = paramObject instanceof DataCacheKey;
+    boolean bool2 = false;
+    if (bool1)
+    {
+      paramObject = (DataCacheKey)paramObject;
+      bool1 = bool2;
+      if (sourceKey.equals(sourceKey))
+      {
+        bool1 = bool2;
+        if (signature.equals(signature)) {
+          bool1 = true;
+        }
+      }
+      return bool1;
+    }
+    return false;
+  }
+  
+  Key getSourceKey()
+  {
+    return sourceKey;
+  }
+  
+  public int hashCode()
+  {
+    return sourceKey.hashCode() * 31 + signature.hashCode();
+  }
+  
+  public String toString()
+  {
+    StringBuilder localStringBuilder = new StringBuilder();
+    localStringBuilder.append("DataCacheKey{sourceKey=");
+    localStringBuilder.append(sourceKey);
+    localStringBuilder.append(", signature=");
+    localStringBuilder.append(signature);
+    localStringBuilder.append('}');
+    return localStringBuilder.toString();
+  }
+  
+  public void updateDiskCacheKey(@NonNull MessageDigest paramMessageDigest)
+  {
+    sourceKey.updateDiskCacheKey(paramMessageDigest);
+    signature.updateDiskCacheKey(paramMessageDigest);
+  }
+}

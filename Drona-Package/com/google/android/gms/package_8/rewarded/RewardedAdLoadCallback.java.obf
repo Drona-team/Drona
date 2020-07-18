@@ -1,0 +1,10 @@
+package com.google.android.gms.ads.rewarded;
+
+public class RewardedAdLoadCallback
+{
+  public RewardedAdLoadCallback() {}
+  
+  public void onRewardedAdFailedToLoad(int paramInt) {}
+  
+  public void onRewardedAdLoaded() {}
+}

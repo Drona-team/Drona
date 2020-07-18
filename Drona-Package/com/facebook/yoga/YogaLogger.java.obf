@@ -1,0 +1,10 @@
+package com.facebook.yoga;
+
+import com.facebook.proguard.annotations.DoNotStrip;
+
+@DoNotStrip
+public abstract interface YogaLogger
+{
+  @DoNotStrip
+  public abstract void log(YogaNode paramYogaNode, YogaLogLevel paramYogaLogLevel, String paramString);
+}

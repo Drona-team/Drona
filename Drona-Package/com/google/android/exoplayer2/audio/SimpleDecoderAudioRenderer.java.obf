@@ -1,0 +1,819 @@
+package com.google.android.exoplayer2.audio;
+
+import android.os.Handler;
+import android.os.Looper;
+import android.os.SystemClock;
+import androidx.annotation.Nullable;
+import com.google.android.exoplayer2.BaseRenderer;
+import com.google.android.exoplayer2.ExoPlaybackException;
+import com.google.android.exoplayer2.Format;
+import com.google.android.exoplayer2.FormatHolder;
+import com.google.android.exoplayer2.PlaybackParameters;
+import com.google.android.exoplayer2.RendererConfiguration;
+import com.google.android.exoplayer2.decoder.DecoderCounters;
+import com.google.android.exoplayer2.decoder.DecoderInputBuffer;
+import com.google.android.exoplayer2.decoder.SimpleDecoder;
+import com.google.android.exoplayer2.decoder.SimpleOutputBuffer;
+import com.google.android.exoplayer2.drm.DrmInitData;
+import com.google.android.exoplayer2.drm.DrmSession;
+import com.google.android.exoplayer2.drm.DrmSessionManager;
+import com.google.android.exoplayer2.drm.ExoMediaCrypto;
+import com.google.android.exoplayer2.util.Assertions;
+import com.google.android.exoplayer2.util.MediaClock;
+import com.google.android.exoplayer2.util.MimeTypes;
+import com.google.android.exoplayer2.util.TraceUtil;
+import com.google.android.exoplayer2.util.Util;
+
+public abstract class SimpleDecoderAudioRenderer
+  extends BaseRenderer
+  implements MediaClock
+{
+  private static final int REINITIALIZATION_STATE_NONE = 0;
+  private static final int REINITIALIZATION_STATE_SIGNAL_END_OF_STREAM = 1;
+  private static final int REINITIALIZATION_STATE_WAIT_END_OF_STREAM = 2;
+  private boolean allowFirstBufferPositionDiscontinuity;
+  private boolean allowPositionDiscontinuity;
+  private final AudioSink audioSink;
+  private boolean audioTrackNeedsConfigure;
+  private long currentPositionUs;
+  private SimpleDecoder<DecoderInputBuffer, ? extends SimpleOutputBuffer, ? extends AudioDecoderException> decoder;
+  private DecoderCounters decoderCounters;
+  private boolean decoderReceivedBuffers;
+  private int decoderReinitializationState;
+  private DrmSession<ExoMediaCrypto> drmSession;
+  private final DrmSessionManager<ExoMediaCrypto> drmSessionManager;
+  private int encoderDelay;
+  private int encoderPadding;
+  private final AudioRendererEventListener.EventDispatcher eventDispatcher;
+  private final DecoderInputBuffer flagsOnlyBuffer;
+  private final FormatHolder formatHolder;
+  private DecoderInputBuffer inputBuffer;
+  private Format inputFormat;
+  private boolean inputStreamEnded;
+  private SimpleOutputBuffer outputBuffer;
+  private boolean outputStreamEnded;
+  private DrmSession<ExoMediaCrypto> pendingDrmSession;
+  private final boolean playClearSamplesWithoutKeys;
+  private boolean waitingForKeys;
+  
+  public SimpleDecoderAudioRenderer()
+  {
+    this(null, null, new AudioProcessor[0]);
+  }
+  
+  public SimpleDecoderAudioRenderer(@Nullable Handler paramHandler, @Nullable AudioRendererEventListener paramAudioRendererEventListener, @Nullable AudioCapabilities paramAudioCapabilities)
+  {
+    this(paramHandler, paramAudioRendererEventListener, paramAudioCapabilities, null, false, new AudioProcessor[0]);
+  }
+  
+  public SimpleDecoderAudioRenderer(@Nullable Handler paramHandler, @Nullable AudioRendererEventListener paramAudioRendererEventListener, @Nullable AudioCapabilities paramAudioCapabilities, @Nullable DrmSessionManager<ExoMediaCrypto> paramDrmSessionManager, boolean paramBoolean, AudioProcessor... paramVarArgs)
+  {
+    this(paramHandler, paramAudioRendererEventListener, paramDrmSessionManager, paramBoolean, new DefaultAudioSink(paramAudioCapabilities, paramVarArgs));
+  }
+  
+  public SimpleDecoderAudioRenderer(@Nullable Handler paramHandler, @Nullable AudioRendererEventListener paramAudioRendererEventListener, @Nullable DrmSessionManager<ExoMediaCrypto> paramDrmSessionManager, boolean paramBoolean, AudioSink paramAudioSink)
+  {
+    super(1);
+    drmSessionManager = paramDrmSessionManager;
+    playClearSamplesWithoutKeys = paramBoolean;
+    eventDispatcher = new AudioRendererEventListener.EventDispatcher(paramHandler, paramAudioRendererEventListener);
+    audioSink = paramAudioSink;
+    paramAudioSink.setListener(new AudioSinkListener(null));
+    formatHolder = new FormatHolder();
+    flagsOnlyBuffer = DecoderInputBuffer.newFlagsOnlyInstance();
+    decoderReinitializationState = 0;
+    audioTrackNeedsConfigure = true;
+  }
+  
+  public SimpleDecoderAudioRenderer(@Nullable Handler paramHandler, @Nullable AudioRendererEventListener paramAudioRendererEventListener, AudioProcessor... paramVarArgs)
+  {
+    this(paramHandler, paramAudioRendererEventListener, null, null, false, paramVarArgs);
+  }
+  
+  private boolean drainOutputBuffer()
+    throws ExoPlaybackException, AudioDecoderException, AudioSink.ConfigurationException, AudioSink.InitializationException, AudioSink.WriteException
+  {
+    Object localObject;
+    if (outputBuffer == null)
+    {
+      outputBuffer = ((SimpleOutputBuffer)decoder.dequeueOutputBuffer());
+      if (outputBuffer == null) {
+        return false;
+      }
+      localObject = decoderCounters;
+      skippedOutputBufferCount += outputBuffer.skippedOutputBufferCount;
+    }
+    if (outputBuffer.isEndOfStream())
+    {
+      if (decoderReinitializationState == 2)
+      {
+        releaseDecoder();
+        maybeInitDecoder();
+        audioTrackNeedsConfigure = true;
+        return false;
+      }
+      outputBuffer.release();
+      outputBuffer = null;
+      processEndOfStream();
+      return false;
+    }
+    if (audioTrackNeedsConfigure)
+    {
+      localObject = getOutputFormat();
+      audioSink.configure(pcmEncoding, channelCount, sampleRate, 0, null, encoderDelay, encoderPadding);
+      audioTrackNeedsConfigure = false;
+    }
+    if (audioSink.handleBuffer(outputBuffer.data, outputBuffer.timeUs))
+    {
+      localObject = decoderCounters;
+      renderedOutputBufferCount += 1;
+      outputBuffer.release();
+      outputBuffer = null;
+      return true;
+    }
+    return false;
+  }
+  
+  private boolean feedInputBuffer()
+    throws AudioDecoderException, ExoPlaybackException
+  {
+    if ((decoder != null) && (decoderReinitializationState != 2))
+    {
+      if (inputStreamEnded) {
+        return false;
+      }
+      if (inputBuffer == null)
+      {
+        inputBuffer = decoder.dequeueInputBuffer();
+        if (inputBuffer == null) {
+          return false;
+        }
+      }
+      if (decoderReinitializationState == 1)
+      {
+        inputBuffer.setFlags(4);
+        decoder.queueInputBuffer(inputBuffer);
+        inputBuffer = null;
+        decoderReinitializationState = 2;
+        return false;
+      }
+      int i;
+      if (waitingForKeys) {
+        i = -4;
+      } else {
+        i = readSource(formatHolder, inputBuffer, false);
+      }
+      if (i == -3) {
+        return false;
+      }
+      if (i == -5)
+      {
+        onInputFormatChanged(formatHolder.format);
+        return true;
+      }
+      if (inputBuffer.isEndOfStream())
+      {
+        inputStreamEnded = true;
+        decoder.queueInputBuffer(inputBuffer);
+        inputBuffer = null;
+        return false;
+      }
+      waitingForKeys = shouldWaitForKeys(inputBuffer.isEncrypted());
+      if (waitingForKeys) {
+        return false;
+      }
+      inputBuffer.flip();
+      onQueueInputBuffer(inputBuffer);
+      decoder.queueInputBuffer(inputBuffer);
+      decoderReceivedBuffers = true;
+      DecoderCounters localDecoderCounters = decoderCounters;
+      inputBufferCount += 1;
+      inputBuffer = null;
+      return true;
+    }
+    return false;
+  }
+  
+  private void flushDecoder()
+    throws ExoPlaybackException
+  {
+    waitingForKeys = false;
+    if (decoderReinitializationState != 0)
+    {
+      releaseDecoder();
+      maybeInitDecoder();
+      return;
+    }
+    inputBuffer = null;
+    if (outputBuffer != null)
+    {
+      outputBuffer.release();
+      outputBuffer = null;
+    }
+    decoder.flush();
+    decoderReceivedBuffers = false;
+  }
+  
+  private void maybeInitDecoder()
+    throws ExoPlaybackException
+  {
+    if (decoder != null) {
+      return;
+    }
+    drmSession = pendingDrmSession;
+    Object localObject = null;
+    if (drmSession != null)
+    {
+      ExoMediaCrypto localExoMediaCrypto = drmSession.getMediaCrypto();
+      localObject = localExoMediaCrypto;
+      if (localExoMediaCrypto == null) {
+        if (drmSession.getError() != null) {
+          localObject = localExoMediaCrypto;
+        } else {
+          return;
+        }
+      }
+    }
+    try
+    {
+      long l1 = SystemClock.elapsedRealtime();
+      TraceUtil.beginSection("createAudioDecoder");
+      decoder = createDecoder(inputFormat, (ExoMediaCrypto)localObject);
+      TraceUtil.endSection();
+      long l2 = SystemClock.elapsedRealtime();
+      eventDispatcher.decoderInitialized(decoder.getName(), l2, l2 - l1);
+      localObject = decoderCounters;
+      decoderInitCount += 1;
+      return;
+    }
+    catch (AudioDecoderException localAudioDecoderException)
+    {
+      throw ExoPlaybackException.createForRenderer(localAudioDecoderException, getIndex());
+    }
+  }
+  
+  private void onInputFormatChanged(Format paramFormat)
+    throws ExoPlaybackException
+  {
+    Object localObject = inputFormat;
+    inputFormat = paramFormat;
+    DrmInitData localDrmInitData = inputFormat.drmInitData;
+    if (localObject == null) {
+      localObject = null;
+    } else {
+      localObject = drmInitData;
+    }
+    if ((Util.areEqual(localDrmInitData, localObject) ^ true)) {
+      if (inputFormat.drmInitData != null)
+      {
+        if (drmSessionManager != null)
+        {
+          pendingDrmSession = drmSessionManager.acquireSession(Looper.myLooper(), inputFormat.drmInitData);
+          if (pendingDrmSession == drmSession) {
+            drmSessionManager.releaseSession(pendingDrmSession);
+          }
+        }
+        else
+        {
+          throw ExoPlaybackException.createForRenderer(new IllegalStateException("Media requires a DrmSessionManager"), getIndex());
+        }
+      }
+      else {
+        pendingDrmSession = null;
+      }
+    }
+    if (decoderReceivedBuffers)
+    {
+      decoderReinitializationState = 1;
+    }
+    else
+    {
+      releaseDecoder();
+      maybeInitDecoder();
+      audioTrackNeedsConfigure = true;
+    }
+    encoderDelay = encoderDelay;
+    encoderPadding = encoderPadding;
+    eventDispatcher.inputFormatChanged(paramFormat);
+  }
+  
+  private void onQueueInputBuffer(DecoderInputBuffer paramDecoderInputBuffer)
+  {
+    if ((allowFirstBufferPositionDiscontinuity) && (!paramDecoderInputBuffer.isDecodeOnly()))
+    {
+      if (Math.abs(timeUs - currentPositionUs) > 500000L) {
+        currentPositionUs = timeUs;
+      }
+      allowFirstBufferPositionDiscontinuity = false;
+    }
+  }
+  
+  private void processEndOfStream()
+    throws ExoPlaybackException
+  {
+    outputStreamEnded = true;
+    try
+    {
+      audioSink.playToEndOfStream();
+      return;
+    }
+    catch (AudioSink.WriteException localWriteException)
+    {
+      throw ExoPlaybackException.createForRenderer(localWriteException, getIndex());
+    }
+  }
+  
+  private void releaseDecoder()
+  {
+    if (decoder == null) {
+      return;
+    }
+    inputBuffer = null;
+    outputBuffer = null;
+    decoder.release();
+    decoder = null;
+    DecoderCounters localDecoderCounters = decoderCounters;
+    decoderReleaseCount += 1;
+    decoderReinitializationState = 0;
+    decoderReceivedBuffers = false;
+  }
+  
+  private boolean shouldWaitForKeys(boolean paramBoolean)
+    throws ExoPlaybackException
+  {
+    if (drmSession != null)
+    {
+      if ((!paramBoolean) && (playClearSamplesWithoutKeys)) {
+        return false;
+      }
+      int i = drmSession.getState();
+      if (i != 1) {
+        return i != 4;
+      }
+      throw ExoPlaybackException.createForRenderer(drmSession.getError(), getIndex());
+    }
+    return false;
+  }
+  
+  private void updateCurrentPosition()
+  {
+    long l = audioSink.getCurrentPositionUs(isEnded());
+    if (l != Long.MIN_VALUE)
+    {
+      if (!allowPositionDiscontinuity) {
+        l = Math.max(currentPositionUs, l);
+      }
+      currentPositionUs = l;
+      allowPositionDiscontinuity = false;
+    }
+  }
+  
+  protected abstract SimpleDecoder<DecoderInputBuffer, ? extends SimpleOutputBuffer, ? extends AudioDecoderException> createDecoder(Format paramFormat, ExoMediaCrypto paramExoMediaCrypto)
+    throws AudioDecoderException;
+  
+  public MediaClock getMediaClock()
+  {
+    return this;
+  }
+  
+  protected Format getOutputFormat()
+  {
+    return Format.createAudioSampleFormat(null, "audio/raw", null, -1, -1, inputFormat.channelCount, inputFormat.sampleRate, 2, null, null, 0, null);
+  }
+  
+  public PlaybackParameters getPlaybackParameters()
+  {
+    return audioSink.getPlaybackParameters();
+  }
+  
+  public long getPositionUs()
+  {
+    if (getState() == 2) {
+      updateCurrentPosition();
+    }
+    return currentPositionUs;
+  }
+  
+  public void handleMessage(int paramInt, @Nullable Object paramObject)
+    throws ExoPlaybackException
+  {
+    if (paramInt != 5)
+    {
+      switch (paramInt)
+      {
+      default: 
+        super.handleMessage(paramInt, paramObject);
+        return;
+      case 3: 
+        paramObject = (AudioAttributes)paramObject;
+        audioSink.setAudioAttributes(paramObject);
+        return;
+      }
+      audioSink.setVolume(((Float)paramObject).floatValue());
+      return;
+    }
+    paramObject = (AuxEffectInfo)paramObject;
+    audioSink.setAuxEffectInfo(paramObject);
+  }
+  
+  public boolean isEnded()
+  {
+    return (outputStreamEnded) && (audioSink.isEnded());
+  }
+  
+  public boolean isReady()
+  {
+    return (audioSink.hasPendingData()) || ((inputFormat != null) && (!waitingForKeys) && ((isSourceReady()) || (outputBuffer != null)));
+  }
+  
+  protected void onAudioSessionId(int paramInt) {}
+  
+  protected void onAudioTrackPositionDiscontinuity() {}
+  
+  protected void onAudioTrackUnderrun(int paramInt, long paramLong1, long paramLong2) {}
+  
+  /* Error */
+  protected void onDisabled()
+  {
+    // Byte code:
+    //   0: aload_0
+    //   1: aconst_null
+    //   2: putfield 297	com/google/android/exoplayer2/audio/SimpleDecoderAudioRenderer:inputFormat	Lcom/google/android/exoplayer2/Format;
+    //   5: aload_0
+    //   6: iconst_1
+    //   7: putfield 124	com/google/android/exoplayer2/audio/SimpleDecoderAudioRenderer:audioTrackNeedsConfigure	Z
+    //   10: aload_0
+    //   11: iconst_0
+    //   12: putfield 233	com/google/android/exoplayer2/audio/SimpleDecoderAudioRenderer:waitingForKeys	Z
+    //   15: aload_0
+    //   16: invokespecial 169	com/google/android/exoplayer2/audio/SimpleDecoderAudioRenderer:releaseDecoder	()V
+    //   19: aload_0
+    //   20: getfield 97	com/google/android/exoplayer2/audio/SimpleDecoderAudioRenderer:audioSink	Lcom/google/android/exoplayer2/audio/AudioSink;
+    //   23: invokeinterface 458 1 0
+    //   28: aload_0
+    //   29: getfield 271	com/google/android/exoplayer2/audio/SimpleDecoderAudioRenderer:drmSession	Lcom/google/android/exoplayer2/drm/DrmSession;
+    //   32: ifnull +16 -> 48
+    //   35: aload_0
+    //   36: getfield 86	com/google/android/exoplayer2/audio/SimpleDecoderAudioRenderer:drmSessionManager	Lcom/google/android/exoplayer2/drm/DrmSessionManager;
+    //   39: aload_0
+    //   40: getfield 271	com/google/android/exoplayer2/audio/SimpleDecoderAudioRenderer:drmSession	Lcom/google/android/exoplayer2/drm/DrmSession;
+    //   43: invokeinterface 349 2 0
+    //   48: aload_0
+    //   49: getfield 269	com/google/android/exoplayer2/audio/SimpleDecoderAudioRenderer:pendingDrmSession	Lcom/google/android/exoplayer2/drm/DrmSession;
+    //   52: ifnull +27 -> 79
+    //   55: aload_0
+    //   56: getfield 269	com/google/android/exoplayer2/audio/SimpleDecoderAudioRenderer:pendingDrmSession	Lcom/google/android/exoplayer2/drm/DrmSession;
+    //   59: aload_0
+    //   60: getfield 271	com/google/android/exoplayer2/audio/SimpleDecoderAudioRenderer:drmSession	Lcom/google/android/exoplayer2/drm/DrmSession;
+    //   63: if_acmpeq +16 -> 79
+    //   66: aload_0
+    //   67: getfield 86	com/google/android/exoplayer2/audio/SimpleDecoderAudioRenderer:drmSessionManager	Lcom/google/android/exoplayer2/drm/DrmSessionManager;
+    //   70: aload_0
+    //   71: getfield 269	com/google/android/exoplayer2/audio/SimpleDecoderAudioRenderer:pendingDrmSession	Lcom/google/android/exoplayer2/drm/DrmSession;
+    //   74: invokeinterface 349 2 0
+    //   79: aload_0
+    //   80: aconst_null
+    //   81: putfield 271	com/google/android/exoplayer2/audio/SimpleDecoderAudioRenderer:drmSession	Lcom/google/android/exoplayer2/drm/DrmSession;
+    //   84: aload_0
+    //   85: aconst_null
+    //   86: putfield 269	com/google/android/exoplayer2/audio/SimpleDecoderAudioRenderer:pendingDrmSession	Lcom/google/android/exoplayer2/drm/DrmSession;
+    //   89: aload_0
+    //   90: getfield 157	com/google/android/exoplayer2/audio/SimpleDecoderAudioRenderer:decoderCounters	Lcom/google/android/exoplayer2/decoder/DecoderCounters;
+    //   93: invokevirtual 461	com/google/android/exoplayer2/decoder/DecoderCounters:ensureUpdated	()V
+    //   96: aload_0
+    //   97: getfield 95	com/google/android/exoplayer2/audio/SimpleDecoderAudioRenderer:eventDispatcher	Lcom/google/android/exoplayer2/audio/AudioRendererEventListener$EventDispatcher;
+    //   100: aload_0
+    //   101: getfield 157	com/google/android/exoplayer2/audio/SimpleDecoderAudioRenderer:decoderCounters	Lcom/google/android/exoplayer2/decoder/DecoderCounters;
+    //   104: invokevirtual 465	com/google/android/exoplayer2/audio/AudioRendererEventListener$EventDispatcher:disabled	(Lcom/google/android/exoplayer2/decoder/DecoderCounters;)V
+    //   107: return
+    //   108: astore_1
+    //   109: aload_0
+    //   110: aconst_null
+    //   111: putfield 271	com/google/android/exoplayer2/audio/SimpleDecoderAudioRenderer:drmSession	Lcom/google/android/exoplayer2/drm/DrmSession;
+    //   114: aload_0
+    //   115: aconst_null
+    //   116: putfield 269	com/google/android/exoplayer2/audio/SimpleDecoderAudioRenderer:pendingDrmSession	Lcom/google/android/exoplayer2/drm/DrmSession;
+    //   119: aload_0
+    //   120: getfield 157	com/google/android/exoplayer2/audio/SimpleDecoderAudioRenderer:decoderCounters	Lcom/google/android/exoplayer2/decoder/DecoderCounters;
+    //   123: invokevirtual 461	com/google/android/exoplayer2/decoder/DecoderCounters:ensureUpdated	()V
+    //   126: aload_0
+    //   127: getfield 95	com/google/android/exoplayer2/audio/SimpleDecoderAudioRenderer:eventDispatcher	Lcom/google/android/exoplayer2/audio/AudioRendererEventListener$EventDispatcher;
+    //   130: aload_0
+    //   131: getfield 157	com/google/android/exoplayer2/audio/SimpleDecoderAudioRenderer:decoderCounters	Lcom/google/android/exoplayer2/decoder/DecoderCounters;
+    //   134: invokevirtual 465	com/google/android/exoplayer2/audio/AudioRendererEventListener$EventDispatcher:disabled	(Lcom/google/android/exoplayer2/decoder/DecoderCounters;)V
+    //   137: aload_1
+    //   138: athrow
+    //   139: astore_1
+    //   140: aload_0
+    //   141: getfield 269	com/google/android/exoplayer2/audio/SimpleDecoderAudioRenderer:pendingDrmSession	Lcom/google/android/exoplayer2/drm/DrmSession;
+    //   144: ifnull +27 -> 171
+    //   147: aload_0
+    //   148: getfield 269	com/google/android/exoplayer2/audio/SimpleDecoderAudioRenderer:pendingDrmSession	Lcom/google/android/exoplayer2/drm/DrmSession;
+    //   151: aload_0
+    //   152: getfield 271	com/google/android/exoplayer2/audio/SimpleDecoderAudioRenderer:drmSession	Lcom/google/android/exoplayer2/drm/DrmSession;
+    //   155: if_acmpeq +16 -> 171
+    //   158: aload_0
+    //   159: getfield 86	com/google/android/exoplayer2/audio/SimpleDecoderAudioRenderer:drmSessionManager	Lcom/google/android/exoplayer2/drm/DrmSessionManager;
+    //   162: aload_0
+    //   163: getfield 269	com/google/android/exoplayer2/audio/SimpleDecoderAudioRenderer:pendingDrmSession	Lcom/google/android/exoplayer2/drm/DrmSession;
+    //   166: invokeinterface 349 2 0
+    //   171: aload_0
+    //   172: aconst_null
+    //   173: putfield 271	com/google/android/exoplayer2/audio/SimpleDecoderAudioRenderer:drmSession	Lcom/google/android/exoplayer2/drm/DrmSession;
+    //   176: aload_0
+    //   177: aconst_null
+    //   178: putfield 269	com/google/android/exoplayer2/audio/SimpleDecoderAudioRenderer:pendingDrmSession	Lcom/google/android/exoplayer2/drm/DrmSession;
+    //   181: aload_0
+    //   182: getfield 157	com/google/android/exoplayer2/audio/SimpleDecoderAudioRenderer:decoderCounters	Lcom/google/android/exoplayer2/decoder/DecoderCounters;
+    //   185: invokevirtual 461	com/google/android/exoplayer2/decoder/DecoderCounters:ensureUpdated	()V
+    //   188: aload_0
+    //   189: getfield 95	com/google/android/exoplayer2/audio/SimpleDecoderAudioRenderer:eventDispatcher	Lcom/google/android/exoplayer2/audio/AudioRendererEventListener$EventDispatcher;
+    //   192: aload_0
+    //   193: getfield 157	com/google/android/exoplayer2/audio/SimpleDecoderAudioRenderer:decoderCounters	Lcom/google/android/exoplayer2/decoder/DecoderCounters;
+    //   196: invokevirtual 465	com/google/android/exoplayer2/audio/AudioRendererEventListener$EventDispatcher:disabled	(Lcom/google/android/exoplayer2/decoder/DecoderCounters;)V
+    //   199: aload_1
+    //   200: athrow
+    //   201: astore_1
+    //   202: aload_0
+    //   203: aconst_null
+    //   204: putfield 271	com/google/android/exoplayer2/audio/SimpleDecoderAudioRenderer:drmSession	Lcom/google/android/exoplayer2/drm/DrmSession;
+    //   207: aload_0
+    //   208: aconst_null
+    //   209: putfield 269	com/google/android/exoplayer2/audio/SimpleDecoderAudioRenderer:pendingDrmSession	Lcom/google/android/exoplayer2/drm/DrmSession;
+    //   212: aload_0
+    //   213: getfield 157	com/google/android/exoplayer2/audio/SimpleDecoderAudioRenderer:decoderCounters	Lcom/google/android/exoplayer2/decoder/DecoderCounters;
+    //   216: invokevirtual 461	com/google/android/exoplayer2/decoder/DecoderCounters:ensureUpdated	()V
+    //   219: aload_0
+    //   220: getfield 95	com/google/android/exoplayer2/audio/SimpleDecoderAudioRenderer:eventDispatcher	Lcom/google/android/exoplayer2/audio/AudioRendererEventListener$EventDispatcher;
+    //   223: aload_0
+    //   224: getfield 157	com/google/android/exoplayer2/audio/SimpleDecoderAudioRenderer:decoderCounters	Lcom/google/android/exoplayer2/decoder/DecoderCounters;
+    //   227: invokevirtual 465	com/google/android/exoplayer2/audio/AudioRendererEventListener$EventDispatcher:disabled	(Lcom/google/android/exoplayer2/decoder/DecoderCounters;)V
+    //   230: aload_1
+    //   231: athrow
+    //   232: astore_1
+    //   233: aload_0
+    //   234: getfield 271	com/google/android/exoplayer2/audio/SimpleDecoderAudioRenderer:drmSession	Lcom/google/android/exoplayer2/drm/DrmSession;
+    //   237: ifnull +16 -> 253
+    //   240: aload_0
+    //   241: getfield 86	com/google/android/exoplayer2/audio/SimpleDecoderAudioRenderer:drmSessionManager	Lcom/google/android/exoplayer2/drm/DrmSessionManager;
+    //   244: aload_0
+    //   245: getfield 271	com/google/android/exoplayer2/audio/SimpleDecoderAudioRenderer:drmSession	Lcom/google/android/exoplayer2/drm/DrmSession;
+    //   248: invokeinterface 349 2 0
+    //   253: aload_0
+    //   254: getfield 269	com/google/android/exoplayer2/audio/SimpleDecoderAudioRenderer:pendingDrmSession	Lcom/google/android/exoplayer2/drm/DrmSession;
+    //   257: ifnull +27 -> 284
+    //   260: aload_0
+    //   261: getfield 269	com/google/android/exoplayer2/audio/SimpleDecoderAudioRenderer:pendingDrmSession	Lcom/google/android/exoplayer2/drm/DrmSession;
+    //   264: aload_0
+    //   265: getfield 271	com/google/android/exoplayer2/audio/SimpleDecoderAudioRenderer:drmSession	Lcom/google/android/exoplayer2/drm/DrmSession;
+    //   268: if_acmpeq +16 -> 284
+    //   271: aload_0
+    //   272: getfield 86	com/google/android/exoplayer2/audio/SimpleDecoderAudioRenderer:drmSessionManager	Lcom/google/android/exoplayer2/drm/DrmSessionManager;
+    //   275: aload_0
+    //   276: getfield 269	com/google/android/exoplayer2/audio/SimpleDecoderAudioRenderer:pendingDrmSession	Lcom/google/android/exoplayer2/drm/DrmSession;
+    //   279: invokeinterface 349 2 0
+    //   284: aload_0
+    //   285: aconst_null
+    //   286: putfield 271	com/google/android/exoplayer2/audio/SimpleDecoderAudioRenderer:drmSession	Lcom/google/android/exoplayer2/drm/DrmSession;
+    //   289: aload_0
+    //   290: aconst_null
+    //   291: putfield 269	com/google/android/exoplayer2/audio/SimpleDecoderAudioRenderer:pendingDrmSession	Lcom/google/android/exoplayer2/drm/DrmSession;
+    //   294: aload_0
+    //   295: getfield 157	com/google/android/exoplayer2/audio/SimpleDecoderAudioRenderer:decoderCounters	Lcom/google/android/exoplayer2/decoder/DecoderCounters;
+    //   298: invokevirtual 461	com/google/android/exoplayer2/decoder/DecoderCounters:ensureUpdated	()V
+    //   301: aload_0
+    //   302: getfield 95	com/google/android/exoplayer2/audio/SimpleDecoderAudioRenderer:eventDispatcher	Lcom/google/android/exoplayer2/audio/AudioRendererEventListener$EventDispatcher;
+    //   305: aload_0
+    //   306: getfield 157	com/google/android/exoplayer2/audio/SimpleDecoderAudioRenderer:decoderCounters	Lcom/google/android/exoplayer2/decoder/DecoderCounters;
+    //   309: invokevirtual 465	com/google/android/exoplayer2/audio/AudioRendererEventListener$EventDispatcher:disabled	(Lcom/google/android/exoplayer2/decoder/DecoderCounters;)V
+    //   312: aload_1
+    //   313: athrow
+    //   314: astore_1
+    //   315: aload_0
+    //   316: aconst_null
+    //   317: putfield 271	com/google/android/exoplayer2/audio/SimpleDecoderAudioRenderer:drmSession	Lcom/google/android/exoplayer2/drm/DrmSession;
+    //   320: aload_0
+    //   321: aconst_null
+    //   322: putfield 269	com/google/android/exoplayer2/audio/SimpleDecoderAudioRenderer:pendingDrmSession	Lcom/google/android/exoplayer2/drm/DrmSession;
+    //   325: aload_0
+    //   326: getfield 157	com/google/android/exoplayer2/audio/SimpleDecoderAudioRenderer:decoderCounters	Lcom/google/android/exoplayer2/decoder/DecoderCounters;
+    //   329: invokevirtual 461	com/google/android/exoplayer2/decoder/DecoderCounters:ensureUpdated	()V
+    //   332: aload_0
+    //   333: getfield 95	com/google/android/exoplayer2/audio/SimpleDecoderAudioRenderer:eventDispatcher	Lcom/google/android/exoplayer2/audio/AudioRendererEventListener$EventDispatcher;
+    //   336: aload_0
+    //   337: getfield 157	com/google/android/exoplayer2/audio/SimpleDecoderAudioRenderer:decoderCounters	Lcom/google/android/exoplayer2/decoder/DecoderCounters;
+    //   340: invokevirtual 465	com/google/android/exoplayer2/audio/AudioRendererEventListener$EventDispatcher:disabled	(Lcom/google/android/exoplayer2/decoder/DecoderCounters;)V
+    //   343: aload_1
+    //   344: athrow
+    //   345: astore_1
+    //   346: aload_0
+    //   347: getfield 269	com/google/android/exoplayer2/audio/SimpleDecoderAudioRenderer:pendingDrmSession	Lcom/google/android/exoplayer2/drm/DrmSession;
+    //   350: ifnull +27 -> 377
+    //   353: aload_0
+    //   354: getfield 269	com/google/android/exoplayer2/audio/SimpleDecoderAudioRenderer:pendingDrmSession	Lcom/google/android/exoplayer2/drm/DrmSession;
+    //   357: aload_0
+    //   358: getfield 271	com/google/android/exoplayer2/audio/SimpleDecoderAudioRenderer:drmSession	Lcom/google/android/exoplayer2/drm/DrmSession;
+    //   361: if_acmpeq +16 -> 377
+    //   364: aload_0
+    //   365: getfield 86	com/google/android/exoplayer2/audio/SimpleDecoderAudioRenderer:drmSessionManager	Lcom/google/android/exoplayer2/drm/DrmSessionManager;
+    //   368: aload_0
+    //   369: getfield 269	com/google/android/exoplayer2/audio/SimpleDecoderAudioRenderer:pendingDrmSession	Lcom/google/android/exoplayer2/drm/DrmSession;
+    //   372: invokeinterface 349 2 0
+    //   377: aload_0
+    //   378: aconst_null
+    //   379: putfield 271	com/google/android/exoplayer2/audio/SimpleDecoderAudioRenderer:drmSession	Lcom/google/android/exoplayer2/drm/DrmSession;
+    //   382: aload_0
+    //   383: aconst_null
+    //   384: putfield 269	com/google/android/exoplayer2/audio/SimpleDecoderAudioRenderer:pendingDrmSession	Lcom/google/android/exoplayer2/drm/DrmSession;
+    //   387: aload_0
+    //   388: getfield 157	com/google/android/exoplayer2/audio/SimpleDecoderAudioRenderer:decoderCounters	Lcom/google/android/exoplayer2/decoder/DecoderCounters;
+    //   391: invokevirtual 461	com/google/android/exoplayer2/decoder/DecoderCounters:ensureUpdated	()V
+    //   394: aload_0
+    //   395: getfield 95	com/google/android/exoplayer2/audio/SimpleDecoderAudioRenderer:eventDispatcher	Lcom/google/android/exoplayer2/audio/AudioRendererEventListener$EventDispatcher;
+    //   398: aload_0
+    //   399: getfield 157	com/google/android/exoplayer2/audio/SimpleDecoderAudioRenderer:decoderCounters	Lcom/google/android/exoplayer2/decoder/DecoderCounters;
+    //   402: invokevirtual 465	com/google/android/exoplayer2/audio/AudioRendererEventListener$EventDispatcher:disabled	(Lcom/google/android/exoplayer2/decoder/DecoderCounters;)V
+    //   405: aload_1
+    //   406: athrow
+    //   407: astore_1
+    //   408: aload_0
+    //   409: aconst_null
+    //   410: putfield 271	com/google/android/exoplayer2/audio/SimpleDecoderAudioRenderer:drmSession	Lcom/google/android/exoplayer2/drm/DrmSession;
+    //   413: aload_0
+    //   414: aconst_null
+    //   415: putfield 269	com/google/android/exoplayer2/audio/SimpleDecoderAudioRenderer:pendingDrmSession	Lcom/google/android/exoplayer2/drm/DrmSession;
+    //   418: aload_0
+    //   419: getfield 157	com/google/android/exoplayer2/audio/SimpleDecoderAudioRenderer:decoderCounters	Lcom/google/android/exoplayer2/decoder/DecoderCounters;
+    //   422: invokevirtual 461	com/google/android/exoplayer2/decoder/DecoderCounters:ensureUpdated	()V
+    //   425: aload_0
+    //   426: getfield 95	com/google/android/exoplayer2/audio/SimpleDecoderAudioRenderer:eventDispatcher	Lcom/google/android/exoplayer2/audio/AudioRendererEventListener$EventDispatcher;
+    //   429: aload_0
+    //   430: getfield 157	com/google/android/exoplayer2/audio/SimpleDecoderAudioRenderer:decoderCounters	Lcom/google/android/exoplayer2/decoder/DecoderCounters;
+    //   433: invokevirtual 465	com/google/android/exoplayer2/audio/AudioRendererEventListener$EventDispatcher:disabled	(Lcom/google/android/exoplayer2/decoder/DecoderCounters;)V
+    //   436: aload_1
+    //   437: athrow
+    // Local variable table:
+    //   start	length	slot	name	signature
+    //   0	438	0	this	SimpleDecoderAudioRenderer
+    //   108	30	1	localObject1	Object
+    //   139	61	1	localObject2	Object
+    //   201	30	1	localObject3	Object
+    //   232	81	1	localObject4	Object
+    //   314	30	1	localObject5	Object
+    //   345	61	1	localObject6	Object
+    //   407	30	1	localObject7	Object
+    // Exception table:
+    //   from	to	target	type
+    //   48	79	108	finally
+    //   28	48	139	finally
+    //   140	171	201	finally
+    //   15	28	232	finally
+    //   253	284	314	finally
+    //   233	253	345	finally
+    //   346	377	407	finally
+  }
+  
+  protected void onEnabled(boolean paramBoolean)
+    throws ExoPlaybackException
+  {
+    decoderCounters = new DecoderCounters();
+    eventDispatcher.enabled(decoderCounters);
+    int i = getConfigurationtunnelingAudioSessionId;
+    if (i != 0)
+    {
+      audioSink.enableTunnelingV21(i);
+      return;
+    }
+    audioSink.disableTunneling();
+  }
+  
+  protected void onPositionReset(long paramLong, boolean paramBoolean)
+    throws ExoPlaybackException
+  {
+    audioSink.reset();
+    currentPositionUs = paramLong;
+    allowFirstBufferPositionDiscontinuity = true;
+    allowPositionDiscontinuity = true;
+    inputStreamEnded = false;
+    outputStreamEnded = false;
+    if (decoder != null) {
+      flushDecoder();
+    }
+  }
+  
+  protected void onStarted()
+  {
+    audioSink.play();
+  }
+  
+  protected void onStopped()
+  {
+    updateCurrentPosition();
+    audioSink.pause();
+  }
+  
+  public void render(long paramLong1, long paramLong2)
+    throws ExoPlaybackException
+  {
+    if (outputStreamEnded) {
+      try
+      {
+        audioSink.playToEndOfStream();
+        return;
+      }
+      catch (AudioSink.WriteException localWriteException)
+      {
+        throw ExoPlaybackException.createForRenderer(localWriteException, getIndex());
+      }
+    }
+    if (inputFormat == null)
+    {
+      flagsOnlyBuffer.clear();
+      int i = readSource(formatHolder, flagsOnlyBuffer, true);
+      if (i == -5)
+      {
+        onInputFormatChanged(formatHolder.format);
+      }
+      else
+      {
+        if (i == -4)
+        {
+          Assertions.checkState(flagsOnlyBuffer.isEndOfStream());
+          inputStreamEnded = true;
+          processEndOfStream();
+          return;
+        }
+        return;
+      }
+    }
+    maybeInitDecoder();
+    if (decoder != null) {
+      try
+      {
+        TraceUtil.beginSection("drainAndFeed");
+        while (drainOutputBuffer()) {}
+        while (feedInputBuffer()) {}
+        TraceUtil.endSection();
+        decoderCounters.ensureUpdated();
+        return;
+      }
+      catch (AudioDecoderException|AudioSink.ConfigurationException|AudioSink.InitializationException|AudioSink.WriteException localAudioDecoderException)
+      {
+        throw ExoPlaybackException.createForRenderer(localAudioDecoderException, getIndex());
+      }
+    }
+  }
+  
+  public PlaybackParameters setPlaybackParameters(PlaybackParameters paramPlaybackParameters)
+  {
+    return audioSink.setPlaybackParameters(paramPlaybackParameters);
+  }
+  
+  public final int supportsFormat(Format paramFormat)
+  {
+    boolean bool = MimeTypes.isAudio(sampleMimeType);
+    int i = 0;
+    if (!bool) {
+      return 0;
+    }
+    int j = supportsFormatInternal(drmSessionManager, paramFormat);
+    if (j <= 2) {
+      return j;
+    }
+    if (Util.SDK_INT >= 21) {
+      i = 32;
+    }
+    return j | i | 0x8;
+  }
+  
+  protected abstract int supportsFormatInternal(DrmSessionManager<ExoMediaCrypto> paramDrmSessionManager, Format paramFormat);
+  
+  protected final boolean supportsOutput(int paramInt1, int paramInt2)
+  {
+    return audioSink.supportsOutput(paramInt1, paramInt2);
+  }
+  
+  private final class AudioSinkListener
+    implements AudioSink.Listener
+  {
+    private AudioSinkListener() {}
+    
+    public void onAudioSessionId(int paramInt)
+    {
+      eventDispatcher.audioSessionId(paramInt);
+      SimpleDecoderAudioRenderer.this.onAudioSessionId(paramInt);
+    }
+    
+    public void onPositionDiscontinuity()
+    {
+      onAudioTrackPositionDiscontinuity();
+      SimpleDecoderAudioRenderer.access$202(SimpleDecoderAudioRenderer.this, true);
+    }
+    
+    public void onUnderrun(int paramInt, long paramLong1, long paramLong2)
+    {
+      eventDispatcher.audioTrackUnderrun(paramInt, paramLong1, paramLong2);
+      onAudioTrackUnderrun(paramInt, paramLong1, paramLong2);
+    }
+  }
+}

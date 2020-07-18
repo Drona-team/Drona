@@ -1,0 +1,146 @@
+package com.bugsnag.android;
+
+import androidx.annotation.NonNull;
+import androidx.annotation.Nullable;
+import java.io.IOException;
+import java.util.ArrayList;
+import java.util.Arrays;
+import java.util.HashSet;
+import java.util.Iterator;
+import java.util.List;
+import java.util.Map;
+import java.util.Observable;
+import java.util.Set;
+import java.util.concurrent.ConcurrentHashMap;
+
+public class MetaData
+  extends Observable
+  implements JsonStream.Streamable
+{
+  final ObjectJsonStreamer jsonStreamer;
+  @NonNull
+  final Map<String, Object> store;
+  
+  public MetaData()
+  {
+    this(new ConcurrentHashMap());
+  }
+  
+  public MetaData(@NonNull Map<String, Object> paramMap)
+  {
+    store = new ConcurrentHashMap(paramMap);
+    jsonStreamer = new ObjectJsonStreamer();
+  }
+  
+  @NonNull
+  static MetaData merge(@NonNull MetaData... paramVarArgs)
+  {
+    ArrayList localArrayList2 = new ArrayList();
+    ArrayList localArrayList1 = new ArrayList();
+    int j = paramVarArgs.length;
+    int i = 0;
+    while (i < j)
+    {
+      MetaData localMetaData = paramVarArgs[i];
+      if (localMetaData != null)
+      {
+        localArrayList2.add(store);
+        if (jsonStreamer.filters != null) {
+          localArrayList1.addAll(Arrays.asList(jsonStreamer.filters));
+        }
+      }
+      i += 1;
+    }
+    paramVarArgs = new MetaData(mergeMaps((Map[])localArrayList2.toArray(new Map[0])));
+    paramVarArgs.setFilters((String[])localArrayList1.toArray(new String[0]));
+    return paramVarArgs;
+  }
+  
+  @SafeVarargs
+  @NonNull
+  private static Map<String, Object> mergeMaps(@NonNull Map<String, Object>... paramVarArgs)
+  {
+    ConcurrentHashMap localConcurrentHashMap = new ConcurrentHashMap();
+    int j = paramVarArgs.length;
+    int i = 0;
+    while (i < j)
+    {
+      Map<String, Object> localMap = paramVarArgs[i];
+      if (localMap != null)
+      {
+        Object localObject1 = new HashSet(localConcurrentHashMap.keySet());
+        ((Set)localObject1).addAll(localMap.keySet());
+        localObject1 = ((Set)localObject1).iterator();
+        while (((Iterator)localObject1).hasNext())
+        {
+          String str = (String)((Iterator)localObject1).next();
+          Object localObject2 = localConcurrentHashMap.get(str);
+          Object localObject3 = localMap.get(str);
+          if (localObject3 != null)
+          {
+            if (((localObject2 instanceof Map)) && ((localObject3 instanceof Map))) {
+              localConcurrentHashMap.put(str, mergeMaps(new Map[] { (Map)localObject2, (Map)localObject3 }));
+            } else {
+              localConcurrentHashMap.put(str, localObject3);
+            }
+          }
+          else if (localObject2 != null) {
+            localConcurrentHashMap.put(str, localObject2);
+          }
+        }
+      }
+      i += 1;
+    }
+    return localConcurrentHashMap;
+  }
+  
+  public void addToTab(@NonNull String paramString1, @NonNull String paramString2, @Nullable Object paramObject)
+  {
+    Map localMap = getTab(paramString1);
+    setChanged();
+    if (paramObject != null)
+    {
+      localMap.put(paramString2, paramObject);
+      notifyObservers(new NativeInterface.Message(NativeInterface.MessageType.ADD_METADATA, Arrays.asList(new Object[] { paramString1, paramString2, paramObject })));
+      return;
+    }
+    localMap.remove(paramString2);
+    notifyObservers(new NativeInterface.Message(NativeInterface.MessageType.REMOVE_METADATA, Arrays.asList(new String[] { paramString1, paramString2 })));
+  }
+  
+  public void clearTab(@NonNull String paramString)
+  {
+    store.remove(paramString);
+    setChanged();
+    notifyObservers(new NativeInterface.Message(NativeInterface.MessageType.CLEAR_METADATA_TAB, paramString));
+  }
+  
+  String[] getFilters()
+  {
+    return jsonStreamer.filters;
+  }
+  
+  @NonNull
+  Map<String, Object> getTab(String paramString)
+  {
+    Map localMap = (Map)store.get(paramString);
+    Object localObject = localMap;
+    if (localMap == null)
+    {
+      localObject = new ConcurrentHashMap();
+      store.put(paramString, localObject);
+    }
+    return localObject;
+  }
+  
+  void setFilters(String... paramVarArgs)
+  {
+    jsonStreamer.filters = paramVarArgs;
+  }
+  
+  public void toStream(@NonNull JsonStream paramJsonStream)
+    throws IOException
+  {
+    jsonStreamer.objectToStream(store, paramJsonStream);
+  }
+}

@@ -1,0 +1,151 @@
+package com.facebook.react.packagerconnection;
+
+import android.net.Uri;
+import android.net.Uri.Builder;
+import androidx.annotation.Nullable;
+import com.facebook.common.logging.FLog;
+import com.facebook.react.modules.systeminfo.AndroidInfoHelpers;
+import java.util.Map;
+import okio.ByteString;
+import org.json.JSONObject;
+
+public final class JSPackagerClient
+  implements ReconnectingWebSocket.MessageCallback
+{
+  private static final String PACKAGER_CONNECTION_URL_FORMAT = "ws://%s/message?device=%s&app=%s&context=%s";
+  private static final int PROTOCOL_VERSION = 2;
+  private static final String TAG = "JSPackagerClient";
+  private Map<String, RequestHandler> mRequestHandlers;
+  private ReconnectingWebSocket mWebSocket;
+  
+  public JSPackagerClient(String paramString, PackagerConnectionSettings paramPackagerConnectionSettings, Map<String, RequestHandler> paramMap)
+  {
+    this(paramString, paramPackagerConnectionSettings, paramMap, null);
+  }
+  
+  public JSPackagerClient(String paramString, PackagerConnectionSettings paramPackagerConnectionSettings, Map<String, RequestHandler> paramMap, @Nullable ReconnectingWebSocket.ConnectionCallback paramConnectionCallback)
+  {
+    Uri.Builder localBuilder = new Uri.Builder();
+    localBuilder.scheme("ws").encodedAuthority(paramPackagerConnectionSettings.getDebugServerHost()).appendPath("message").appendQueryParameter("device", AndroidInfoHelpers.getFriendlyDeviceName()).appendQueryParameter("app", paramPackagerConnectionSettings.getPackageName()).appendQueryParameter("clientid", paramString);
+    mWebSocket = new ReconnectingWebSocket(localBuilder.build().toString(), this, paramConnectionCallback);
+    mRequestHandlers = paramMap;
+  }
+  
+  private void abortOnMessage(Object paramObject, String paramString)
+  {
+    if (paramObject != null) {
+      new ResponderImpl(paramObject).error(paramString);
+    }
+    paramObject = TAG;
+    StringBuilder localStringBuilder = new StringBuilder();
+    localStringBuilder.append("Handling the message failed with reason: ");
+    localStringBuilder.append(paramString);
+    FLog.e(paramObject, localStringBuilder.toString());
+  }
+  
+  public void close()
+  {
+    mWebSocket.closeQuietly();
+  }
+  
+  public void init()
+  {
+    mWebSocket.connect();
+  }
+  
+  public void onMessage(String paramString)
+  {
+    try
+    {
+      Object localObject2 = new JSONObject(paramString);
+      int i = ((JSONObject)localObject2).optInt("version");
+      paramString = ((JSONObject)localObject2).optString("method");
+      Object localObject1 = ((JSONObject)localObject2).opt("id");
+      localObject2 = ((JSONObject)localObject2).opt("params");
+      if (i != 2)
+      {
+        paramString = TAG;
+        localObject1 = new StringBuilder();
+        ((StringBuilder)localObject1).append("Message with incompatible or missing version of protocol received: ");
+        ((StringBuilder)localObject1).append(i);
+        FLog.e(paramString, ((StringBuilder)localObject1).toString());
+        return;
+      }
+      if (paramString == null)
+      {
+        abortOnMessage(localObject1, "No method provided");
+        return;
+      }
+      RequestHandler localRequestHandler = (RequestHandler)mRequestHandlers.get(paramString);
+      if (localRequestHandler == null)
+      {
+        localObject2 = new StringBuilder();
+        ((StringBuilder)localObject2).append("No request handler for method: ");
+        ((StringBuilder)localObject2).append(paramString);
+        abortOnMessage(localObject1, ((StringBuilder)localObject2).toString());
+        return;
+      }
+      if (localObject1 == null)
+      {
+        localRequestHandler.onNotification(localObject2);
+        return;
+      }
+      localRequestHandler.onRequest(localObject2, new ResponderImpl(localObject1));
+      return;
+    }
+    catch (Exception paramString)
+    {
+      FLog.e(TAG, "Handling the message failed", paramString);
+    }
+  }
+  
+  public void onMessage(ByteString paramByteString)
+  {
+    FLog.w(TAG, "Websocket received message with payload of unexpected type binary");
+  }
+  
+  private class ResponderImpl
+    implements Responder
+  {
+    private Object mId;
+    
+    public ResponderImpl(Object paramObject)
+    {
+      mId = paramObject;
+    }
+    
+    public void error(Object paramObject)
+    {
+      try
+      {
+        JSONObject localJSONObject = new JSONObject();
+        localJSONObject.put("version", 2);
+        localJSONObject.put("id", mId);
+        localJSONObject.put("error", paramObject);
+        mWebSocket.sendMessage(localJSONObject.toString());
+        return;
+      }
+      catch (Exception paramObject)
+      {
+        FLog.e(JSPackagerClient.TAG, "Responding with error failed", paramObject);
+      }
+    }
+    
+    public void respond(Object paramObject)
+    {
+      try
+      {
+        JSONObject localJSONObject = new JSONObject();
+        localJSONObject.put("version", 2);
+        localJSONObject.put("id", mId);
+        localJSONObject.put("result", paramObject);
+        mWebSocket.sendMessage(localJSONObject.toString());
+        return;
+      }
+      catch (Exception paramObject)
+      {
+        FLog.e(JSPackagerClient.TAG, "Responding failed", paramObject);
+      }
+    }
+  }
+}

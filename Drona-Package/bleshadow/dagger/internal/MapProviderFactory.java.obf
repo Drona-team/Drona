@@ -1,0 +1,49 @@
+package bleshadow.dagger.internal;
+
+import bleshadow.dagger.Lazy;
+import bleshadow.javax.inject.Provider;
+import java.util.Collections;
+import java.util.LinkedHashMap;
+import java.util.Map;
+
+public final class MapProviderFactory<K, V>
+  implements Factory<Map<K, Provider<V>>>, Lazy<Map<K, Provider<V>>>
+{
+  private final Map<K, Provider<V>> contributingMap;
+  
+  private MapProviderFactory(Map<K, Provider<V>> paramMap)
+  {
+    contributingMap = Collections.unmodifiableMap(paramMap);
+  }
+  
+  public static <K, V> Builder<K, V> builder(int paramInt)
+  {
+    return new Builder(paramInt, null);
+  }
+  
+  public Map<K, Provider<V>> get()
+  {
+    return contributingMap;
+  }
+  
+  public static final class Builder<K, V>
+  {
+    private final LinkedHashMap<K, Provider<V>> map;
+    
+    private Builder(int paramInt)
+    {
+      map = DaggerCollections.newLinkedHashMapWithExpectedSize(paramInt);
+    }
+    
+    public MapProviderFactory<K, V> build()
+    {
+      return new MapProviderFactory(map, null);
+    }
+    
+    public Builder<K, V> put(K paramK, Provider<V> paramProvider)
+    {
+      map.put(Preconditions.checkNotNull(paramK, "key"), Preconditions.checkNotNull(paramProvider, "provider"));
+      return this;
+    }
+  }
+}

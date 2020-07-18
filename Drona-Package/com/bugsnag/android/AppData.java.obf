@@ -1,0 +1,202 @@
+package com.bugsnag.android;
+
+import android.app.ActivityManager;
+import android.app.ActivityManager.MemoryInfo;
+import android.content.Context;
+import android.content.pm.ApplicationInfo;
+import android.content.pm.PackageInfo;
+import android.content.pm.PackageManager;
+import android.content.pm.PackageManager.NameNotFoundException;
+import android.os.SystemClock;
+import androidx.annotation.NonNull;
+import androidx.annotation.Nullable;
+import java.util.HashMap;
+import java.util.Map;
+
+class AppData
+{
+  static final String RELEASE_STAGE_DEVELOPMENT = "development";
+  static final String RELEASE_STAGE_PRODUCTION = "production";
+  private static final long startTimeMs = ;
+  private final Context appContext;
+  @Nullable
+  final String appName;
+  @Nullable
+  private ApplicationInfo applicationInfo;
+  private String binaryArch = null;
+  private final Configuration config;
+  @Nullable
+  private PackageInfo packageInfo;
+  private PackageManager packageManager;
+  private final String packageName;
+  private final SessionTracker sessionTracker;
+  
+  AppData(Context paramContext, PackageManager paramPackageManager, Configuration paramConfiguration, SessionTracker paramSessionTracker)
+  {
+    appContext = paramContext;
+    packageManager = paramPackageManager;
+    config = paramConfiguration;
+    sessionTracker = paramSessionTracker;
+    packageName = paramContext.getPackageName();
+    try
+    {
+      packageManager = paramPackageManager;
+      packageInfo = packageManager.getPackageInfo(packageName, 0);
+      applicationInfo = packageManager.getApplicationInfo(packageName, 0);
+    }
+    catch (PackageManager.NameNotFoundException paramContext)
+    {
+      for (;;) {}
+    }
+    paramContext = new StringBuilder();
+    paramContext.append("Could not retrieve package/application information for ");
+    paramContext.append(packageName);
+    Logger.warn(paramContext.toString());
+    appName = getAppName();
+  }
+  
+  @NonNull
+  private String calculateNotifierType()
+  {
+    String str = config.getNotifierType();
+    if (str != null) {
+      return str;
+    }
+    return "android";
+  }
+  
+  @Nullable
+  private Integer calculateVersionCode()
+  {
+    Integer localInteger = config.getVersionCode();
+    if (localInteger != null) {
+      return localInteger;
+    }
+    if (packageInfo != null) {
+      return Integer.valueOf(packageInfo.versionCode);
+    }
+    return null;
+  }
+  
+  @Nullable
+  private String calculateVersionName()
+  {
+    String str = config.getAppVersion();
+    if (str != null) {
+      return str;
+    }
+    if (packageInfo != null) {
+      return packageInfo.versionName;
+    }
+    return null;
+  }
+  
+  @Nullable
+  private String getAppName()
+  {
+    if ((packageManager != null) && (applicationInfo != null)) {
+      return packageManager.getApplicationLabel(applicationInfo).toString();
+    }
+    return null;
+  }
+  
+  static long getDurationMs()
+  {
+    return SystemClock.elapsedRealtime() - startTimeMs;
+  }
+  
+  private long getMemoryUsage()
+  {
+    Runtime localRuntime = Runtime.getRuntime();
+    return localRuntime.totalMemory() - localRuntime.freeMemory();
+  }
+  
+  @Nullable
+  private Boolean isLowMemory()
+  {
+    try
+    {
+      ActivityManager localActivityManager = (ActivityManager)appContext.getSystemService("activity");
+      if (localActivityManager == null) {
+        break label45;
+      }
+      ActivityManager.MemoryInfo localMemoryInfo = new ActivityManager.MemoryInfo();
+      localActivityManager.getMemoryInfo(localMemoryInfo);
+      boolean bool = lowMemory;
+      return Boolean.valueOf(bool);
+    }
+    catch (Exception localException)
+    {
+      label45:
+      for (;;) {}
+    }
+    Logger.warn("Could not check lowMemory status");
+    return null;
+  }
+  
+  @Nullable
+  Long calculateDurationInForeground()
+  {
+    long l = System.currentTimeMillis();
+    return sessionTracker.getDurationInForegroundMs(l);
+  }
+  
+  String getActiveScreenClass()
+  {
+    return sessionTracker.getContextActivity();
+  }
+  
+  Map<String, Object> getAppData()
+  {
+    Map localMap = getAppDataSummary();
+    localMap.put("id", packageName);
+    localMap.put("buildUUID", config.getBuildUUID());
+    localMap.put("duration", Long.valueOf(getDurationMs()));
+    localMap.put("durationInForeground", calculateDurationInForeground());
+    localMap.put("inForeground", sessionTracker.isInForeground());
+    localMap.put("packageName", packageName);
+    localMap.put("binaryArch", binaryArch);
+    return localMap;
+  }
+  
+  Map<String, Object> getAppDataMetaData()
+  {
+    HashMap localHashMap = new HashMap();
+    localHashMap.put("name", appName);
+    localHashMap.put("packageName", packageName);
+    localHashMap.put("versionName", calculateVersionName());
+    localHashMap.put("activeScreen", getActiveScreenClass());
+    localHashMap.put("memoryUsage", Long.valueOf(getMemoryUsage()));
+    localHashMap.put("lowMemory", isLowMemory());
+    return localHashMap;
+  }
+  
+  Map<String, Object> getAppDataSummary()
+  {
+    HashMap localHashMap = new HashMap();
+    localHashMap.put("type", calculateNotifierType());
+    localHashMap.put("releaseStage", guessReleaseStage());
+    localHashMap.put("version", calculateVersionName());
+    localHashMap.put("versionCode", calculateVersionCode());
+    localHashMap.put("codeBundleId", config.getCodeBundleId());
+    return localHashMap;
+  }
+  
+  @NonNull
+  String guessReleaseStage()
+  {
+    String str = config.getReleaseStage();
+    if (str != null) {
+      return str;
+    }
+    if ((applicationInfo != null) && ((applicationInfo.flags & 0x2) != 0)) {
+      return "development";
+    }
+    return "production";
+  }
+  
+  void setBinaryArch(String paramString)
+  {
+    binaryArch = paramString;
+  }
+}

@@ -1,0 +1,40 @@
+package bleshadow.dagger.internal;
+
+import bleshadow.dagger.Lazy;
+import bleshadow.javax.inject.Provider;
+
+public final class SingleCheck<T>
+  implements Provider<T>, Lazy<T>
+{
+  private static final Object UNINITIALIZED = new Object();
+  private volatile Object instance = UNINITIALIZED;
+  private volatile Provider<T> provider;
+  
+  private SingleCheck(Provider<T> paramProvider)
+  {
+    provider = paramProvider;
+  }
+  
+  public static <P extends Provider<T>, T> Provider<T> provider(P paramP)
+  {
+    if (!(paramP instanceof SingleCheck))
+    {
+      if ((paramP instanceof DoubleCheck)) {
+        return paramP;
+      }
+      return new SingleCheck((Provider)Preconditions.checkNotNull(paramP));
+    }
+    return paramP;
+  }
+  
+  public T get()
+  {
+    Provider localProvider = provider;
+    if (instance == UNINITIALIZED)
+    {
+      instance = localProvider.get();
+      provider = null;
+    }
+    return instance;
+  }
+}

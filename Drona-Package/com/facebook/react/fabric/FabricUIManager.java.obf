@@ -1,0 +1,623 @@
+package com.facebook.react.fabric;
+
+import android.annotation.SuppressLint;
+import android.os.SystemClock;
+import android.view.View;
+import androidx.annotation.GuardedBy;
+import androidx.annotation.Nullable;
+import androidx.annotation.UiThread;
+import com.facebook.common.logging.FLog;
+import com.facebook.debug.holder.Printer;
+import com.facebook.debug.holder.PrinterHolder;
+import com.facebook.debug.tags.ReactDebugOverlayTags;
+import com.facebook.infer.annotation.ThreadConfined;
+import com.facebook.proguard.annotations.DoNotStrip;
+import com.facebook.react.bridge.LifecycleEventListener;
+import com.facebook.react.bridge.NativeMap;
+import com.facebook.react.bridge.ReactApplicationContext;
+import com.facebook.react.bridge.ReactContext;
+import com.facebook.react.bridge.ReactMarker;
+import com.facebook.react.bridge.ReactMarkerConstants;
+import com.facebook.react.bridge.ReadableArray;
+import com.facebook.react.bridge.ReadableMap;
+import com.facebook.react.bridge.UIManager;
+import com.facebook.react.bridge.UiThreadUtil;
+import com.facebook.react.bridge.WritableMap;
+import com.facebook.react.config.ReactFeatureFlags;
+import com.facebook.react.fabric.events.EventBeatManager;
+import com.facebook.react.fabric.events.EventEmitterWrapper;
+import com.facebook.react.fabric.events.FabricEventEmitter;
+import com.facebook.react.fabric.mounting.LayoutMetricsConversions;
+import com.facebook.react.fabric.mounting.MountingManager;
+import com.facebook.react.fabric.mounting.mountitems.BatchMountItem;
+import com.facebook.react.fabric.mounting.mountitems.CreateMountItem;
+import com.facebook.react.fabric.mounting.mountitems.DeleteMountItem;
+import com.facebook.react.fabric.mounting.mountitems.DispatchCommandMountItem;
+import com.facebook.react.fabric.mounting.mountitems.DispatchStringCommandMountItem;
+import com.facebook.react.fabric.mounting.mountitems.InsertMountItem;
+import com.facebook.react.fabric.mounting.mountitems.MountItem;
+import com.facebook.react.fabric.mounting.mountitems.PreAllocateViewMountItem;
+import com.facebook.react.fabric.mounting.mountitems.RemoveMountItem;
+import com.facebook.react.fabric.mounting.mountitems.UpdateEventEmitterMountItem;
+import com.facebook.react.fabric.mounting.mountitems.UpdateLayoutMountItem;
+import com.facebook.react.fabric.mounting.mountitems.UpdateLocalDataMountItem;
+import com.facebook.react.fabric.mounting.mountitems.UpdatePropsMountItem;
+import com.facebook.react.fabric.mounting.mountitems.UpdateStateMountItem;
+import com.facebook.react.modules.core.ReactChoreographer;
+import com.facebook.react.modules.core.ReactChoreographer.CallbackType;
+import com.facebook.react.uimanager.ReactRoot;
+import com.facebook.react.uimanager.ReactRootViewTagGenerator;
+import com.facebook.react.uimanager.StateWrapper;
+import com.facebook.react.uimanager.ThemedReactContext;
+import com.facebook.react.uimanager.ViewManagerPropertyUpdater;
+import com.facebook.react.uimanager.ViewManagerRegistry;
+import com.facebook.react.uimanager.events.EventDispatcher;
+import com.facebook.systrace.Systrace;
+import java.util.ArrayDeque;
+import java.util.ArrayList;
+import java.util.HashMap;
+import java.util.Iterator;
+import java.util.List;
+import java.util.Map;
+import java.util.concurrent.ConcurrentHashMap;
+
+@SuppressLint({"MissingNativeLoadLibrary"})
+public class FabricUIManager
+  implements UIManager, LifecycleEventListener
+{
+  public static final boolean DEBUG;
+  private static final int FRAME_TIME_MS = 16;
+  private static final int MAX_TIME_IN_FRAME_FOR_NON_BATCHED_OPERATIONS_MS = 8;
+  private static final int PRE_MOUNT_ITEMS_INITIAL_SIZE_ARRAY = 250;
+  public static final String TAG = "FabricUIManager";
+  private long mBatchedExecutionTime = 0L;
+  private Binding mBinding;
+  private long mCommitStartTime = 0L;
+  private int mCurrentSynchronousCommitNumber = 10000;
+  @ThreadConfined("UI")
+  private final DispatchUIFrameCallback mDispatchUIFrameCallback;
+  private long mDispatchViewUpdatesTime = 0L;
+  private final EventBeatManager mEventBeatManager;
+  private final EventDispatcher mEventDispatcher;
+  private long mFinishTransactionCPPTime = 0L;
+  private long mFinishTransactionTime = 0L;
+  @ThreadConfined("UI")
+  private boolean mIsMountingEnabled = true;
+  private long mLayoutTime = 0L;
+  @GuardedBy("mMountItemsLock")
+  private List<MountItem> mMountItems = new ArrayList();
+  private final Object mMountItemsLock = new Object();
+  private final MountingManager mMountingManager;
+  @GuardedBy("mPreMountItemsLock")
+  private ArrayDeque<MountItem> mPreMountItems = new ArrayDeque(250);
+  private final Object mPreMountItemsLock = new Object();
+  private final ReactApplicationContext mReactApplicationContext;
+  private final ConcurrentHashMap<Integer, ThemedReactContext> mReactContextForRootTag = new ConcurrentHashMap();
+  private long mRunStartTime = 0L;
+  
+  static
+  {
+    boolean bool;
+    if ((!ReactFeatureFlags.enableFabricLogs) && (!PrinterHolder.getPrinter().shouldDisplayLogMessage(ReactDebugOverlayTags.FABRIC_UI_MANAGER))) {
+      bool = false;
+    } else {
+      bool = true;
+    }
+    DEBUG = bool;
+    FabricSoLoader.staticInit();
+  }
+  
+  public FabricUIManager(ReactApplicationContext paramReactApplicationContext, ViewManagerRegistry paramViewManagerRegistry, EventDispatcher paramEventDispatcher, EventBeatManager paramEventBeatManager)
+  {
+    mDispatchUIFrameCallback = new DispatchUIFrameCallback(paramReactApplicationContext, null);
+    mReactApplicationContext = paramReactApplicationContext;
+    mMountingManager = new MountingManager(paramViewManagerRegistry);
+    mEventDispatcher = paramEventDispatcher;
+    mEventBeatManager = paramEventBeatManager;
+    mReactApplicationContext.addLifecycleEventListener(this);
+  }
+  
+  @DoNotStrip
+  private MountItem createBatchMountItem(MountItem[] paramArrayOfMountItem, int paramInt1, int paramInt2)
+  {
+    return new BatchMountItem(paramArrayOfMountItem, paramInt1, paramInt2);
+  }
+  
+  @DoNotStrip
+  private MountItem createMountItem(String paramString, @Nullable ReadableMap paramReadableMap, @Nullable Object paramObject, int paramInt1, int paramInt2, boolean paramBoolean)
+  {
+    paramString = FabricComponents.getFabricComponentName(paramString);
+    ThemedReactContext localThemedReactContext = (ThemedReactContext)mReactContextForRootTag.get(Integer.valueOf(paramInt1));
+    if (localThemedReactContext != null) {
+      return new CreateMountItem(localThemedReactContext, paramInt1, paramInt2, paramString, paramReadableMap, (StateWrapper)paramObject, paramBoolean);
+    }
+    paramString = new StringBuilder();
+    paramString.append("Unable to find ReactContext for root: ");
+    paramString.append(paramInt1);
+    throw new IllegalArgumentException(paramString.toString());
+  }
+  
+  @DoNotStrip
+  private MountItem deleteMountItem(int paramInt)
+  {
+    return new DeleteMountItem(paramInt);
+  }
+  
+  @UiThread
+  private void dispatchMountItems()
+  {
+    mRunStartTime = SystemClock.uptimeMillis();
+    synchronized (mMountItemsLock)
+    {
+      if (mMountItems.isEmpty()) {
+        return;
+      }
+      Object localObject3 = mMountItems;
+      mMountItems = new ArrayList();
+      ??? = null;
+      synchronized (mPreMountItemsLock)
+      {
+        if (!mPreMountItems.isEmpty())
+        {
+          ??? = mPreMountItems;
+          mPreMountItems = new ArrayDeque(250);
+        }
+        if (??? != null)
+        {
+          ??? = new StringBuilder();
+          ((StringBuilder)???).append("FabricUIManager::mountViews preMountItems to execute: ");
+          ((StringBuilder)???).append(((ArrayDeque)???).size());
+          Systrace.beginSection(0L, ((StringBuilder)???).toString());
+          while (!((ArrayDeque)???).isEmpty()) {
+            ((MountItem)((ArrayDeque)???).pollFirst()).execute(mMountingManager);
+          }
+          Systrace.endSection(0L);
+        }
+        ??? = new StringBuilder();
+        ((StringBuilder)???).append("FabricUIManager::mountViews mountItems to execute: ");
+        ((StringBuilder)???).append(((List)localObject3).size());
+        Systrace.beginSection(0L, ((StringBuilder)???).toString());
+        long l = SystemClock.uptimeMillis();
+        ??? = ((List)localObject3).iterator();
+        while (((Iterator)???).hasNext())
+        {
+          localObject3 = (MountItem)((Iterator)???).next();
+          if (DEBUG)
+          {
+            ??? = TAG;
+            StringBuilder localStringBuilder = new StringBuilder();
+            localStringBuilder.append("dispatchMountItems: Executing mountItem: ");
+            localStringBuilder.append(localObject3);
+            FLog.d((String)???, localStringBuilder.toString());
+          }
+          ((MountItem)localObject3).execute(mMountingManager);
+        }
+        mBatchedExecutionTime = (SystemClock.uptimeMillis() - l);
+        Systrace.endSection(0L);
+        return;
+      }
+    }
+  }
+  
+  @UiThread
+  private void dispatchPreMountItems(long paramLong)
+  {
+    Systrace.beginSection(0L, "FabricUIManager::premountViews");
+    for (;;)
+    {
+      if (16L - (System.nanoTime() - paramLong) / 1000000L >= 8L) {}
+      synchronized (mPreMountItemsLock)
+      {
+        if (mPreMountItems.isEmpty())
+        {
+          Systrace.endSection(0L);
+          return;
+        }
+        MountItem localMountItem = (MountItem)mPreMountItems.pollFirst();
+        localMountItem.execute(mMountingManager);
+      }
+    }
+  }
+  
+  @DoNotStrip
+  private MountItem insertMountItem(int paramInt1, int paramInt2, int paramInt3)
+  {
+    return new InsertMountItem(paramInt1, paramInt2, paramInt3);
+  }
+  
+  @DoNotStrip
+  private long measure(String paramString, ReadableMap paramReadableMap1, ReadableMap paramReadableMap2, ReadableMap paramReadableMap3, float paramFloat1, float paramFloat2, float paramFloat3, float paramFloat4)
+  {
+    return mMountingManager.measure(mReactApplicationContext, paramString, paramReadableMap1, paramReadableMap2, paramReadableMap3, LayoutMetricsConversions.getYogaSize(paramFloat1, paramFloat2), LayoutMetricsConversions.getYogaMeasureMode(paramFloat1, paramFloat2), LayoutMetricsConversions.getYogaSize(paramFloat3, paramFloat4), LayoutMetricsConversions.getYogaMeasureMode(paramFloat3, paramFloat4));
+  }
+  
+  @DoNotStrip
+  private void preallocateView(int paramInt1, int paramInt2, String arg3, @Nullable ReadableMap paramReadableMap, @Nullable Object paramObject, boolean paramBoolean)
+  {
+    ThemedReactContext localThemedReactContext = (ThemedReactContext)mReactContextForRootTag.get(Integer.valueOf(paramInt1));
+    String str = FabricComponents.getFabricComponentName(???);
+    synchronized (mPreMountItemsLock)
+    {
+      mPreMountItems.add(new PreAllocateViewMountItem(localThemedReactContext, paramInt1, paramInt2, str, paramReadableMap, (StateWrapper)paramObject, paramBoolean));
+      return;
+    }
+  }
+  
+  @DoNotStrip
+  private MountItem removeMountItem(int paramInt1, int paramInt2, int paramInt3)
+  {
+    return new RemoveMountItem(paramInt1, paramInt2, paramInt3);
+  }
+  
+  @DoNotStrip
+  private void scheduleMountItem(MountItem paramMountItem, int paramInt, long paramLong1, long paramLong2, long paramLong3, long paramLong4, long paramLong5, long paramLong6, long paramLong7)
+  {
+    boolean bool = paramMountItem instanceof BatchMountItem;
+    if (bool)
+    {
+      mCommitStartTime = paramLong1;
+      mLayoutTime = (paramLong5 - paramLong4);
+      mFinishTransactionCPPTime = (paramLong7 - paramLong6);
+      mFinishTransactionTime = (SystemClock.uptimeMillis() - paramLong6);
+      mDispatchViewUpdatesTime = SystemClock.uptimeMillis();
+    }
+    synchronized (mMountItemsLock)
+    {
+      mMountItems.add(paramMountItem);
+      if (bool)
+      {
+        ReactMarker.logFabricMarker(ReactMarkerConstants.FABRIC_COMMIT_START, null, paramInt, mCommitStartTime);
+        ReactMarker.logFabricMarker(ReactMarkerConstants.FABRIC_FINISH_TRANSACTION_START, null, paramInt, paramLong6);
+        ReactMarker.logFabricMarker(ReactMarkerConstants.FABRIC_FINISH_TRANSACTION_END, null, paramInt, paramLong7);
+        ReactMarker.logFabricMarker(ReactMarkerConstants.FABRIC_DIFF_START, null, paramInt, paramLong2);
+        ReactMarker.logFabricMarker(ReactMarkerConstants.FABRIC_DIFF_END, null, paramInt, paramLong3);
+        ReactMarker.logFabricMarker(ReactMarkerConstants.FABRIC_LAYOUT_START, null, paramInt, paramLong4);
+        ReactMarker.logFabricMarker(ReactMarkerConstants.FABRIC_LAYOUT_END, null, paramInt, paramLong5);
+        ReactMarker.logFabricMarker(ReactMarkerConstants.FABRIC_COMMIT_END, null, paramInt);
+      }
+      if (UiThreadUtil.isOnUiThread()) {
+        dispatchMountItems();
+      }
+      return;
+    }
+  }
+  
+  @DoNotStrip
+  private MountItem updateEventEmitterMountItem(int paramInt, Object paramObject)
+  {
+    return new UpdateEventEmitterMountItem(paramInt, (EventEmitterWrapper)paramObject);
+  }
+  
+  @DoNotStrip
+  private MountItem updateLayoutMountItem(int paramInt1, int paramInt2, int paramInt3, int paramInt4, int paramInt5, int paramInt6)
+  {
+    return new UpdateLayoutMountItem(paramInt1, paramInt2, paramInt3, paramInt4, paramInt5, paramInt6);
+  }
+  
+  @DoNotStrip
+  private MountItem updateLocalDataMountItem(int paramInt, ReadableMap paramReadableMap)
+  {
+    return new UpdateLocalDataMountItem(paramInt, paramReadableMap);
+  }
+  
+  @DoNotStrip
+  private MountItem updatePropsMountItem(int paramInt, ReadableMap paramReadableMap)
+  {
+    return new UpdatePropsMountItem(paramInt, paramReadableMap);
+  }
+  
+  @DoNotStrip
+  private MountItem updateStateMountItem(int paramInt, Object paramObject)
+  {
+    return new UpdateStateMountItem(paramInt, (StateWrapper)paramObject);
+  }
+  
+  public <T extends View> int addRootView(T paramT, WritableMap paramWritableMap, @Nullable String paramString)
+  {
+    int i = ReactRootViewTagGenerator.getNextRootViewTag();
+    ThemedReactContext localThemedReactContext = new ThemedReactContext(mReactApplicationContext, paramT.getContext());
+    mMountingManager.addRootView(i, paramT);
+    mReactContextForRootTag.put(Integer.valueOf(i), localThemedReactContext);
+    paramT = ((ReactRoot)paramT).getJSModuleName();
+    if (DEBUG) {
+      FLog.d(TAG, "Starting surface for module: %s and reactTag: %d", paramT, Integer.valueOf(i));
+    }
+    mBinding.startSurface(i, paramT, (NativeMap)paramWritableMap);
+    if (paramString != null) {
+      mBinding.renderTemplateToSurface(i, paramString);
+    }
+    return i;
+  }
+  
+  @DoNotStrip
+  public void clearJSResponder()
+  {
+    synchronized (mMountItemsLock)
+    {
+      mMountItems.add(new MountItem()
+      {
+        public void execute(MountingManager paramAnonymousMountingManager)
+        {
+          paramAnonymousMountingManager.clearJSResponder();
+        }
+      });
+      return;
+    }
+  }
+  
+  @Deprecated
+  public void dispatchCommand(int paramInt1, int paramInt2, @Nullable ReadableArray paramReadableArray)
+  {
+    synchronized (mMountItemsLock)
+    {
+      mMountItems.add(new DispatchCommandMountItem(paramInt1, paramInt2, paramReadableArray));
+      return;
+    }
+  }
+  
+  public void dispatchCommand(int paramInt, String paramString, @Nullable ReadableArray paramReadableArray)
+  {
+    synchronized (mMountItemsLock)
+    {
+      mMountItems.add(new DispatchStringCommandMountItem(paramInt, paramString, paramReadableArray));
+      return;
+    }
+  }
+  
+  public Map<String, Long> getPerformanceCounters()
+  {
+    HashMap localHashMap = new HashMap();
+    localHashMap.put("CommitStartTime", Long.valueOf(mCommitStartTime));
+    localHashMap.put("LayoutTime", Long.valueOf(mLayoutTime));
+    localHashMap.put("DispatchViewUpdatesTime", Long.valueOf(mDispatchViewUpdatesTime));
+    localHashMap.put("RunStartTime", Long.valueOf(mRunStartTime));
+    localHashMap.put("BatchedExecutionTime", Long.valueOf(mBatchedExecutionTime));
+    localHashMap.put("FinishFabricTransactionTime", Long.valueOf(mFinishTransactionTime));
+    localHashMap.put("FinishFabricTransactionCPPTime", Long.valueOf(mFinishTransactionCPPTime));
+    return localHashMap;
+  }
+  
+  public void initialize()
+  {
+    mEventDispatcher.registerEventEmitter(2, new FabricEventEmitter(this));
+    mEventDispatcher.addBatchEventDispatchedListener(mEventBeatManager);
+  }
+  
+  public void onCatalystInstanceDestroy()
+  {
+    if (DEBUG) {
+      FLog.d(TAG, "Destroying Catalyst Instance");
+    }
+    mEventDispatcher.removeBatchEventDispatchedListener(mEventBeatManager);
+    mEventDispatcher.unregisterEventEmitter(2);
+    mBinding.unregister();
+    ViewManagerPropertyUpdater.clear();
+  }
+  
+  public void onHostDestroy() {}
+  
+  public void onHostPause()
+  {
+    ReactChoreographer.getInstance().removeFrameCallback(ReactChoreographer.CallbackType.DISPATCH_UI, mDispatchUIFrameCallback);
+  }
+  
+  public void onHostResume()
+  {
+    ReactChoreographer.getInstance().postFrameCallback(ReactChoreographer.CallbackType.DISPATCH_UI, mDispatchUIFrameCallback);
+  }
+  
+  @DoNotStrip
+  public void onRequestEventBeat()
+  {
+    mEventDispatcher.dispatchAllEvents();
+  }
+  
+  public void profileNextBatch() {}
+  
+  public void receiveEvent(int paramInt, String paramString, @Nullable WritableMap paramWritableMap)
+  {
+    Object localObject = mMountingManager.getEventEmitter(paramInt);
+    if (localObject == null)
+    {
+      paramWritableMap = TAG;
+      localObject = new StringBuilder();
+      ((StringBuilder)localObject).append("Unable to invoke event: ");
+      ((StringBuilder)localObject).append(paramString);
+      ((StringBuilder)localObject).append(" for reactTag: ");
+      ((StringBuilder)localObject).append(paramInt);
+      FLog.d(paramWritableMap, ((StringBuilder)localObject).toString());
+      return;
+    }
+    ((EventEmitterWrapper)localObject).invoke(paramString, paramWritableMap);
+  }
+  
+  public void setBinding(Binding paramBinding)
+  {
+    mBinding = paramBinding;
+  }
+  
+  @DoNotStrip
+  public void setJSResponder(final int paramInt1, final int paramInt2, final boolean paramBoolean)
+  {
+    synchronized (mMountItemsLock)
+    {
+      mMountItems.add(new MountItem()
+      {
+        public void execute(MountingManager paramAnonymousMountingManager)
+        {
+          paramAnonymousMountingManager.setJSResponder(paramInt1, paramInt2, paramBoolean);
+        }
+      });
+      return;
+    }
+  }
+  
+  public <T extends View> int startSurface(T paramT, String paramString, WritableMap paramWritableMap, int paramInt1, int paramInt2)
+  {
+    int i = ReactRootViewTagGenerator.getNextRootViewTag();
+    ThemedReactContext localThemedReactContext = new ThemedReactContext(mReactApplicationContext, paramT.getContext());
+    if (DEBUG) {
+      FLog.d(TAG, "Starting surface for module: %s and reactTag: %d", paramString, Integer.valueOf(i));
+    }
+    mMountingManager.addRootView(i, paramT);
+    mReactContextForRootTag.put(Integer.valueOf(i), localThemedReactContext);
+    mBinding.startSurfaceWithConstraints(i, paramString, (NativeMap)paramWritableMap, LayoutMetricsConversions.getMinSize(paramInt1), LayoutMetricsConversions.getMaxSize(paramInt1), LayoutMetricsConversions.getMinSize(paramInt2), LayoutMetricsConversions.getMaxSize(paramInt2));
+    return i;
+  }
+  
+  public void stopSurface(int paramInt)
+  {
+    mBinding.stopSurface(paramInt);
+  }
+  
+  /* Error */
+  public void synchronouslyUpdateViewOnUIThread(int paramInt, ReadableMap paramReadableMap)
+  {
+    // Byte code:
+    //   0: invokestatic 256	android/os/SystemClock:uptimeMillis	()J
+    //   3: lstore 4
+    //   5: aload_0
+    //   6: getfield 144	com/facebook/react/fabric/FabricUIManager:mCurrentSynchronousCommitNumber	I
+    //   9: istore_3
+    //   10: aload_0
+    //   11: iload_3
+    //   12: iconst_1
+    //   13: iadd
+    //   14: putfield 144	com/facebook/react/fabric/FabricUIManager:mCurrentSynchronousCommitNumber	I
+    //   17: getstatic 633	com/facebook/react/bridge/ReactMarkerConstants:FABRIC_UPDATE_UI_MAIN_THREAD_START	Lcom/facebook/react/bridge/ReactMarkerConstants;
+    //   20: aconst_null
+    //   21: iload_3
+    //   22: invokestatic 403	com/facebook/react/bridge/ReactMarker:logFabricMarker	(Lcom/facebook/react/bridge/ReactMarkerConstants;Ljava/lang/String;I)V
+    //   25: aload_0
+    //   26: iload_1
+    //   27: aload_2
+    //   28: invokespecial 635	com/facebook/react/fabric/FabricUIManager:updatePropsMountItem	(ILcom/facebook/react/bridge/ReadableMap;)Lcom/facebook/react/fabric/mounting/mountitems/MountItem;
+    //   31: astore_2
+    //   32: aload_0
+    //   33: aload_2
+    //   34: iload_3
+    //   35: lload 4
+    //   37: lconst_0
+    //   38: lconst_0
+    //   39: lconst_0
+    //   40: lconst_0
+    //   41: lconst_0
+    //   42: lconst_0
+    //   43: invokespecial 637	com/facebook/react/fabric/FabricUIManager:scheduleMountItem	(Lcom/facebook/react/fabric/mounting/mountitems/MountItem;IJJJJJJJ)V
+    //   46: getstatic 640	com/facebook/react/bridge/ReactMarkerConstants:FABRIC_UPDATE_UI_MAIN_THREAD_END	Lcom/facebook/react/bridge/ReactMarkerConstants;
+    //   49: astore_2
+    //   50: goto +25 -> 75
+    //   53: astore_2
+    //   54: goto +7 -> 61
+    //   57: goto +14 -> 71
+    //   60: astore_2
+    //   61: getstatic 640	com/facebook/react/bridge/ReactMarkerConstants:FABRIC_UPDATE_UI_MAIN_THREAD_END	Lcom/facebook/react/bridge/ReactMarkerConstants;
+    //   64: aconst_null
+    //   65: iload_3
+    //   66: invokestatic 403	com/facebook/react/bridge/ReactMarker:logFabricMarker	(Lcom/facebook/react/bridge/ReactMarkerConstants;Ljava/lang/String;I)V
+    //   69: aload_2
+    //   70: athrow
+    //   71: getstatic 640	com/facebook/react/bridge/ReactMarkerConstants:FABRIC_UPDATE_UI_MAIN_THREAD_END	Lcom/facebook/react/bridge/ReactMarkerConstants;
+    //   74: astore_2
+    //   75: aload_2
+    //   76: aconst_null
+    //   77: iload_3
+    //   78: invokestatic 403	com/facebook/react/bridge/ReactMarker:logFabricMarker	(Lcom/facebook/react/bridge/ReactMarkerConstants;Ljava/lang/String;I)V
+    //   81: return
+    //   82: astore_2
+    //   83: goto -12 -> 71
+    //   86: astore_2
+    //   87: goto -30 -> 57
+    // Local variable table:
+    //   start	length	slot	name	signature
+    //   0	90	0	this	FabricUIManager
+    //   0	90	1	paramInt	int
+    //   0	90	2	paramReadableMap	ReadableMap
+    //   9	69	3	i	int
+    //   3	33	4	l	long
+    // Exception table:
+    //   from	to	target	type
+    //   32	46	53	finally
+    //   17	32	60	finally
+    //   17	32	82	java/lang/Exception
+    //   32	46	86	java/lang/Exception
+  }
+  
+  public void updateRootLayoutSpecs(int paramInt1, int paramInt2, int paramInt3)
+  {
+    if (DEBUG) {
+      FLog.d(TAG, "Updating Root Layout Specs");
+    }
+    mBinding.setConstraints(paramInt1, LayoutMetricsConversions.getMinSize(paramInt2), LayoutMetricsConversions.getMaxSize(paramInt2), LayoutMetricsConversions.getMinSize(paramInt3), LayoutMetricsConversions.getMaxSize(paramInt3));
+  }
+  
+  private class DispatchUIFrameCallback
+    extends GuardedFrameCallback
+  {
+    private DispatchUIFrameCallback(ReactContext paramReactContext)
+    {
+      super();
+    }
+    
+    /* Error */
+    public void doFrameGuarded(long paramLong)
+    {
+      // Byte code:
+      //   0: aload_0
+      //   1: getfield 13	com/facebook/react/fabric/FabricUIManager$DispatchUIFrameCallback:this$0	Lcom/facebook/react/fabric/FabricUIManager;
+      //   4: invokestatic 28	com/facebook/react/fabric/FabricUIManager:access$100	(Lcom/facebook/react/fabric/FabricUIManager;)Z
+      //   7: ifne +11 -> 18
+      //   10: ldc 30
+      //   12: ldc 32
+      //   14: invokestatic 38	com/facebook/common/logging/FLog:w	(Ljava/lang/String;Ljava/lang/String;)V
+      //   17: return
+      //   18: aload_0
+      //   19: getfield 13	com/facebook/react/fabric/FabricUIManager$DispatchUIFrameCallback:this$0	Lcom/facebook/react/fabric/FabricUIManager;
+      //   22: lload_1
+      //   23: invokestatic 42	com/facebook/react/fabric/FabricUIManager:access$200	(Lcom/facebook/react/fabric/FabricUIManager;J)V
+      //   26: aload_0
+      //   27: getfield 13	com/facebook/react/fabric/FabricUIManager$DispatchUIFrameCallback:this$0	Lcom/facebook/react/fabric/FabricUIManager;
+      //   30: invokestatic 46	com/facebook/react/fabric/FabricUIManager:access$300	(Lcom/facebook/react/fabric/FabricUIManager;)V
+      //   33: invokestatic 52	com/facebook/react/modules/core/ReactChoreographer:getInstance	()Lcom/facebook/react/modules/core/ReactChoreographer;
+      //   36: getstatic 58	com/facebook/react/modules/core/ReactChoreographer$CallbackType:DISPATCH_UI	Lcom/facebook/react/modules/core/ReactChoreographer$CallbackType;
+      //   39: aload_0
+      //   40: getfield 13	com/facebook/react/fabric/FabricUIManager$DispatchUIFrameCallback:this$0	Lcom/facebook/react/fabric/FabricUIManager;
+      //   43: invokestatic 62	com/facebook/react/fabric/FabricUIManager:access$400	(Lcom/facebook/react/fabric/FabricUIManager;)Lcom/facebook/react/fabric/FabricUIManager$DispatchUIFrameCallback;
+      //   46: invokevirtual 66	com/facebook/react/modules/core/ReactChoreographer:postFrameCallback	(Lcom/facebook/react/modules/core/ReactChoreographer$CallbackType;Lcom/facebook/react/modules/core/ChoreographerCompat$FrameCallback;)V
+      //   49: return
+      //   50: astore_3
+      //   51: goto +23 -> 74
+      //   54: astore_3
+      //   55: ldc 30
+      //   57: ldc 68
+      //   59: aload_3
+      //   60: invokestatic 72	com/facebook/common/logging/FLog:i	(Ljava/lang/String;Ljava/lang/String;Ljava/lang/Throwable;)V
+      //   63: aload_0
+      //   64: getfield 13	com/facebook/react/fabric/FabricUIManager$DispatchUIFrameCallback:this$0	Lcom/facebook/react/fabric/FabricUIManager;
+      //   67: iconst_0
+      //   68: invokestatic 76	com/facebook/react/fabric/FabricUIManager:access$102	(Lcom/facebook/react/fabric/FabricUIManager;Z)Z
+      //   71: pop
+      //   72: aload_3
+      //   73: athrow
+      //   74: invokestatic 52	com/facebook/react/modules/core/ReactChoreographer:getInstance	()Lcom/facebook/react/modules/core/ReactChoreographer;
+      //   77: getstatic 58	com/facebook/react/modules/core/ReactChoreographer$CallbackType:DISPATCH_UI	Lcom/facebook/react/modules/core/ReactChoreographer$CallbackType;
+      //   80: aload_0
+      //   81: getfield 13	com/facebook/react/fabric/FabricUIManager$DispatchUIFrameCallback:this$0	Lcom/facebook/react/fabric/FabricUIManager;
+      //   84: invokestatic 62	com/facebook/react/fabric/FabricUIManager:access$400	(Lcom/facebook/react/fabric/FabricUIManager;)Lcom/facebook/react/fabric/FabricUIManager$DispatchUIFrameCallback;
+      //   87: invokevirtual 66	com/facebook/react/modules/core/ReactChoreographer:postFrameCallback	(Lcom/facebook/react/modules/core/ReactChoreographer$CallbackType;Lcom/facebook/react/modules/core/ChoreographerCompat$FrameCallback;)V
+      //   90: aload_3
+      //   91: athrow
+      // Local variable table:
+      //   start	length	slot	name	signature
+      //   0	92	0	this	DispatchUIFrameCallback
+      //   0	92	1	paramLong	long
+      //   50	1	3	localObject	Object
+      //   54	37	3	localException	Exception
+      // Exception table:
+      //   from	to	target	type
+      //   18	33	50	finally
+      //   55	74	50	finally
+      //   18	33	54	java/lang/Exception
+    }
+  }
+}

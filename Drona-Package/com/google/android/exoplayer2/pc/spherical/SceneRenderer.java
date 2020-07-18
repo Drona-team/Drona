@@ -1,0 +1,120 @@
+package com.google.android.exoplayer2.pc.spherical;
+
+import android.graphics.SurfaceTexture;
+import android.opengl.GLES20;
+import android.opengl.Matrix;
+import androidx.annotation.Nullable;
+import com.google.android.exoplayer2.Format;
+import com.google.android.exoplayer2.util.Assertions;
+import com.google.android.exoplayer2.util.TimedValueQueue;
+import com.google.android.exoplayer2.video.VideoFrameMetadataListener;
+import com.google.android.exoplayer2.video.spherical.CameraMotionListener;
+import com.google.android.exoplayer2.video.spherical.FrameRotationQueue;
+import com.google.android.exoplayer2.video.spherical.Projection;
+import com.google.android.exoplayer2.video.spherical.ProjectionDecoder;
+import java.util.Arrays;
+import java.util.concurrent.atomic.AtomicBoolean;
+
+class SceneRenderer
+  implements VideoFrameMetadataListener, CameraMotionListener
+{
+  private volatile int defaultStereoMode = 0;
+  private final AtomicBoolean frameAvailable = new AtomicBoolean();
+  private final FrameRotationQueue frameRotationQueue = new FrameRotationQueue();
+  @Nullable
+  private byte[] lastProjectionData;
+  private int lastStereoMode = -1;
+  private final TimedValueQueue<Projection> projectionQueue = new TimedValueQueue();
+  private final ProjectionRenderer projectionRenderer = new ProjectionRenderer();
+  private final AtomicBoolean resetRotationAtNextFrame = new AtomicBoolean(true);
+  private final float[] rotationMatrix = new float[16];
+  private final TimedValueQueue<Long> sampleTimestampQueue = new TimedValueQueue();
+  private SurfaceTexture surfaceTexture;
+  private final float[] tempMatrix = new float[16];
+  private int textureId;
+  
+  public SceneRenderer() {}
+  
+  private void setProjection(byte[] paramArrayOfByte, int paramInt, long paramLong)
+  {
+    byte[] arrayOfByte = lastProjectionData;
+    int j = lastStereoMode;
+    lastProjectionData = paramArrayOfByte;
+    int i = paramInt;
+    if (paramInt == -1) {
+      i = defaultStereoMode;
+    }
+    lastStereoMode = i;
+    if ((j == lastStereoMode) && (Arrays.equals(arrayOfByte, lastProjectionData))) {
+      return;
+    }
+    paramArrayOfByte = null;
+    if (lastProjectionData != null) {
+      paramArrayOfByte = ProjectionDecoder.decode(lastProjectionData, lastStereoMode);
+    }
+    if ((paramArrayOfByte == null) || (!ProjectionRenderer.isSupported(paramArrayOfByte))) {
+      paramArrayOfByte = Projection.createEquirectangular(lastStereoMode);
+    }
+    projectionQueue.concatenate(paramLong, paramArrayOfByte);
+  }
+  
+  public void drawFrame(float[] paramArrayOfFloat, int paramInt)
+  {
+    GLES20.glClear(16384);
+    GlUtil.checkGlError();
+    if (frameAvailable.compareAndSet(true, false))
+    {
+      ((SurfaceTexture)Assertions.checkNotNull(surfaceTexture)).updateTexImage();
+      GlUtil.checkGlError();
+      if (resetRotationAtNextFrame.compareAndSet(true, false)) {
+        Matrix.setIdentityM(rotationMatrix, 0);
+      }
+      long l = surfaceTexture.getTimestamp();
+      Object localObject = (Long)sampleTimestampQueue.poll(l);
+      if (localObject != null) {
+        frameRotationQueue.pollRotationMatrix(rotationMatrix, ((Long)localObject).longValue());
+      }
+      localObject = (Projection)projectionQueue.pollFloor(l);
+      if (localObject != null) {
+        projectionRenderer.setProjection((Projection)localObject);
+      }
+    }
+    Matrix.multiplyMM(tempMatrix, 0, paramArrayOfFloat, 0, rotationMatrix, 0);
+    projectionRenderer.draw(textureId, tempMatrix, paramInt);
+  }
+  
+  public SurfaceTexture init()
+  {
+    GLES20.glClearColor(0.5F, 0.5F, 0.5F, 1.0F);
+    GlUtil.checkGlError();
+    projectionRenderer.init();
+    GlUtil.checkGlError();
+    textureId = GlUtil.createExternalTexture();
+    surfaceTexture = new SurfaceTexture(textureId);
+    surfaceTexture.setOnFrameAvailableListener(new -..Lambda.SceneRenderer.4ClzwyHXabRJX89l_xvhRW1IBQs(this));
+    return surfaceTexture;
+  }
+  
+  public void onCameraMotion(long paramLong, float[] paramArrayOfFloat)
+  {
+    frameRotationQueue.setRotation(paramLong, paramArrayOfFloat);
+  }
+  
+  public void onCameraMotionReset()
+  {
+    sampleTimestampQueue.clear();
+    frameRotationQueue.reset();
+    resetRotationAtNextFrame.set(true);
+  }
+  
+  public void onVideoFrameAboutToBeRendered(long paramLong1, long paramLong2, Format paramFormat)
+  {
+    sampleTimestampQueue.concatenate(paramLong2, Long.valueOf(paramLong1));
+    setProjection(projectionData, stereoMode, paramLong2);
+  }
+  
+  public void setDefaultStereoMode(int paramInt)
+  {
+    defaultStereoMode = paramInt;
+  }
+}

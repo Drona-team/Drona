@@ -1,0 +1,179 @@
+package com.google.android.exoplayer2.ui.spherical;
+
+import android.annotation.TargetApi;
+import android.opengl.GLES20;
+import com.google.android.exoplayer2.video.spherical.Projection;
+import com.google.android.exoplayer2.video.spherical.Projection.Mesh;
+import com.google.android.exoplayer2.video.spherical.Projection.SubMesh;
+import java.nio.FloatBuffer;
+
+@TargetApi(15)
+final class ProjectionRenderer
+{
+  private static final String[] FRAGMENT_SHADER_CODE;
+  private static final float[] TEX_MATRIX_BOTTOM = { 1.0F, 0.0F, 0.0F, 0.0F, -0.5F, 0.0F, 0.0F, 1.0F, 1.0F };
+  private static final float[] TEX_MATRIX_LEFT = { 0.5F, 0.0F, 0.0F, 0.0F, -1.0F, 0.0F, 0.0F, 1.0F, 1.0F };
+  private static final float[] TEX_MATRIX_RIGHT = { 0.5F, 0.0F, 0.0F, 0.0F, -1.0F, 0.0F, 0.5F, 1.0F, 1.0F };
+  private static final float[] TEX_MATRIX_TOP;
+  private static final float[] TEX_MATRIX_WHOLE;
+  private static final String[] VERTEX_SHADER_CODE = { "uniform mat4 uMvpMatrix;", "uniform mat3 uTexMatrix;", "attribute vec4 aPosition;", "attribute vec2 aTexCoords;", "varying vec2 vTexCoords;", "void main() {", "  gl_Position = uMvpMatrix * aPosition;", "  vTexCoords = (uTexMatrix * vec3(aTexCoords, 1)).xy;", "}" };
+  private MeshData leftMeshData;
+  private int mvpMatrixHandle;
+  private int positionHandle;
+  private int program;
+  private MeshData rightMeshData;
+  private int stereoMode;
+  private int texCoordsHandle;
+  private int textureHandle;
+  private int uTexMatrixHandle;
+  
+  static
+  {
+    FRAGMENT_SHADER_CODE = new String[] { "#extension GL_OES_EGL_image_external : require", "precision mediump float;", "uniform samplerExternalOES uTexture;", "varying vec2 vTexCoords;", "void main() {", "  gl_FragColor = texture2D(uTexture, vTexCoords);", "}" };
+    TEX_MATRIX_WHOLE = new float[] { 1.0F, 0.0F, 0.0F, 0.0F, -1.0F, 0.0F, 0.0F, 1.0F, 1.0F };
+    TEX_MATRIX_TOP = new float[] { 1.0F, 0.0F, 0.0F, 0.0F, -0.5F, 0.0F, 0.0F, 0.5F, 1.0F };
+  }
+  
+  ProjectionRenderer() {}
+  
+  public static boolean isSupported(Projection paramProjection)
+  {
+    Projection.Mesh localMesh = leftMesh;
+    paramProjection = rightMesh;
+    int i = localMesh.getSubMeshCount();
+    boolean bool2 = false;
+    boolean bool1 = bool2;
+    if (i == 1)
+    {
+      bool1 = bool2;
+      if (getSubMesh0textureId == 0)
+      {
+        bool1 = bool2;
+        if (paramProjection.getSubMeshCount() == 1)
+        {
+          bool1 = bool2;
+          if (getSubMesh0textureId == 0) {
+            bool1 = true;
+          }
+        }
+      }
+    }
+    return bool1;
+  }
+  
+  void draw(int paramInt1, float[] paramArrayOfFloat, int paramInt2)
+  {
+    MeshData localMeshData;
+    if (paramInt2 == 2) {
+      localMeshData = rightMeshData;
+    } else {
+      localMeshData = leftMeshData;
+    }
+    if (localMeshData == null) {
+      return;
+    }
+    GLES20.glUseProgram(program);
+    GlUtil.checkGlError();
+    GLES20.glEnableVertexAttribArray(positionHandle);
+    GLES20.glEnableVertexAttribArray(texCoordsHandle);
+    GlUtil.checkGlError();
+    float[] arrayOfFloat;
+    if (stereoMode == 1)
+    {
+      if (paramInt2 == 2) {
+        arrayOfFloat = TEX_MATRIX_BOTTOM;
+      } else {
+        arrayOfFloat = TEX_MATRIX_TOP;
+      }
+    }
+    else if (stereoMode == 2)
+    {
+      if (paramInt2 == 2) {
+        arrayOfFloat = TEX_MATRIX_RIGHT;
+      } else {
+        arrayOfFloat = TEX_MATRIX_LEFT;
+      }
+    }
+    else {
+      arrayOfFloat = TEX_MATRIX_WHOLE;
+    }
+    GLES20.glUniformMatrix3fv(uTexMatrixHandle, 1, false, arrayOfFloat, 0);
+    GLES20.glUniformMatrix4fv(mvpMatrixHandle, 1, false, paramArrayOfFloat, 0);
+    GLES20.glActiveTexture(33984);
+    GLES20.glBindTexture(36197, paramInt1);
+    GLES20.glUniform1i(textureHandle, 0);
+    GlUtil.checkGlError();
+    GLES20.glVertexAttribPointer(positionHandle, 3, 5126, false, 12, vertexBuffer);
+    GlUtil.checkGlError();
+    GLES20.glVertexAttribPointer(texCoordsHandle, 2, 5126, false, 8, textureBuffer);
+    GlUtil.checkGlError();
+    GLES20.glDrawArrays(drawMode, 0, vertexCount);
+    GlUtil.checkGlError();
+    GLES20.glDisableVertexAttribArray(positionHandle);
+    GLES20.glDisableVertexAttribArray(texCoordsHandle);
+  }
+  
+  void init()
+  {
+    program = GlUtil.compileProgram(VERTEX_SHADER_CODE, FRAGMENT_SHADER_CODE);
+    mvpMatrixHandle = GLES20.glGetUniformLocation(program, "uMvpMatrix");
+    uTexMatrixHandle = GLES20.glGetUniformLocation(program, "uTexMatrix");
+    positionHandle = GLES20.glGetAttribLocation(program, "aPosition");
+    texCoordsHandle = GLES20.glGetAttribLocation(program, "aTexCoords");
+    textureHandle = GLES20.glGetUniformLocation(program, "uTexture");
+  }
+  
+  public void setProjection(Projection paramProjection)
+  {
+    if (!isSupported(paramProjection)) {
+      return;
+    }
+    stereoMode = stereoMode;
+    leftMeshData = new MeshData(leftMesh.getSubMesh(0));
+    if (singleMesh) {
+      paramProjection = leftMeshData;
+    } else {
+      paramProjection = new MeshData(rightMesh.getSubMesh(0));
+    }
+    rightMeshData = paramProjection;
+  }
+  
+  void shutdown()
+  {
+    if (program != 0) {
+      GLES20.glDeleteProgram(program);
+    }
+  }
+  
+  static abstract interface EyeType
+  {
+    public static final int LEFT = 1;
+    public static final int MONOCULAR = 0;
+    public static final int RIGHT = 2;
+  }
+  
+  private static class MeshData
+  {
+    private final int drawMode;
+    private final FloatBuffer textureBuffer;
+    private final FloatBuffer vertexBuffer;
+    private final int vertexCount;
+    
+    public MeshData(Projection.SubMesh paramSubMesh)
+    {
+      vertexCount = paramSubMesh.getVertexCount();
+      vertexBuffer = GlUtil.createBuffer(vertices);
+      textureBuffer = GlUtil.createBuffer(textureCoords);
+      switch (mode)
+      {
+      default: 
+        drawMode = 4;
+        return;
+      case 2: 
+        drawMode = 6;
+        return;
+      }
+      drawMode = 5;
+    }
+  }
+}

@@ -1,0 +1,46 @@
+package com.airbnb.lottie.animation.keyframe;
+
+import android.graphics.Path;
+import android.graphics.PathMeasure;
+import android.graphics.PointF;
+import com.airbnb.lottie.value.Keyframe;
+import com.airbnb.lottie.value.LottieValueCallback;
+import java.util.List;
+
+public class PathKeyframeAnimation
+  extends KeyframeAnimation<PointF>
+{
+  private PathMeasure pathMeasure = new PathMeasure();
+  private PathKeyframe pathMeasureKeyframe;
+  private final PointF point = new PointF();
+  private final float[] pos = new float[2];
+  
+  public PathKeyframeAnimation(List<? extends Keyframe<PointF>> paramList)
+  {
+    super(paramList);
+  }
+  
+  public PointF getValue(Keyframe<PointF> paramKeyframe, float paramFloat)
+  {
+    PathKeyframe localPathKeyframe = (PathKeyframe)paramKeyframe;
+    Path localPath = localPathKeyframe.getPath();
+    if (localPath == null) {
+      return (PointF)startValue;
+    }
+    if (valueCallback != null)
+    {
+      paramKeyframe = (PointF)valueCallback.getValueInternal(startFrame, endFrame.floatValue(), startValue, endValue, getLinearCurrentKeyframeProgress(), paramFloat, getProgress());
+      if (paramKeyframe != null) {
+        return paramKeyframe;
+      }
+    }
+    if (pathMeasureKeyframe != localPathKeyframe)
+    {
+      pathMeasure.setPath(localPath, false);
+      pathMeasureKeyframe = localPathKeyframe;
+    }
+    pathMeasure.getPosTan(paramFloat * pathMeasure.getLength(), pos, null);
+    point.set(pos[0], pos[1]);
+    return point;
+  }
+}

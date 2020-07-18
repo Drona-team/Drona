@@ -1,0 +1,16 @@
+package com.google.android.gms.auth.api.signin.internal;
+
+import android.os.RemoteException;
+import com.google.android.gms.common.api.Status;
+
+final class zzl
+  extends zzc
+{
+  zzl(zzk paramZzk) {}
+  
+  public final void zze(Status paramStatus)
+    throws RemoteException
+  {
+    zzbl.setResult(paramStatus);
+  }
+}

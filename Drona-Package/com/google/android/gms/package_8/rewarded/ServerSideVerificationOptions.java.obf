@@ -1,0 +1,48 @@
+package com.google.android.gms.ads.rewarded;
+
+public class ServerSideVerificationOptions
+{
+  private final String zzdqs;
+  private final String zzdqt;
+  
+  private ServerSideVerificationOptions(Builder paramBuilder)
+  {
+    zzdqs = Builder.zza(paramBuilder);
+    zzdqt = Builder.zzb(paramBuilder);
+  }
+  
+  public String getCustomData()
+  {
+    return zzdqt;
+  }
+  
+  public String getUserId()
+  {
+    return zzdqs;
+  }
+  
+  public static final class Builder
+  {
+    private String zzdqs = "";
+    private String zzdqt = "";
+    
+    public Builder() {}
+    
+    public final ServerSideVerificationOptions build()
+    {
+      return new ServerSideVerificationOptions(this, null);
+    }
+    
+    public final Builder setCustomData(String paramString)
+    {
+      zzdqt = paramString;
+      return this;
+    }
+    
+    public final Builder setUserId(String paramString)
+    {
+      zzdqs = paramString;
+      return this;
+    }
+  }
+}

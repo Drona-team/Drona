@@ -1,0 +1,47 @@
+package com.bitgo.randombytes;
+
+import android.util.Base64;
+import com.facebook.react.bridge.Callback;
+import com.facebook.react.bridge.ReactApplicationContext;
+import com.facebook.react.bridge.ReactContextBaseJavaModule;
+import com.facebook.react.bridge.ReactMethod;
+import java.security.SecureRandom;
+import java.util.HashMap;
+import java.util.Map;
+
+class RandomBytesModule
+  extends ReactContextBaseJavaModule
+{
+  private static final String SEED_KEY = "seed";
+  
+  public RandomBytesModule(ReactApplicationContext paramReactApplicationContext)
+  {
+    super(paramReactApplicationContext);
+  }
+  
+  private String getRandomBytes(int paramInt)
+  {
+    SecureRandom localSecureRandom = new SecureRandom();
+    byte[] arrayOfByte = new byte[paramInt];
+    localSecureRandom.nextBytes(arrayOfByte);
+    return Base64.encodeToString(arrayOfByte, 2);
+  }
+  
+  public Map<String, Object> getConstants()
+  {
+    HashMap localHashMap = new HashMap();
+    localHashMap.put("seed", getRandomBytes(4096));
+    return localHashMap;
+  }
+  
+  public String getName()
+  {
+    return "RNRandomBytes";
+  }
+  
+  @ReactMethod
+  public void randomBytes(int paramInt, Callback paramCallback)
+  {
+    paramCallback.invoke(new Object[] { null, getRandomBytes(paramInt) });
+  }
+}

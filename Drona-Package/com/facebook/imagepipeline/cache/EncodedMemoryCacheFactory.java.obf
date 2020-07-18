@@ -1,0 +1,31 @@
+package com.facebook.imagepipeline.cache;
+
+import com.facebook.cache.common.CacheKey;
+import com.facebook.common.memory.PooledByteBuffer;
+
+public class EncodedMemoryCacheFactory
+{
+  public EncodedMemoryCacheFactory() {}
+  
+  public static InstrumentedMemoryCache<CacheKey, PooledByteBuffer> get(CountingMemoryCache<CacheKey, PooledByteBuffer> paramCountingMemoryCache, ImageCacheStatsTracker paramImageCacheStatsTracker)
+  {
+    paramImageCacheStatsTracker.registerEncodedMemoryCache(paramCountingMemoryCache);
+    new InstrumentedMemoryCache(paramCountingMemoryCache, new MemoryCacheTracker()
+    {
+      public void onCacheHit(CacheKey paramAnonymousCacheKey)
+      {
+        val$imageCacheStatsTracker.onMemoryCacheHit(paramAnonymousCacheKey);
+      }
+      
+      public void onCacheMiss()
+      {
+        val$imageCacheStatsTracker.onMemoryCacheMiss();
+      }
+      
+      public void onCachePut()
+      {
+        val$imageCacheStatsTracker.onMemoryCachePut();
+      }
+    });
+  }
+}

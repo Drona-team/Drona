@@ -1,0 +1,23 @@
+package com.google.android.gms.common.api.internal;
+
+import java.lang.ref.WeakReference;
+
+final class zabc
+  extends zabr
+{
+  private WeakReference<zaaw> zahm;
+  
+  zabc(zaaw paramZaaw)
+  {
+    zahm = new WeakReference(paramZaaw);
+  }
+  
+  public final void zas()
+  {
+    zaaw localZaaw = (zaaw)zahm.get();
+    if (localZaaw == null) {
+      return;
+    }
+    zaaw.zaa(localZaaw);
+  }
+}

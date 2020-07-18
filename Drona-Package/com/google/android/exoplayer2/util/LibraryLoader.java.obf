@@ -1,0 +1,67 @@
+package com.google.android.exoplayer2.util;
+
+public final class LibraryLoader
+{
+  private boolean isAvailable;
+  private boolean loadAttempted;
+  private String[] nativeLibraries;
+  
+  public LibraryLoader(String... paramVarArgs)
+  {
+    nativeLibraries = paramVarArgs;
+  }
+  
+  public boolean isAvailable()
+  {
+    for (;;)
+    {
+      boolean bool;
+      String[] arrayOfString;
+      int j;
+      int i;
+      try
+      {
+        if (loadAttempted)
+        {
+          bool = isAvailable;
+          return bool;
+        }
+        loadAttempted = true;
+      }
+      finally {}
+      try
+      {
+        arrayOfString = nativeLibraries;
+        j = arrayOfString.length;
+        i = 0;
+        if (i < j)
+        {
+          System.loadLibrary(arrayOfString[i]);
+          i += 1;
+        }
+        else
+        {
+          isAvailable = true;
+        }
+      }
+      catch (UnsatisfiedLinkError localUnsatisfiedLinkError) {}
+    }
+    bool = isAvailable;
+    return bool;
+  }
+  
+  public void setLibraries(String... paramVarArgs)
+  {
+    try
+    {
+      Assertions.checkState(loadAttempted ^ true, "Cannot set libraries after loading");
+      nativeLibraries = paramVarArgs;
+      return;
+    }
+    finally
+    {
+      paramVarArgs = finally;
+      throw paramVarArgs;
+    }
+  }
+}

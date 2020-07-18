@@ -1,0 +1,21 @@
+package com.bugsnag.android;
+
+import androidx.annotation.NonNull;
+
+public enum BreadcrumbType
+{
+  ERROR("error"),  LOG("log"),  MANUAL("manual"),  NAVIGATION("navigation"),  PROCESS("process"),  REQUEST("request"),  STATE("state"),  USER("user");
+  
+  private final String type;
+  
+  private BreadcrumbType(@NonNull String paramString)
+  {
+    type = paramString;
+  }
+  
+  @NonNull
+  public String toString()
+  {
+    return type;
+  }
+}

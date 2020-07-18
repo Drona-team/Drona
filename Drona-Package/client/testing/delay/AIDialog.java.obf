@@ -1,0 +1,185 @@
+package ai.api.ui;
+
+import ai.api.AIServiceException;
+import ai.api.PartialResultsListener;
+import ai.api.R.id;
+import ai.api.R.layout;
+import ai.api.android.AIConfiguration;
+import ai.api.android.AIService;
+import ai.api.model.AIError;
+import ai.api.model.AIRequest;
+import ai.api.model.AIResponse;
+import android.app.Dialog;
+import android.content.Context;
+import android.os.Handler;
+import android.os.Looper;
+import android.text.TextUtils;
+import android.widget.TextView;
+import java.util.List;
+
+public class AIDialog
+{
+  private static final String TAG = "ai.api.ui.AIDialog";
+  private final AIButton aiButton;
+  private final AIConfiguration config;
+  private final Context context;
+  private final Dialog dialog;
+  private final Handler handler;
+  private final TextView partialResultsTextView;
+  private AIDialogListener resultsListener;
+  
+  public AIDialog(Context paramContext, AIConfiguration paramAIConfiguration)
+  {
+    this(paramContext, paramAIConfiguration, R.layout.aidialog);
+  }
+  
+  public AIDialog(Context paramContext, AIConfiguration paramAIConfiguration, int paramInt)
+  {
+    context = paramContext;
+    config = paramAIConfiguration;
+    dialog = new Dialog(paramContext);
+    handler = new Handler(Looper.getMainLooper());
+    dialog.setCanceledOnTouchOutside(true);
+    dialog.requestWindowFeature(1);
+    dialog.setContentView(paramInt);
+    partialResultsTextView = ((TextView)dialog.findViewById(R.id.partialResultsTextView));
+    aiButton = ((AIButton)dialog.findViewById(R.id.micButton));
+    aiButton.initialize(paramAIConfiguration);
+    setAIButtonCallback(aiButton);
+  }
+  
+  private void resetControls()
+  {
+    if (partialResultsTextView != null) {
+      partialResultsTextView.setText("");
+    }
+  }
+  
+  private void setAIButtonCallback(AIButton paramAIButton)
+  {
+    paramAIButton.setResultsListener(new AIButton.AIButtonListener()
+    {
+      public void onCancelled()
+      {
+        close();
+        if (resultsListener != null) {
+          resultsListener.onCancelled();
+        }
+      }
+      
+      public void onError(AIError paramAnonymousAIError)
+      {
+        if (resultsListener != null) {
+          resultsListener.onError(paramAnonymousAIError);
+        }
+      }
+      
+      public void onResult(AIResponse paramAnonymousAIResponse)
+      {
+        close();
+        if (resultsListener != null) {
+          resultsListener.onResult(paramAnonymousAIResponse);
+        }
+      }
+    });
+    paramAIButton.setPartialResultsListener(new PartialResultsListener()
+    {
+      public void onPartialResults(final List<String> paramAnonymousList)
+      {
+        paramAnonymousList = (String)paramAnonymousList.get(0);
+        if (!TextUtils.isEmpty(paramAnonymousList)) {
+          handler.post(new Runnable()
+          {
+            public void run()
+            {
+              if (partialResultsTextView != null) {
+                partialResultsTextView.setText(paramAnonymousList);
+              }
+            }
+          });
+        }
+      }
+    });
+  }
+  
+  private void startListening()
+  {
+    if (aiButton != null) {
+      aiButton.startListening();
+    }
+  }
+  
+  public void close()
+  {
+    handler.post(new Runnable()
+    {
+      public void run()
+      {
+        dialog.dismiss();
+      }
+    });
+  }
+  
+  public AIService getAIService()
+  {
+    return aiButton.getAIService();
+  }
+  
+  public Dialog getDialog()
+  {
+    return dialog;
+  }
+  
+  public void pause()
+  {
+    if (aiButton != null) {
+      aiButton.pause();
+    }
+  }
+  
+  public void resume()
+  {
+    if (aiButton != null) {
+      aiButton.resume();
+    }
+  }
+  
+  public void setResultsListener(AIDialogListener paramAIDialogListener)
+  {
+    resultsListener = paramAIDialogListener;
+  }
+  
+  public void showAndListen()
+  {
+    handler.post(new Runnable()
+    {
+      public void run()
+      {
+        AIDialog.this.resetControls();
+        dialog.show();
+        AIDialog.this.startListening();
+      }
+    });
+  }
+  
+  public AIResponse textRequest(AIRequest paramAIRequest)
+    throws AIServiceException
+  {
+    return aiButton.textRequest(paramAIRequest);
+  }
+  
+  public AIResponse textRequest(String paramString)
+    throws AIServiceException
+  {
+    return textRequest(new AIRequest(paramString));
+  }
+  
+  public static abstract interface AIDialogListener
+  {
+    public abstract void onCancelled();
+    
+    public abstract void onError(AIError paramAIError);
+    
+    public abstract void onResult(AIResponse paramAIResponse);
+  }
+}

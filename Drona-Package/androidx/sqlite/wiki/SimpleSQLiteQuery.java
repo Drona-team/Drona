@@ -1,0 +1,123 @@
+package androidx.sqlite.wiki;
+
+import androidx.annotation.Nullable;
+
+public final class SimpleSQLiteQuery
+  implements SupportSQLiteQuery
+{
+  @Nullable
+  private final Object[] mBindArgs;
+  private final String mQuery;
+  
+  public SimpleSQLiteQuery(String paramString)
+  {
+    this(paramString, null);
+  }
+  
+  public SimpleSQLiteQuery(String paramString, Object[] paramArrayOfObject)
+  {
+    mQuery = paramString;
+    mBindArgs = paramArrayOfObject;
+  }
+  
+  private static void bind(SupportSQLiteProgram paramSupportSQLiteProgram, int paramInt, Object paramObject)
+  {
+    if (paramObject == null)
+    {
+      paramSupportSQLiteProgram.bindNull(paramInt);
+      return;
+    }
+    if ((paramObject instanceof byte[]))
+    {
+      paramSupportSQLiteProgram.bindBlob(paramInt, (byte[])paramObject);
+      return;
+    }
+    if ((paramObject instanceof Float))
+    {
+      paramSupportSQLiteProgram.bindDouble(paramInt, ((Float)paramObject).floatValue());
+      return;
+    }
+    if ((paramObject instanceof Double))
+    {
+      paramSupportSQLiteProgram.bindDouble(paramInt, ((Double)paramObject).doubleValue());
+      return;
+    }
+    if ((paramObject instanceof Long))
+    {
+      paramSupportSQLiteProgram.bindLong(paramInt, ((Long)paramObject).longValue());
+      return;
+    }
+    if ((paramObject instanceof Integer))
+    {
+      paramSupportSQLiteProgram.bindLong(paramInt, ((Integer)paramObject).intValue());
+      return;
+    }
+    if ((paramObject instanceof Short))
+    {
+      paramSupportSQLiteProgram.bindLong(paramInt, ((Short)paramObject).shortValue());
+      return;
+    }
+    if ((paramObject instanceof Byte))
+    {
+      paramSupportSQLiteProgram.bindLong(paramInt, ((Byte)paramObject).byteValue());
+      return;
+    }
+    if ((paramObject instanceof String))
+    {
+      paramSupportSQLiteProgram.bindString(paramInt, (String)paramObject);
+      return;
+    }
+    if ((paramObject instanceof Boolean))
+    {
+      long l;
+      if (((Boolean)paramObject).booleanValue()) {
+        l = 1L;
+      } else {
+        l = 0L;
+      }
+      paramSupportSQLiteProgram.bindLong(paramInt, l);
+      return;
+    }
+    paramSupportSQLiteProgram = new StringBuilder();
+    paramSupportSQLiteProgram.append("Cannot bind ");
+    paramSupportSQLiteProgram.append(paramObject);
+    paramSupportSQLiteProgram.append(" at index ");
+    paramSupportSQLiteProgram.append(paramInt);
+    paramSupportSQLiteProgram.append(" Supported types: null, byte[], float, double, long, int, short, byte,");
+    paramSupportSQLiteProgram.append(" string");
+    throw new IllegalArgumentException(paramSupportSQLiteProgram.toString());
+  }
+  
+  public static void bind(SupportSQLiteProgram paramSupportSQLiteProgram, Object[] paramArrayOfObject)
+  {
+    if (paramArrayOfObject == null) {
+      return;
+    }
+    int j = paramArrayOfObject.length;
+    int i = 0;
+    while (i < j)
+    {
+      Object localObject = paramArrayOfObject[i];
+      i += 1;
+      bind(paramSupportSQLiteProgram, i, localObject);
+    }
+  }
+  
+  public void bindTo(SupportSQLiteProgram paramSupportSQLiteProgram)
+  {
+    bind(paramSupportSQLiteProgram, mBindArgs);
+  }
+  
+  public int getArgCount()
+  {
+    if (mBindArgs == null) {
+      return 0;
+    }
+    return mBindArgs.length;
+  }
+  
+  public String getSql()
+  {
+    return mQuery;
+  }
+}

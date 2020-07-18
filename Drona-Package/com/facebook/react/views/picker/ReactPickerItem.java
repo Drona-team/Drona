@@ -1,0 +1,40 @@
+package com.facebook.react.views.picker;
+
+import androidx.annotation.Nullable;
+import com.facebook.react.bridge.ReadableArray;
+import com.facebook.react.bridge.ReadableMap;
+import java.util.ArrayList;
+import java.util.List;
+
+class ReactPickerItem
+{
+  @Nullable
+  public final Integer color;
+  public final String label;
+  
+  public ReactPickerItem(ReadableMap paramReadableMap)
+  {
+    label = paramReadableMap.getString("label");
+    if ((paramReadableMap.hasKey("color")) && (!paramReadableMap.isNull("color")))
+    {
+      color = Integer.valueOf(paramReadableMap.getInt("color"));
+      return;
+    }
+    color = null;
+  }
+  
+  public static List createFromJsArrayMap(ReadableArray paramReadableArray)
+  {
+    if (paramReadableArray == null) {
+      return null;
+    }
+    ArrayList localArrayList = new ArrayList(paramReadableArray.size());
+    int i = 0;
+    while (i < paramReadableArray.size())
+    {
+      localArrayList.add(new ReactPickerItem(paramReadableArray.getMap(i)));
+      i += 1;
+    }
+    return localArrayList;
+  }
+}

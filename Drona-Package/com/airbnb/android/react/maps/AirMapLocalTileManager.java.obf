@@ -1,0 +1,56 @@
+package com.airbnb.android.react.maps;
+
+import android.content.res.Resources;
+import android.os.Build.VERSION;
+import android.util.DisplayMetrics;
+import android.view.Display;
+import android.view.WindowManager;
+import com.facebook.react.bridge.ReactApplicationContext;
+import com.facebook.react.uimanager.ThemedReactContext;
+import com.facebook.react.uimanager.ViewGroupManager;
+import com.facebook.react.uimanager.annotations.ReactProp;
+
+public class AirMapLocalTileManager
+  extends ViewGroupManager<AirMapLocalTile>
+{
+  private DisplayMetrics metrics;
+  
+  public AirMapLocalTileManager(ReactApplicationContext paramReactApplicationContext)
+  {
+    if (Build.VERSION.SDK_INT >= 17)
+    {
+      metrics = new DisplayMetrics();
+      ((WindowManager)paramReactApplicationContext.getSystemService("window")).getDefaultDisplay().getRealMetrics(metrics);
+      return;
+    }
+    metrics = paramReactApplicationContext.getResources().getDisplayMetrics();
+  }
+  
+  public AirMapLocalTile createViewInstance(ThemedReactContext paramThemedReactContext)
+  {
+    return new AirMapLocalTile(paramThemedReactContext);
+  }
+  
+  public String getName()
+  {
+    return "AIRMapLocalTile";
+  }
+  
+  @ReactProp(name="pathTemplate")
+  public void setPathTemplate(AirMapLocalTile paramAirMapLocalTile, String paramString)
+  {
+    paramAirMapLocalTile.setPathTemplate(paramString);
+  }
+  
+  @ReactProp(defaultFloat=256.0F, name="tileSize")
+  public void setTileSize(AirMapLocalTile paramAirMapLocalTile, float paramFloat)
+  {
+    paramAirMapLocalTile.setTileSize(paramFloat);
+  }
+  
+  @ReactProp(defaultFloat=-1.0F, name="zIndex")
+  public void setZIndex(AirMapLocalTile paramAirMapLocalTile, float paramFloat)
+  {
+    paramAirMapLocalTile.setZIndex(paramFloat);
+  }
+}

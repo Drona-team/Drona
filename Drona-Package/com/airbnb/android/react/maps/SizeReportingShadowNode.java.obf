@@ -1,0 +1,21 @@
+package com.airbnb.android.react.maps;
+
+import com.facebook.react.uimanager.LayoutShadowNode;
+import com.facebook.react.uimanager.UIViewOperationQueue;
+import java.util.HashMap;
+import java.util.Map;
+
+public class SizeReportingShadowNode
+  extends LayoutShadowNode
+{
+  public SizeReportingShadowNode() {}
+  
+  public void onCollectExtraUpdates(UIViewOperationQueue paramUIViewOperationQueue)
+  {
+    super.onCollectExtraUpdates(paramUIViewOperationQueue);
+    HashMap localHashMap = new HashMap();
+    localHashMap.put("width", Float.valueOf(getLayoutWidth()));
+    localHashMap.put("height", Float.valueOf(getLayoutHeight()));
+    paramUIViewOperationQueue.enqueueUpdateExtraData(getReactTag(), localHashMap);
+  }
+}

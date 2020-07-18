@@ -1,0 +1,33 @@
+package com.google.android.gms.iid;
+
+import android.os.Binder;
+import android.os.Process;
+import android.util.Log;
+import java.util.concurrent.ExecutorService;
+
+public final class zzi
+  extends Binder
+{
+  private final zze zzbm;
+  
+  zzi(zze paramZze)
+  {
+    zzbm = paramZze;
+  }
+  
+  public final void zzd(zzg paramZzg)
+  {
+    if (Binder.getCallingUid() == Process.myUid())
+    {
+      if (Log.isLoggable("EnhancedIntentService", 3)) {
+        Log.d("EnhancedIntentService", "service received new intent via bind strategy");
+      }
+      if (Log.isLoggable("EnhancedIntentService", 3)) {
+        Log.d("EnhancedIntentService", "intent being queued for bg execution");
+      }
+      zzbm.zzbb.execute(new zzj(this, paramZzg));
+      return;
+    }
+    throw new SecurityException("Binding only allowed within app");
+  }
+}

@@ -1,0 +1,144 @@
+package com.bumptech.glide.load.model;
+
+import android.util.Base64;
+import androidx.annotation.NonNull;
+import com.bumptech.glide.Priority;
+import com.bumptech.glide.load.DataSource;
+import com.bumptech.glide.load.Options;
+import com.bumptech.glide.load.data.DataFetcher;
+import com.bumptech.glide.load.data.DataFetcher.DataCallback;
+import com.bumptech.glide.signature.ObjectKey;
+import java.io.ByteArrayInputStream;
+import java.io.IOException;
+import java.io.InputStream;
+
+public final class DataUrlLoader<Model, Data>
+  implements ModelLoader<Model, Data>
+{
+  private static final String BASE64_TAG = ";base64";
+  private static final String DATA_SCHEME_IMAGE = "data:image";
+  private final DataDecoder<Data> dataDecoder;
+  
+  public DataUrlLoader(DataDecoder<Data> paramDataDecoder)
+  {
+    dataDecoder = paramDataDecoder;
+  }
+  
+  public ModelLoader.LoadData<Data> buildLoadData(@NonNull Model paramModel, int paramInt1, int paramInt2, @NonNull Options paramOptions)
+  {
+    return new ModelLoader.LoadData(new ObjectKey(paramModel), new DataUriFetcher(paramModel.toString(), dataDecoder));
+  }
+  
+  public boolean handles(@NonNull Model paramModel)
+  {
+    return paramModel.toString().startsWith("data:image");
+  }
+  
+  public static abstract interface DataDecoder<Data>
+  {
+    public abstract void close(Data paramData)
+      throws IOException;
+    
+    public abstract Data decode(String paramString)
+      throws IllegalArgumentException;
+    
+    public abstract Class<Data> getDataClass();
+  }
+  
+  private static final class DataUriFetcher<Data>
+    implements DataFetcher<Data>
+  {
+    private Data data;
+    private final String dataUri;
+    private final DataUrlLoader.DataDecoder<Data> reader;
+    
+    DataUriFetcher(String paramString, DataUrlLoader.DataDecoder<Data> paramDataDecoder)
+    {
+      dataUri = paramString;
+      reader = paramDataDecoder;
+    }
+    
+    public void cancel() {}
+    
+    public void cleanup()
+    {
+      try
+      {
+        reader.close(data);
+        return;
+      }
+      catch (IOException localIOException) {}
+    }
+    
+    @NonNull
+    public Class<Data> getDataClass()
+    {
+      return reader.getDataClass();
+    }
+    
+    @NonNull
+    public DataSource getDataSource()
+    {
+      return DataSource.LOCAL;
+    }
+    
+    public void loadData(@NonNull Priority paramPriority, @NonNull DataFetcher.DataCallback<? super Data> paramDataCallback)
+    {
+      try
+      {
+        data = reader.decode(dataUri);
+        paramDataCallback.onDataReady(data);
+        return;
+      }
+      catch (IllegalArgumentException paramPriority)
+      {
+        paramDataCallback.onLoadFailed(paramPriority);
+      }
+    }
+  }
+  
+  public static final class StreamFactory<Model>
+    implements ModelLoaderFactory<Model, InputStream>
+  {
+    private final DataUrlLoader.DataDecoder<InputStream> opener = new DataUrlLoader.DataDecoder()
+    {
+      public void close(InputStream paramAnonymousInputStream)
+        throws IOException
+      {
+        paramAnonymousInputStream.close();
+      }
+      
+      public InputStream decode(String paramAnonymousString)
+      {
+        if (paramAnonymousString.startsWith("data:image"))
+        {
+          int i = paramAnonymousString.indexOf(',');
+          if (i != -1)
+          {
+            if (paramAnonymousString.substring(0, i).endsWith(";base64")) {
+              return new ByteArrayInputStream(Base64.decode(paramAnonymousString.substring(i + 1), 0));
+            }
+            throw new IllegalArgumentException("Not a base64 image data URL.");
+          }
+          throw new IllegalArgumentException("Missing comma in data URL.");
+        }
+        throw new IllegalArgumentException("Not a valid image data URL.");
+      }
+      
+      public Class<InputStream> getDataClass()
+      {
+        return InputStream.class;
+      }
+    };
+    
+    public StreamFactory() {}
+    
+    @NonNull
+    public ModelLoader<Model, InputStream> build(@NonNull MultiModelLoaderFactory paramMultiModelLoaderFactory)
+    {
+      return new DataUrlLoader(opener);
+    }
+    
+    public void teardown() {}
+  }
+}

@@ -1,0 +1,148 @@
+package com.facebook.react.views.image;
+
+import com.facebook.cache.common.CacheKey;
+import com.facebook.cache.common.MultiCacheKey;
+import com.facebook.imagepipeline.request.Postprocessor;
+import java.util.Iterator;
+import java.util.LinkedList;
+import java.util.List;
+
+public class MultiPostprocessor
+  implements Postprocessor
+{
+  private final List<Postprocessor> mPostprocessors;
+  
+  private MultiPostprocessor(List<Postprocessor> paramList)
+  {
+    mPostprocessors = new LinkedList(paramList);
+  }
+  
+  public static Postprocessor from(List<Postprocessor> paramList)
+  {
+    switch (paramList.size())
+    {
+    default: 
+      return new MultiPostprocessor(paramList);
+    case 1: 
+      return (Postprocessor)paramList.get(0);
+    }
+    return null;
+  }
+  
+  public String getName()
+  {
+    StringBuilder localStringBuilder = new StringBuilder();
+    Iterator localIterator = mPostprocessors.iterator();
+    while (localIterator.hasNext())
+    {
+      Postprocessor localPostprocessor = (Postprocessor)localIterator.next();
+      if (localStringBuilder.length() > 0) {
+        localStringBuilder.append(",");
+      }
+      localStringBuilder.append(localPostprocessor.getName());
+    }
+    localStringBuilder.insert(0, "MultiPostProcessor (");
+    localStringBuilder.append(")");
+    return localStringBuilder.toString();
+  }
+  
+  public CacheKey getPostprocessorCacheKey()
+  {
+    LinkedList localLinkedList = new LinkedList();
+    Iterator localIterator = mPostprocessors.iterator();
+    while (localIterator.hasNext()) {
+      localLinkedList.push(((Postprocessor)localIterator.next()).getPostprocessorCacheKey());
+    }
+    return new MultiCacheKey(localLinkedList);
+  }
+  
+  /* Error */
+  public com.facebook.common.references.CloseableReference<android.graphics.Bitmap> process(android.graphics.Bitmap paramBitmap, com.facebook.imagepipeline.bitmaps.PlatformBitmapFactory paramPlatformBitmapFactory)
+  {
+    // Byte code:
+    //   0: aconst_null
+    //   1: astore_3
+    //   2: aconst_null
+    //   3: astore 4
+    //   5: aload_0
+    //   6: getfield 21	com/facebook/react/views/image/MultiPostprocessor:mPostprocessors	Ljava/util/List;
+    //   9: invokeinterface 48 1 0
+    //   14: astore 7
+    //   16: aconst_null
+    //   17: astore 5
+    //   19: aload 4
+    //   21: astore_3
+    //   22: aload 7
+    //   24: invokeinterface 54 1 0
+    //   29: ifeq +76 -> 105
+    //   32: aload 4
+    //   34: astore_3
+    //   35: aload 7
+    //   37: invokeinterface 58 1 0
+    //   42: checkcast 6	com/facebook/imagepipeline/request/Postprocessor
+    //   45: astore 8
+    //   47: aload 5
+    //   49: ifnull +79 -> 128
+    //   52: aload 4
+    //   54: astore_3
+    //   55: aload 5
+    //   57: invokevirtual 98	com/facebook/common/references/CloseableReference:get	()Ljava/lang/Object;
+    //   60: checkcast 100	android/graphics/Bitmap
+    //   63: astore 6
+    //   65: goto +3 -> 68
+    //   68: aload 4
+    //   70: astore_3
+    //   71: aload 8
+    //   73: aload 6
+    //   75: aload_2
+    //   76: invokeinterface 102 3 0
+    //   81: astore 4
+    //   83: aload 5
+    //   85: invokestatic 106	com/facebook/common/references/CloseableReference:closeSafely	(Lcom/facebook/common/references/CloseableReference;)V
+    //   88: aload 4
+    //   90: invokevirtual 110	com/facebook/common/references/CloseableReference:clone	()Lcom/facebook/common/references/CloseableReference;
+    //   93: astore 5
+    //   95: goto -76 -> 19
+    //   98: astore_1
+    //   99: aload 4
+    //   101: astore_3
+    //   102: goto +20 -> 122
+    //   105: aload 4
+    //   107: astore_3
+    //   108: aload 4
+    //   110: invokevirtual 110	com/facebook/common/references/CloseableReference:clone	()Lcom/facebook/common/references/CloseableReference;
+    //   113: astore_1
+    //   114: aload 4
+    //   116: invokestatic 106	com/facebook/common/references/CloseableReference:closeSafely	(Lcom/facebook/common/references/CloseableReference;)V
+    //   119: aload_1
+    //   120: areturn
+    //   121: astore_1
+    //   122: aload_3
+    //   123: invokestatic 106	com/facebook/common/references/CloseableReference:closeSafely	(Lcom/facebook/common/references/CloseableReference;)V
+    //   126: aload_1
+    //   127: athrow
+    //   128: aload_1
+    //   129: astore 6
+    //   131: goto -63 -> 68
+    // Local variable table:
+    //   start	length	slot	name	signature
+    //   0	134	0	this	MultiPostprocessor
+    //   0	134	1	paramBitmap	android.graphics.Bitmap
+    //   0	134	2	paramPlatformBitmapFactory	com.facebook.imagepipeline.bitmaps.PlatformBitmapFactory
+    //   1	122	3	localObject	Object
+    //   3	112	4	localCloseableReference1	com.facebook.common.references.CloseableReference
+    //   17	77	5	localCloseableReference2	com.facebook.common.references.CloseableReference
+    //   63	67	6	localBitmap	android.graphics.Bitmap
+    //   14	22	7	localIterator	Iterator
+    //   45	27	8	localPostprocessor	Postprocessor
+    // Exception table:
+    //   from	to	target	type
+    //   83	95	98	finally
+    //   5	16	121	finally
+    //   22	32	121	finally
+    //   35	47	121	finally
+    //   55	65	121	finally
+    //   71	83	121	finally
+    //   108	114	121	finally
+  }
+}

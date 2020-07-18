@@ -1,0 +1,39 @@
+package com.facebook.react.devsupport;
+
+import android.content.Context;
+import android.text.SpannedString;
+import androidx.annotation.Nullable;
+import com.facebook.react.devsupport.interfaces.StackFrame;
+
+public abstract interface RedBoxHandler
+{
+  public abstract void handleRedbox(@Nullable String paramString, StackFrame[] paramArrayOfStackFrame, ErrorType paramErrorType);
+  
+  public abstract boolean isReportEnabled();
+  
+  public abstract void reportRedbox(Context paramContext, String paramString1, StackFrame[] paramArrayOfStackFrame, String paramString2, ReportCompletedListener paramReportCompletedListener);
+  
+  public static enum ErrorType
+  {
+    JS("JS"),  NATIVE("Native");
+    
+    private final String name;
+    
+    private ErrorType(String paramString)
+    {
+      name = paramString;
+    }
+    
+    public String getName()
+    {
+      return name;
+    }
+  }
+  
+  public static abstract interface ReportCompletedListener
+  {
+    public abstract void onReportError(SpannedString paramSpannedString);
+    
+    public abstract void onReportSuccess(SpannedString paramSpannedString);
+  }
+}

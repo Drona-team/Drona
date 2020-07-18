@@ -1,0 +1,766 @@
+package com.facebook.react.devsupport;
+
+import android.content.Context;
+import android.os.AsyncTask;
+import android.os.Handler;
+import android.os.Looper;
+import android.widget.Toast;
+import androidx.annotation.Nullable;
+import com.facebook.common.logging.FLog;
+import com.facebook.infer.annotation.Assertions;
+import com.facebook.react.R.string;
+import com.facebook.react.bridge.UiThreadUtil;
+import com.facebook.react.common.network.OkHttpCallUtil;
+import com.facebook.react.devsupport.interfaces.DevBundleDownloadListener;
+import com.facebook.react.devsupport.interfaces.PackagerStatusCallback;
+import com.facebook.react.devsupport.interfaces.StackFrame;
+import com.facebook.react.modules.systeminfo.AndroidInfoHelpers;
+import com.facebook.react.packagerconnection.FileIoHandler;
+import com.facebook.react.packagerconnection.JSPackagerClient;
+import com.facebook.react.packagerconnection.NotificationOnlyHandler;
+import com.facebook.react.packagerconnection.PackagerConnectionSettings;
+import com.facebook.react.packagerconnection.ReconnectingWebSocket.ConnectionCallback;
+import com.facebook.react.packagerconnection.RequestHandler;
+import com.facebook.react.packagerconnection.RequestOnlyHandler;
+import com.facebook.react.packagerconnection.Responder;
+import java.io.File;
+import java.io.IOException;
+import java.util.Arrays;
+import java.util.HashMap;
+import java.util.Iterator;
+import java.util.Locale;
+import java.util.Map;
+import java.util.concurrent.TimeUnit;
+import okhttp3.Call;
+import okhttp3.Callback;
+import okhttp3.ConnectionPool;
+import okhttp3.MediaType;
+import okhttp3.OkHttpClient;
+import okhttp3.OkHttpClient.Builder;
+import okhttp3.Request;
+import okhttp3.Request.Builder;
+import okhttp3.RequestBody;
+import okhttp3.Response;
+import okhttp3.ResponseBody;
+import org.json.JSONArray;
+import org.json.JSONException;
+import org.json.JSONObject;
+
+public class DevServerHelper
+{
+  private static final String DEBUGGER_MSG_DISABLE = "{ \"id\":1,\"method\":\"Debugger.disable\" }";
+  private static final int HTTP_CONNECT_TIMEOUT_MS = 5000;
+  private static final int LONG_POLL_FAILURE_DELAY_MS = 5000;
+  private static final int LONG_POLL_KEEP_ALIVE_DURATION_MS = 120000;
+  private static final String PACKAGER_OK_STATUS = "packager-status:running";
+  public static final String RELOAD_APP_EXTRA_JS_PROXY = "jsproxy";
+  private final BundleDownloader mBundleDownloader;
+  private InspectorPackagerConnection.BundleStatusProvider mBundlerStatusProvider;
+  private final OkHttpClient mClient;
+  @Nullable
+  private InspectorPackagerConnection mInspectorPackagerConnection;
+  @Nullable
+  private OkHttpClient mOnChangePollingClient;
+  private boolean mOnChangePollingEnabled;
+  @Nullable
+  private OnServerContentChangeListener mOnServerContentChangeListener;
+  private final String mPackageName;
+  @Nullable
+  private JSPackagerClient mPackagerClient;
+  private final Handler mRestartOnChangePollingHandler;
+  private final DevInternalSettings mSettings;
+  
+  public DevServerHelper(DevInternalSettings paramDevInternalSettings, String paramString, InspectorPackagerConnection.BundleStatusProvider paramBundleStatusProvider)
+  {
+    mSettings = paramDevInternalSettings;
+    mBundlerStatusProvider = paramBundleStatusProvider;
+    mClient = new OkHttpClient.Builder().connectTimeout(5000L, TimeUnit.MILLISECONDS).readTimeout(0L, TimeUnit.MILLISECONDS).writeTimeout(0L, TimeUnit.MILLISECONDS).build();
+    mBundleDownloader = new BundleDownloader(mClient);
+    mRestartOnChangePollingHandler = new Handler(Looper.getMainLooper());
+    mPackageName = paramString;
+  }
+  
+  private String createBundleURL(String paramString, BundleType paramBundleType)
+  {
+    return createBundleURL(paramString, paramBundleType, mSettings.getPackagerConnectionSettings().getDebugServerHost());
+  }
+  
+  private String createBundleURL(String paramString1, BundleType paramBundleType, String paramString2)
+  {
+    return String.format(Locale.US, "http://%s/%s.%s?platform=android&dev=%s&minify=%s", new Object[] { paramString2, paramString1, paramBundleType.typeID(), Boolean.valueOf(getDevMode()), Boolean.valueOf(getJSMinifyMode()) });
+  }
+  
+  private String createLaunchJSDevtoolsCommandUrl()
+  {
+    return String.format(Locale.US, "http://%s/launch-js-devtools", new Object[] { mSettings.getPackagerConnectionSettings().getDebugServerHost() });
+  }
+  
+  private String createOnChangeEndpointUrl()
+  {
+    return String.format(Locale.US, "http://%s/onchange", new Object[] { mSettings.getPackagerConnectionSettings().getDebugServerHost() });
+  }
+  
+  private static String createOpenStackFrameURL(String paramString)
+  {
+    return String.format(Locale.US, "http://%s/open-stack-frame", new Object[] { paramString });
+  }
+  
+  private static String createPackagerStatusURL(String paramString)
+  {
+    return String.format(Locale.US, "http://%s/status", new Object[] { paramString });
+  }
+  
+  private static String createResourceURL(String paramString1, String paramString2)
+  {
+    return String.format(Locale.US, "http://%s/%s", new Object[] { paramString1, paramString2 });
+  }
+  
+  private static String createSymbolicateURL(String paramString)
+  {
+    return String.format(Locale.US, "http://%s/symbolicate", new Object[] { paramString });
+  }
+  
+  private void enqueueOnChangeEndpointLongPolling()
+  {
+    Request localRequest = new Request.Builder().url(createOnChangeEndpointUrl()).tag(this).build();
+    ((OkHttpClient)Assertions.assertNotNull(mOnChangePollingClient)).newCall(localRequest).enqueue(new Callback()
+    {
+      public void onFailure(Call paramAnonymousCall, IOException paramAnonymousIOException)
+      {
+        if (mOnChangePollingEnabled)
+        {
+          FLog.d("ReactNative", "Error while requesting /onchange endpoint", paramAnonymousIOException);
+          mRestartOnChangePollingHandler.postDelayed(new Runnable()
+          {
+            public void run()
+            {
+              DevServerHelper.this.handleOnChangePollingResponse(false);
+            }
+          }, 5000L);
+        }
+      }
+      
+      public void onResponse(Call paramAnonymousCall, Response paramAnonymousResponse)
+        throws IOException
+      {
+        paramAnonymousCall = DevServerHelper.this;
+        boolean bool;
+        if (paramAnonymousResponse.code() == 205) {
+          bool = true;
+        } else {
+          bool = false;
+        }
+        paramAnonymousCall.handleOnChangePollingResponse(bool);
+      }
+    });
+  }
+  
+  private BundleDeltaClient.ClientType getDeltaClientType()
+  {
+    if (mSettings.isBundleDeltasCppEnabled()) {
+      return BundleDeltaClient.ClientType.NATIVE;
+    }
+    if (mSettings.isBundleDeltasEnabled()) {
+      return BundleDeltaClient.ClientType.DEV_SUPPORT;
+    }
+    return BundleDeltaClient.ClientType.NONE;
+  }
+  
+  private boolean getDevMode()
+  {
+    return mSettings.isJSDevModeEnabled();
+  }
+  
+  private String getHostForJSProxy()
+  {
+    String str = (String)Assertions.assertNotNull(mSettings.getPackagerConnectionSettings().getDebugServerHost());
+    int i = str.lastIndexOf(':');
+    if (i > -1)
+    {
+      StringBuilder localStringBuilder = new StringBuilder();
+      localStringBuilder.append("localhost");
+      localStringBuilder.append(str.substring(i));
+      return localStringBuilder.toString();
+    }
+    return "localhost";
+  }
+  
+  private String getInspectorAttachUrl(Context paramContext, String paramString)
+  {
+    return String.format(Locale.US, "http://%s/nuclide/attach-debugger-nuclide?title=%s&app=%s&device=%s", new Object[] { AndroidInfoHelpers.getServerHost(paramContext), paramString, mPackageName, AndroidInfoHelpers.getFriendlyDeviceName() });
+  }
+  
+  private String getInspectorDeviceUrl()
+  {
+    return String.format(Locale.US, "http://%s/inspector/device?name=%s&app=%s", new Object[] { mSettings.getPackagerConnectionSettings().getInspectorServerHost(), AndroidInfoHelpers.getFriendlyDeviceName(), mPackageName });
+  }
+  
+  private boolean getJSMinifyMode()
+  {
+    return mSettings.isJSMinifyEnabled();
+  }
+  
+  private void handleOnChangePollingResponse(boolean paramBoolean)
+  {
+    if (mOnChangePollingEnabled)
+    {
+      if (paramBoolean) {
+        UiThreadUtil.runOnUiThread(new Runnable()
+        {
+          public void run()
+          {
+            if (mOnServerContentChangeListener != null) {
+              mOnServerContentChangeListener.onServerContentChanged();
+            }
+          }
+        });
+      }
+      enqueueOnChangeEndpointLongPolling();
+    }
+  }
+  
+  public void attachDebugger(final Context paramContext, final String paramString)
+  {
+    new AsyncTask()
+    {
+      protected Boolean doInBackground(Void... paramAnonymousVarArgs)
+      {
+        return Boolean.valueOf(doSync());
+      }
+      
+      public boolean doSync()
+      {
+        try
+        {
+          String str = DevServerHelper.this.getInspectorAttachUrl(paramContext, paramString);
+          new OkHttpClient().newCall(new Request.Builder().url(str).build()).execute();
+          return true;
+        }
+        catch (IOException localIOException)
+        {
+          FLog.e("ReactNative", "Failed to send attach request to Inspector", localIOException);
+        }
+        return false;
+      }
+      
+      protected void onPostExecute(Boolean paramAnonymousBoolean)
+      {
+        if (!paramAnonymousBoolean.booleanValue())
+        {
+          paramAnonymousBoolean = paramContext.getString(R.string.catalyst_debug_nuclide_error);
+          Toast.makeText(paramContext, paramAnonymousBoolean, 1).show();
+        }
+      }
+    }.executeOnExecutor(AsyncTask.THREAD_POOL_EXECUTOR, new Void[0]);
+  }
+  
+  public void closeInspectorConnection()
+  {
+    new AsyncTask()
+    {
+      protected Void doInBackground(Void... paramAnonymousVarArgs)
+      {
+        if (mInspectorPackagerConnection != null)
+        {
+          mInspectorPackagerConnection.closeQuietly();
+          DevServerHelper.access$202(DevServerHelper.this, null);
+        }
+        return null;
+      }
+    }.executeOnExecutor(AsyncTask.THREAD_POOL_EXECUTOR, new Void[0]);
+  }
+  
+  public void closePackagerConnection()
+  {
+    new AsyncTask()
+    {
+      protected Void doInBackground(Void... paramAnonymousVarArgs)
+      {
+        if (mPackagerClient != null)
+        {
+          mPackagerClient.close();
+          DevServerHelper.access$002(DevServerHelper.this, null);
+        }
+        return null;
+      }
+    }.executeOnExecutor(AsyncTask.THREAD_POOL_EXECUTOR, new Void[0]);
+  }
+  
+  public void disableDebugger()
+  {
+    if (mInspectorPackagerConnection != null) {
+      mInspectorPackagerConnection.sendEventToAllConnections("{ \"id\":1,\"method\":\"Debugger.disable\" }");
+    }
+  }
+  
+  public void downloadBundleFromURL(DevBundleDownloadListener paramDevBundleDownloadListener, File paramFile, String paramString, BundleDownloader.BundleInfo paramBundleInfo)
+  {
+    mBundleDownloader.downloadBundleFromURL(paramDevBundleDownloadListener, paramFile, paramString, paramBundleInfo, getDeltaClientType());
+  }
+  
+  public void downloadBundleFromURL(DevBundleDownloadListener paramDevBundleDownloadListener, File paramFile, String paramString, BundleDownloader.BundleInfo paramBundleInfo, Request.Builder paramBuilder)
+  {
+    mBundleDownloader.downloadBundleFromURL(paramDevBundleDownloadListener, paramFile, paramString, paramBundleInfo, getDeltaClientType(), paramBuilder);
+  }
+  
+  /* Error */
+  @Nullable
+  public File downloadBundleResourceFromUrlSync(String paramString, File paramFile)
+  {
+    // Byte code:
+    //   0: aload_0
+    //   1: getfield 95	com/facebook/react/devsupport/DevServerHelper:mSettings	Lcom/facebook/react/devsupport/DevInternalSettings;
+    //   4: invokevirtual 200	com/facebook/react/devsupport/DevInternalSettings:getPackagerConnectionSettings	()Lcom/facebook/react/packagerconnection/PackagerConnectionSettings;
+    //   7: invokevirtual 205	com/facebook/react/packagerconnection/PackagerConnectionSettings:getDebugServerHost	()Ljava/lang/String;
+    //   10: aload_1
+    //   11: invokestatic 419	com/facebook/react/devsupport/DevServerHelper:createResourceURL	(Ljava/lang/String;Ljava/lang/String;)Ljava/lang/String;
+    //   14: astore 4
+    //   16: new 261	okhttp3/Request$Builder
+    //   19: dup
+    //   20: invokespecial 262	okhttp3/Request$Builder:<init>	()V
+    //   23: aload 4
+    //   25: invokevirtual 268	okhttp3/Request$Builder:url	(Ljava/lang/String;)Lokhttp3/Request$Builder;
+    //   28: invokevirtual 275	okhttp3/Request$Builder:build	()Lokhttp3/Request;
+    //   31: astore 4
+    //   33: aload_0
+    //   34: getfield 124	com/facebook/react/devsupport/DevServerHelper:mClient	Lokhttp3/OkHttpClient;
+    //   37: aload 4
+    //   39: invokevirtual 289	okhttp3/OkHttpClient:newCall	(Lokhttp3/Request;)Lokhttp3/Call;
+    //   42: invokeinterface 423 1 0
+    //   47: astore 6
+    //   49: aload 6
+    //   51: invokevirtual 428	okhttp3/Response:isSuccessful	()Z
+    //   54: istore_3
+    //   55: iload_3
+    //   56: ifne +15 -> 71
+    //   59: aload 6
+    //   61: ifnull +8 -> 69
+    //   64: aload 6
+    //   66: invokevirtual 431	okhttp3/Response:close	()V
+    //   69: aconst_null
+    //   70: areturn
+    //   71: aload_2
+    //   72: invokestatic 437	okio/Okio:sink	(Ljava/io/File;)Lokio/Sink;
+    //   75: astore 4
+    //   77: aload 6
+    //   79: invokevirtual 441	okhttp3/Response:body	()Lokhttp3/ResponseBody;
+    //   82: invokevirtual 447	okhttp3/ResponseBody:source	()Lokio/BufferedSource;
+    //   85: invokestatic 451	okio/Okio:buffer	(Lokio/Source;)Lokio/BufferedSource;
+    //   88: aload 4
+    //   90: invokeinterface 457 2 0
+    //   95: pop2
+    //   96: aload 4
+    //   98: ifnull +10 -> 108
+    //   101: aload 4
+    //   103: invokeinterface 460 1 0
+    //   108: aload 6
+    //   110: ifnull +8 -> 118
+    //   113: aload 6
+    //   115: invokevirtual 431	okhttp3/Response:close	()V
+    //   118: aload_2
+    //   119: areturn
+    //   120: astore 5
+    //   122: goto +8 -> 130
+    //   125: astore 5
+    //   127: aconst_null
+    //   128: astore 4
+    //   130: aload 4
+    //   132: ifnull +10 -> 142
+    //   135: aload 4
+    //   137: invokeinterface 460 1 0
+    //   142: aload 5
+    //   144: athrow
+    //   145: astore 4
+    //   147: aconst_null
+    //   148: astore 5
+    //   150: goto +10 -> 160
+    //   153: astore 5
+    //   155: aload 5
+    //   157: athrow
+    //   158: astore 4
+    //   160: aload 6
+    //   162: ifnull +33 -> 195
+    //   165: aload 5
+    //   167: ifnull +23 -> 190
+    //   170: aload 6
+    //   172: invokevirtual 431	okhttp3/Response:close	()V
+    //   175: goto +20 -> 195
+    //   178: astore 6
+    //   180: aload 5
+    //   182: aload 6
+    //   184: invokevirtual 464	java/lang/Throwable:addSuppressed	(Ljava/lang/Throwable;)V
+    //   187: goto +8 -> 195
+    //   190: aload 6
+    //   192: invokevirtual 431	okhttp3/Response:close	()V
+    //   195: aload 4
+    //   197: athrow
+    //   198: astore 4
+    //   200: ldc_w 466
+    //   203: ldc_w 468
+    //   206: iconst_3
+    //   207: anewarray 4	java/lang/Object
+    //   210: dup
+    //   211: iconst_0
+    //   212: aload_1
+    //   213: aastore
+    //   214: dup
+    //   215: iconst_1
+    //   216: aload_2
+    //   217: invokevirtual 473	java/io/File:getAbsolutePath	()Ljava/lang/String;
+    //   220: aastore
+    //   221: dup
+    //   222: iconst_2
+    //   223: aload 4
+    //   225: aastore
+    //   226: invokestatic 479	com/facebook/common/logging/FLog:e	(Ljava/lang/String;Ljava/lang/String;[Ljava/lang/Object;)V
+    //   229: aconst_null
+    //   230: areturn
+    // Local variable table:
+    //   start	length	slot	name	signature
+    //   0	231	0	this	DevServerHelper
+    //   0	231	1	paramString	String
+    //   0	231	2	paramFile	File
+    //   54	2	3	bool	boolean
+    //   14	122	4	localObject1	Object
+    //   145	1	4	localObject2	Object
+    //   158	38	4	localObject3	Object
+    //   198	26	4	localException	Exception
+    //   120	1	5	localObject4	Object
+    //   125	18	5	localObject5	Object
+    //   148	1	5	localObject6	Object
+    //   153	28	5	localThrowable1	Throwable
+    //   47	124	6	localResponse	Response
+    //   178	13	6	localThrowable2	Throwable
+    // Exception table:
+    //   from	to	target	type
+    //   77	96	120	finally
+    //   71	77	125	finally
+    //   49	55	145	finally
+    //   101	108	145	finally
+    //   135	142	145	finally
+    //   142	145	145	finally
+    //   49	55	153	java/lang/Throwable
+    //   101	108	153	java/lang/Throwable
+    //   135	142	153	java/lang/Throwable
+    //   142	145	153	java/lang/Throwable
+    //   155	158	158	finally
+    //   170	175	178	java/lang/Throwable
+    //   33	49	198	java/lang/Exception
+    //   64	69	198	java/lang/Exception
+    //   113	118	198	java/lang/Exception
+    //   170	175	198	java/lang/Exception
+    //   180	187	198	java/lang/Exception
+    //   190	195	198	java/lang/Exception
+    //   195	198	198	java/lang/Exception
+  }
+  
+  public String getDevServerBundleURL(String paramString)
+  {
+    BundleType localBundleType;
+    if (mSettings.isBundleDeltasEnabled()) {
+      localBundleType = BundleType.DELTA;
+    } else {
+      localBundleType = BundleType.BUNDLE;
+    }
+    return createBundleURL(paramString, localBundleType, mSettings.getPackagerConnectionSettings().getDebugServerHost());
+  }
+  
+  public String getJSBundleURLForRemoteDebugging(String paramString)
+  {
+    return createBundleURL(paramString, BundleType.BUNDLE, getHostForJSProxy());
+  }
+  
+  public String getSourceMapUrl(String paramString)
+  {
+    return createBundleURL(paramString, BundleType.MAP);
+  }
+  
+  public String getSourceUrl(String paramString)
+  {
+    BundleType localBundleType;
+    if (mSettings.isBundleDeltasEnabled()) {
+      localBundleType = BundleType.DELTA;
+    } else {
+      localBundleType = BundleType.BUNDLE;
+    }
+    return createBundleURL(paramString, localBundleType);
+  }
+  
+  public String getWebsocketProxyURL()
+  {
+    return String.format(Locale.US, "ws://%s/debugger-proxy?role=client", new Object[] { mSettings.getPackagerConnectionSettings().getDebugServerHost() });
+  }
+  
+  public void isPackagerRunning(final PackagerStatusCallback paramPackagerStatusCallback)
+  {
+    Object localObject = createPackagerStatusURL(mSettings.getPackagerConnectionSettings().getDebugServerHost());
+    localObject = new Request.Builder().url((String)localObject).build();
+    mClient.newCall((Request)localObject).enqueue(new Callback()
+    {
+      public void onFailure(Call paramAnonymousCall, IOException paramAnonymousIOException)
+      {
+        paramAnonymousCall = new StringBuilder();
+        paramAnonymousCall.append("The packager does not seem to be running as we got an IOException requesting its status: ");
+        paramAnonymousCall.append(paramAnonymousIOException.getMessage());
+        FLog.w("ReactNative", paramAnonymousCall.toString());
+        paramPackagerStatusCallback.onPackagerStatusFetched(false);
+      }
+      
+      public void onResponse(Call paramAnonymousCall, Response paramAnonymousResponse)
+        throws IOException
+      {
+        if (!paramAnonymousResponse.isSuccessful())
+        {
+          paramAnonymousCall = new StringBuilder();
+          paramAnonymousCall.append("Got non-success http code from packager when requesting status: ");
+          paramAnonymousCall.append(paramAnonymousResponse.code());
+          FLog.e("ReactNative", paramAnonymousCall.toString());
+          paramPackagerStatusCallback.onPackagerStatusFetched(false);
+          return;
+        }
+        paramAnonymousCall = paramAnonymousResponse.body();
+        if (paramAnonymousCall == null)
+        {
+          FLog.e("ReactNative", "Got null body response from packager when requesting status");
+          paramPackagerStatusCallback.onPackagerStatusFetched(false);
+          return;
+        }
+        paramAnonymousCall = paramAnonymousCall.string();
+        if (!"packager-status:running".equals(paramAnonymousCall))
+        {
+          paramAnonymousResponse = new StringBuilder();
+          paramAnonymousResponse.append("Got unexpected response from packager when requesting status: ");
+          paramAnonymousResponse.append(paramAnonymousCall);
+          FLog.e("ReactNative", paramAnonymousResponse.toString());
+          paramPackagerStatusCallback.onPackagerStatusFetched(false);
+          return;
+        }
+        paramPackagerStatusCallback.onPackagerStatusFetched(true);
+      }
+    });
+  }
+  
+  public void launchJSDevtools()
+  {
+    Request localRequest = new Request.Builder().url(createLaunchJSDevtoolsCommandUrl()).build();
+    mClient.newCall(localRequest).enqueue(new Callback()
+    {
+      public void onFailure(Call paramAnonymousCall, IOException paramAnonymousIOException) {}
+      
+      public void onResponse(Call paramAnonymousCall, Response paramAnonymousResponse)
+        throws IOException
+      {}
+    });
+  }
+  
+  public void openInspectorConnection()
+  {
+    if (mInspectorPackagerConnection != null)
+    {
+      FLog.w("ReactNative", "Inspector connection already open, nooping.");
+      return;
+    }
+    new AsyncTask()
+    {
+      protected Void doInBackground(Void... paramAnonymousVarArgs)
+      {
+        DevServerHelper.access$202(DevServerHelper.this, new InspectorPackagerConnection(DevServerHelper.this.getInspectorDeviceUrl(), mPackageName, mBundlerStatusProvider));
+        mInspectorPackagerConnection.connect();
+        return null;
+      }
+    }.executeOnExecutor(AsyncTask.THREAD_POOL_EXECUTOR, new Void[0]);
+  }
+  
+  public void openPackagerConnection(final String paramString, final PackagerCommandListener paramPackagerCommandListener)
+  {
+    if (mPackagerClient != null)
+    {
+      FLog.w("ReactNative", "Packager connection already open, nooping.");
+      return;
+    }
+    new AsyncTask()
+    {
+      protected Void doInBackground(Void... paramAnonymousVarArgs)
+      {
+        paramAnonymousVarArgs = new HashMap();
+        paramAnonymousVarArgs.put("reload", new NotificationOnlyHandler()
+        {
+          public void onNotification(@Nullable Object paramAnonymous2Object)
+          {
+            val$commandListener.onPackagerReloadCommand();
+          }
+        });
+        paramAnonymousVarArgs.put("devMenu", new NotificationOnlyHandler()
+        {
+          public void onNotification(@Nullable Object paramAnonymous2Object)
+          {
+            val$commandListener.onPackagerDevMenuCommand();
+          }
+        });
+        paramAnonymousVarArgs.put("captureHeap", new RequestOnlyHandler()
+        {
+          public void onRequest(@Nullable Object paramAnonymous2Object, Responder paramAnonymous2Responder)
+          {
+            val$commandListener.onCaptureHeapCommand(paramAnonymous2Responder);
+          }
+        });
+        Object localObject = paramPackagerCommandListener.customCommandHandlers();
+        if (localObject != null) {
+          paramAnonymousVarArgs.putAll((Map)localObject);
+        }
+        paramAnonymousVarArgs.putAll(new FileIoHandler().handlers());
+        localObject = new ReconnectingWebSocket.ConnectionCallback()
+        {
+          public void onConnected()
+          {
+            val$commandListener.onPackagerConnected();
+          }
+          
+          public void onDisconnected()
+          {
+            val$commandListener.onPackagerDisconnected();
+          }
+        };
+        DevServerHelper.access$002(DevServerHelper.this, new JSPackagerClient(paramString, mSettings.getPackagerConnectionSettings(), paramAnonymousVarArgs, (ReconnectingWebSocket.ConnectionCallback)localObject));
+        mPackagerClient.init();
+        return null;
+      }
+    }.executeOnExecutor(AsyncTask.THREAD_POOL_EXECUTOR, new Void[0]);
+  }
+  
+  public void openStackFrameCall(StackFrame paramStackFrame)
+  {
+    String str = createOpenStackFrameURL(mSettings.getPackagerConnectionSettings().getDebugServerHost());
+    paramStackFrame = new Request.Builder().url(str).post(RequestBody.create(MediaType.parse("application/json"), paramStackFrame.toJSON().toString())).build();
+    ((Call)Assertions.assertNotNull(mClient.newCall(paramStackFrame))).enqueue(new Callback()
+    {
+      public void onFailure(Call paramAnonymousCall, IOException paramAnonymousIOException)
+      {
+        paramAnonymousCall = new StringBuilder();
+        paramAnonymousCall.append("Got IOException when attempting to open stack frame: ");
+        paramAnonymousCall.append(paramAnonymousIOException.getMessage());
+        FLog.w("ReactNative", paramAnonymousCall.toString());
+      }
+      
+      public void onResponse(Call paramAnonymousCall, Response paramAnonymousResponse)
+        throws IOException
+      {}
+    });
+  }
+  
+  public void startPollingOnChangeEndpoint(OnServerContentChangeListener paramOnServerContentChangeListener)
+  {
+    if (mOnChangePollingEnabled) {
+      return;
+    }
+    mOnChangePollingEnabled = true;
+    mOnServerContentChangeListener = paramOnServerContentChangeListener;
+    mOnChangePollingClient = new OkHttpClient.Builder().connectionPool(new ConnectionPool(1, 120000L, TimeUnit.MILLISECONDS)).connectTimeout(5000L, TimeUnit.MILLISECONDS).build();
+    enqueueOnChangeEndpointLongPolling();
+  }
+  
+  public void stopPollingOnChangeEndpoint()
+  {
+    mOnChangePollingEnabled = false;
+    mRestartOnChangePollingHandler.removeCallbacksAndMessages(null);
+    if (mOnChangePollingClient != null)
+    {
+      OkHttpCallUtil.cancelTag(mOnChangePollingClient, this);
+      mOnChangePollingClient = null;
+    }
+    mOnServerContentChangeListener = null;
+  }
+  
+  public void symbolicateStackTrace(Iterable<StackFrame> paramIterable, final SymbolicationListener paramSymbolicationListener)
+  {
+    try
+    {
+      String str = createSymbolicateURL(mSettings.getPackagerConnectionSettings().getDebugServerHost());
+      JSONArray localJSONArray = new JSONArray();
+      paramIterable = paramIterable.iterator();
+      while (paramIterable.hasNext()) {
+        localJSONArray.put(((StackFrame)paramIterable.next()).toJSON());
+      }
+      paramIterable = new Request.Builder().url(str).post(RequestBody.create(MediaType.parse("application/json"), new JSONObject().put("stack", localJSONArray).toString())).build();
+      ((Call)Assertions.assertNotNull(mClient.newCall(paramIterable))).enqueue(new Callback()
+      {
+        public void onFailure(Call paramAnonymousCall, IOException paramAnonymousIOException)
+        {
+          paramAnonymousCall = new StringBuilder();
+          paramAnonymousCall.append("Got IOException when attempting symbolicate stack trace: ");
+          paramAnonymousCall.append(paramAnonymousIOException.getMessage());
+          FLog.w("ReactNative", paramAnonymousCall.toString());
+          paramSymbolicationListener.onSymbolicationComplete(null);
+        }
+        
+        public void onResponse(Call paramAnonymousCall, Response paramAnonymousResponse)
+          throws IOException
+        {
+          try
+          {
+            paramSymbolicationListener.onSymbolicationComplete(Arrays.asList(StackTraceHelper.convertJsStackTrace(new JSONObject(paramAnonymousResponse.body().string()).getJSONArray("stack"))));
+            return;
+          }
+          catch (JSONException paramAnonymousCall)
+          {
+            for (;;) {}
+          }
+          paramSymbolicationListener.onSymbolicationComplete(null);
+        }
+      });
+      return;
+    }
+    catch (JSONException paramIterable)
+    {
+      paramSymbolicationListener = new StringBuilder();
+      paramSymbolicationListener.append("Got JSONException when attempting symbolicate stack trace: ");
+      paramSymbolicationListener.append(paramIterable.getMessage());
+      FLog.w("ReactNative", paramSymbolicationListener.toString());
+    }
+  }
+  
+  private static enum BundleType
+  {
+    BUNDLE("bundle"),  DELTA("delta"),  MAP("map");
+    
+    private final String mTypeID;
+    
+    private BundleType(String paramString)
+    {
+      mTypeID = paramString;
+    }
+    
+    public String typeID()
+    {
+      return mTypeID;
+    }
+  }
+  
+  public static abstract interface OnServerContentChangeListener
+  {
+    public abstract void onServerContentChanged();
+  }
+  
+  public static abstract interface PackagerCommandListener
+  {
+    @Nullable
+    public abstract Map<String, RequestHandler> customCommandHandlers();
+    
+    public abstract void onCaptureHeapCommand(Responder paramResponder);
+    
+    public abstract void onPackagerConnected();
+    
+    public abstract void onPackagerDevMenuCommand();
+    
+    public abstract void onPackagerDisconnected();
+    
+    public abstract void onPackagerReloadCommand();
+  }
+  
+  public static abstract interface PackagerCustomCommandProvider {}
+  
+  public static abstract interface SymbolicationListener
+  {
+    public abstract void onSymbolicationComplete(@Nullable Iterable<StackFrame> paramIterable);
+  }
+}

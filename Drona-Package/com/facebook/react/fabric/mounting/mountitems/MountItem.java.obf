@@ -1,0 +1,10 @@
+package com.facebook.react.fabric.mounting.mountitems;
+
+import androidx.annotation.UiThread;
+import com.facebook.react.fabric.mounting.MountingManager;
+
+public abstract interface MountItem
+{
+  @UiThread
+  public abstract void execute(MountingManager paramMountingManager);
+}

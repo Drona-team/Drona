@@ -1,0 +1,33 @@
+package com.google.android.exoplayer2.ui;
+
+import androidx.annotation.Nullable;
+
+public abstract interface TimeBar
+{
+  public abstract void addListener(OnScrubListener paramOnScrubListener);
+  
+  public abstract void removeListener(OnScrubListener paramOnScrubListener);
+  
+  public abstract void setAdGroupTimesMs(@Nullable long[] paramArrayOfLong, @Nullable boolean[] paramArrayOfBoolean, int paramInt);
+  
+  public abstract void setBufferedPosition(long paramLong);
+  
+  public abstract void setDuration(long paramLong);
+  
+  public abstract void setEnabled(boolean paramBoolean);
+  
+  public abstract void setKeyCountIncrement(int paramInt);
+  
+  public abstract void setKeyTimeIncrement(long paramLong);
+  
+  public abstract void setPosition(long paramLong);
+  
+  public static abstract interface OnScrubListener
+  {
+    public abstract void onScrubMove(TimeBar paramTimeBar, long paramLong);
+    
+    public abstract void onScrubStart(TimeBar paramTimeBar, long paramLong);
+    
+    public abstract void onScrubStop(TimeBar paramTimeBar, long paramLong, boolean paramBoolean);
+  }
+}

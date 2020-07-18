@@ -1,0 +1,329 @@
+package com.google.android.gms.ads.search;
+
+import android.content.Context;
+import android.os.Bundle;
+import com.google.ads.mediation.admob.AdMobAdapter;
+import com.google.android.gms.ads.mediation.MediationAdapter;
+import com.google.android.gms.ads.mediation.NetworkExtras;
+import com.google.android.gms.ads.mediation.customevent.CustomEvent;
+import com.google.android.gms.internal.ads.zzaaz;
+
+public final class DynamicHeightSearchAdRequest
+{
+  private final SearchAdRequest zzgnv;
+  
+  private DynamicHeightSearchAdRequest(Builder paramBuilder)
+  {
+    zzgnv = Builder.zza(paramBuilder).build();
+  }
+  
+  public final <T extends CustomEvent> Bundle getCustomEventExtrasBundle(Class<T> paramClass)
+  {
+    return zzgnv.getCustomEventExtrasBundle(paramClass);
+  }
+  
+  @Deprecated
+  public final <T extends NetworkExtras> T getNetworkExtras(Class<T> paramClass)
+  {
+    return zzgnv.getNetworkExtras(paramClass);
+  }
+  
+  public final <T extends MediationAdapter> Bundle getNetworkExtrasBundle(Class<T> paramClass)
+  {
+    return zzgnv.getNetworkExtrasBundle(paramClass);
+  }
+  
+  public final String getQuery()
+  {
+    return zzgnv.getQuery();
+  }
+  
+  public final boolean isTestDevice(Context paramContext)
+  {
+    return zzgnv.isTestDevice(paramContext);
+  }
+  
+  final zzaaz zzde()
+  {
+    return zzgnv.zzde();
+  }
+  
+  public static final class Builder
+  {
+    private final SearchAdRequest.Builder zzgnw = new SearchAdRequest.Builder();
+    private final Bundle zzgnx = new Bundle();
+    
+    public Builder() {}
+    
+    public final Builder addCustomEventExtrasBundle(Class<? extends CustomEvent> paramClass, Bundle paramBundle)
+    {
+      zzgnw.addCustomEventExtrasBundle(paramClass, paramBundle);
+      return this;
+    }
+    
+    public final Builder addNetworkExtras(NetworkExtras paramNetworkExtras)
+    {
+      zzgnw.addNetworkExtras(paramNetworkExtras);
+      return this;
+    }
+    
+    public final Builder addNetworkExtrasBundle(Class<? extends MediationAdapter> paramClass, Bundle paramBundle)
+    {
+      zzgnw.addNetworkExtrasBundle(paramClass, paramBundle);
+      return this;
+    }
+    
+    public final DynamicHeightSearchAdRequest build()
+    {
+      zzgnw.addNetworkExtrasBundle(AdMobAdapter.class, zzgnx);
+      return new DynamicHeightSearchAdRequest(this, null);
+    }
+    
+    public final Builder setAdBorderSelectors(String paramString)
+    {
+      zzgnx.putString("csa_adBorderSelectors", paramString);
+      return this;
+    }
+    
+    public final Builder setAdTest(boolean paramBoolean)
+    {
+      Bundle localBundle = zzgnx;
+      String str;
+      if (paramBoolean) {
+        str = "on";
+      } else {
+        str = "off";
+      }
+      localBundle.putString("csa_adtest", str);
+      return this;
+    }
+    
+    public final Builder setAdjustableLineHeight(int paramInt)
+    {
+      zzgnx.putString("csa_adjustableLineHeight", Integer.toString(paramInt));
+      return this;
+    }
+    
+    public final Builder setAdvancedOptionValue(String paramString1, String paramString2)
+    {
+      zzgnx.putString(paramString1, paramString2);
+      return this;
+    }
+    
+    public final Builder setAttributionSpacingBelow(int paramInt)
+    {
+      zzgnx.putString("csa_attributionSpacingBelow", Integer.toString(paramInt));
+      return this;
+    }
+    
+    public final Builder setBorderSelections(String paramString)
+    {
+      zzgnx.putString("csa_borderSelections", paramString);
+      return this;
+    }
+    
+    public final Builder setChannel(String paramString)
+    {
+      zzgnx.putString("csa_channel", paramString);
+      return this;
+    }
+    
+    public final Builder setColorAdBorder(String paramString)
+    {
+      zzgnx.putString("csa_colorAdBorder", paramString);
+      return this;
+    }
+    
+    public final Builder setColorAdSeparator(String paramString)
+    {
+      zzgnx.putString("csa_colorAdSeparator", paramString);
+      return this;
+    }
+    
+    public final Builder setColorAnnotation(String paramString)
+    {
+      zzgnx.putString("csa_colorAnnotation", paramString);
+      return this;
+    }
+    
+    public final Builder setColorAttribution(String paramString)
+    {
+      zzgnx.putString("csa_colorAttribution", paramString);
+      return this;
+    }
+    
+    public final Builder setColorBackground(String paramString)
+    {
+      zzgnx.putString("csa_colorBackground", paramString);
+      return this;
+    }
+    
+    public final Builder setColorBorder(String paramString)
+    {
+      zzgnx.putString("csa_colorBorder", paramString);
+      return this;
+    }
+    
+    public final Builder setColorDomainLink(String paramString)
+    {
+      zzgnx.putString("csa_colorDomainLink", paramString);
+      return this;
+    }
+    
+    public final Builder setColorText(String paramString)
+    {
+      zzgnx.putString("csa_colorText", paramString);
+      return this;
+    }
+    
+    public final Builder setColorTitleLink(String paramString)
+    {
+      zzgnx.putString("csa_colorTitleLink", paramString);
+      return this;
+    }
+    
+    public final Builder setCssWidth(int paramInt)
+    {
+      zzgnx.putString("csa_width", Integer.toString(paramInt));
+      return this;
+    }
+    
+    public final Builder setDetailedAttribution(boolean paramBoolean)
+    {
+      zzgnx.putString("csa_detailedAttribution", Boolean.toString(paramBoolean));
+      return this;
+    }
+    
+    public final Builder setFontFamily(String paramString)
+    {
+      zzgnx.putString("csa_fontFamily", paramString);
+      return this;
+    }
+    
+    public final Builder setFontFamilyAttribution(String paramString)
+    {
+      zzgnx.putString("csa_fontFamilyAttribution", paramString);
+      return this;
+    }
+    
+    public final Builder setFontSizeAnnotation(int paramInt)
+    {
+      zzgnx.putString("csa_fontSizeAnnotation", Integer.toString(paramInt));
+      return this;
+    }
+    
+    public final Builder setFontSizeAttribution(int paramInt)
+    {
+      zzgnx.putString("csa_fontSizeAttribution", Integer.toString(paramInt));
+      return this;
+    }
+    
+    public final Builder setFontSizeDescription(int paramInt)
+    {
+      zzgnx.putString("csa_fontSizeDescription", Integer.toString(paramInt));
+      return this;
+    }
+    
+    public final Builder setFontSizeDomainLink(int paramInt)
+    {
+      zzgnx.putString("csa_fontSizeDomainLink", Integer.toString(paramInt));
+      return this;
+    }
+    
+    public final Builder setFontSizeTitle(int paramInt)
+    {
+      zzgnx.putString("csa_fontSizeTitle", Integer.toString(paramInt));
+      return this;
+    }
+    
+    public final Builder setHostLanguage(String paramString)
+    {
+      zzgnx.putString("csa_hl", paramString);
+      return this;
+    }
+    
+    public final Builder setIsClickToCallEnabled(boolean paramBoolean)
+    {
+      zzgnx.putString("csa_clickToCall", Boolean.toString(paramBoolean));
+      return this;
+    }
+    
+    public final Builder setIsLocationEnabled(boolean paramBoolean)
+    {
+      zzgnx.putString("csa_location", Boolean.toString(paramBoolean));
+      return this;
+    }
+    
+    public final Builder setIsPlusOnesEnabled(boolean paramBoolean)
+    {
+      zzgnx.putString("csa_plusOnes", Boolean.toString(paramBoolean));
+      return this;
+    }
+    
+    public final Builder setIsSellerRatingsEnabled(boolean paramBoolean)
+    {
+      zzgnx.putString("csa_sellerRatings", Boolean.toString(paramBoolean));
+      return this;
+    }
+    
+    public final Builder setIsSiteLinksEnabled(boolean paramBoolean)
+    {
+      zzgnx.putString("csa_siteLinks", Boolean.toString(paramBoolean));
+      return this;
+    }
+    
+    public final Builder setIsTitleBold(boolean paramBoolean)
+    {
+      zzgnx.putString("csa_titleBold", Boolean.toString(paramBoolean));
+      return this;
+    }
+    
+    public final Builder setIsTitleUnderlined(boolean paramBoolean)
+    {
+      zzgnx.putString("csa_noTitleUnderline", Boolean.toString(paramBoolean ^ true));
+      return this;
+    }
+    
+    public final Builder setLocationColor(String paramString)
+    {
+      zzgnx.putString("csa_colorLocation", paramString);
+      return this;
+    }
+    
+    public final Builder setLocationFontSize(int paramInt)
+    {
+      zzgnx.putString("csa_fontSizeLocation", Integer.toString(paramInt));
+      return this;
+    }
+    
+    public final Builder setLongerHeadlines(boolean paramBoolean)
+    {
+      zzgnx.putString("csa_longerHeadlines", Boolean.toString(paramBoolean));
+      return this;
+    }
+    
+    public final Builder setNumber(int paramInt)
+    {
+      zzgnx.putString("csa_number", Integer.toString(paramInt));
+      return this;
+    }
+    
+    public final Builder setPage(int paramInt)
+    {
+      zzgnx.putString("csa_adPage", Integer.toString(paramInt));
+      return this;
+    }
+    
+    public final Builder setQuery(String paramString)
+    {
+      zzgnw.setQuery(paramString);
+      return this;
+    }
+    
+    public final Builder setVerticalSpacing(int paramInt)
+    {
+      zzgnx.putString("csa_verticalSpacing", Integer.toString(paramInt));
+      return this;
+    }
+  }
+}

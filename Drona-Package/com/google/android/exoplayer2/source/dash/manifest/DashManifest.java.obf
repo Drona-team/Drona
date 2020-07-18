@@ -1,0 +1,149 @@
+package com.google.android.exoplayer2.source.dash.manifest;
+
+import android.net.Uri;
+import androidx.annotation.Nullable;
+import com.google.android.exoplayer2.C;
+import com.google.android.exoplayer2.offline.FilterableManifest;
+import com.google.android.exoplayer2.offline.StreamKey;
+import java.util.ArrayList;
+import java.util.Collections;
+import java.util.LinkedList;
+import java.util.List;
+
+public class DashManifest
+  implements FilterableManifest<DashManifest>
+{
+  public final long availabilityStartTimeMs;
+  public final long durationMs;
+  public final boolean dynamic;
+  public final Uri location;
+  public final long minBufferTimeMs;
+  public final long minUpdatePeriodMs;
+  private final List<Period> periods;
+  @Nullable
+  public final ProgramInformation programInformation;
+  public final long publishTimeMs;
+  public final long suggestedPresentationDelayMs;
+  public final long timeShiftBufferDepthMs;
+  public final UtcTimingElement utcTiming;
+  
+  public DashManifest(long paramLong1, long paramLong2, long paramLong3, boolean paramBoolean, long paramLong4, long paramLong5, long paramLong6, long paramLong7, @Nullable ProgramInformation paramProgramInformation, UtcTimingElement paramUtcTimingElement, Uri paramUri, List<Period> paramList)
+  {
+    availabilityStartTimeMs = paramLong1;
+    durationMs = paramLong2;
+    minBufferTimeMs = paramLong3;
+    dynamic = paramBoolean;
+    minUpdatePeriodMs = paramLong4;
+    timeShiftBufferDepthMs = paramLong5;
+    suggestedPresentationDelayMs = paramLong6;
+    publishTimeMs = paramLong7;
+    programInformation = paramProgramInformation;
+    utcTiming = paramUtcTimingElement;
+    location = paramUri;
+    if (paramList == null) {
+      paramList = Collections.emptyList();
+    }
+    periods = paramList;
+  }
+  
+  @Deprecated
+  public DashManifest(long paramLong1, long paramLong2, long paramLong3, boolean paramBoolean, long paramLong4, long paramLong5, long paramLong6, long paramLong7, UtcTimingElement paramUtcTimingElement, Uri paramUri, List<Period> paramList)
+  {
+    this(paramLong1, paramLong2, paramLong3, paramBoolean, paramLong4, paramLong5, paramLong6, paramLong7, null, paramUtcTimingElement, paramUri, paramList);
+  }
+  
+  private static ArrayList<AdaptationSet> copyAdaptationSets(List<AdaptationSet> paramList, LinkedList<StreamKey> paramLinkedList)
+  {
+    Object localObject = (StreamKey)paramLinkedList.poll();
+    int i = periodIndex;
+    ArrayList localArrayList1 = new ArrayList();
+    StreamKey localStreamKey;
+    do
+    {
+      int j = groupIndex;
+      AdaptationSet localAdaptationSet = (AdaptationSet)paramList.get(j);
+      List localList = representations;
+      ArrayList localArrayList2 = new ArrayList();
+      do
+      {
+        localArrayList2.add((Representation)localList.get(trackIndex));
+        localStreamKey = (StreamKey)paramLinkedList.poll();
+        if (periodIndex != i) {
+          break;
+        }
+        localObject = localStreamKey;
+      } while (groupIndex == j);
+      localArrayList1.add(new AdaptationSet(id, type, localArrayList2, accessibilityDescriptors, supplementalProperties));
+      localObject = localStreamKey;
+    } while (periodIndex == i);
+    paramLinkedList.addFirst(localStreamKey);
+    return localArrayList1;
+  }
+  
+  public final DashManifest copy(List<StreamKey> paramList)
+  {
+    paramList = new LinkedList(paramList);
+    Collections.sort(paramList);
+    paramList.add(new StreamKey(-1, -1, -1));
+    ArrayList localArrayList1 = new ArrayList();
+    long l1 = 0L;
+    int i = 0;
+    long l2;
+    for (;;)
+    {
+      int j = getPeriodCount();
+      l2 = -9223372036854775807L;
+      if (i >= j) {
+        break;
+      }
+      if (peekperiodIndex != i)
+      {
+        long l3 = getPeriodDurationMs(i);
+        l2 = l1;
+        if (l3 != -9223372036854775807L) {
+          l2 = l1 + l3;
+        }
+      }
+      else
+      {
+        Period localPeriod = getPeriod(i);
+        ArrayList localArrayList2 = copyAdaptationSets(adaptationSets, paramList);
+        localArrayList1.add(new Period(id, startMs - l1, localArrayList2, eventStreams));
+        l2 = l1;
+      }
+      i += 1;
+      l1 = l2;
+    }
+    if (durationMs != -9223372036854775807L) {
+      l2 = durationMs - l1;
+    }
+    return new DashManifest(availabilityStartTimeMs, l2, minBufferTimeMs, dynamic, minUpdatePeriodMs, timeShiftBufferDepthMs, suggestedPresentationDelayMs, publishTimeMs, programInformation, utcTiming, location, localArrayList1);
+  }
+  
+  public final Period getPeriod(int paramInt)
+  {
+    return (Period)periods.get(paramInt);
+  }
+  
+  public final int getPeriodCount()
+  {
+    return periods.size();
+  }
+  
+  public final long getPeriodDurationMs(int paramInt)
+  {
+    if (paramInt == periods.size() - 1)
+    {
+      if (durationMs == -9223372036854775807L) {
+        return -9223372036854775807L;
+      }
+      return durationMs - periods.get(paramInt)).startMs;
+    }
+    return periods.get(paramInt + 1)).startMs - periods.get(paramInt)).startMs;
+  }
+  
+  public final long getPeriodDurationUs(int paramInt)
+  {
+    return C.msToUs(getPeriodDurationMs(paramInt));
+  }
+}

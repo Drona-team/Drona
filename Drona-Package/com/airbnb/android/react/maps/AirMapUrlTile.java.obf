@@ -1,0 +1,239 @@
+package com.airbnb.android.react.maps;
+
+import android.content.Context;
+import com.google.android.gms.maps.GoogleMap;
+import com.google.android.gms.maps.model.TileOverlay;
+import com.google.android.gms.maps.model.TileOverlayOptions;
+import com.google.android.gms.maps.model.UrlTileProvider;
+
+public class AirMapUrlTile
+  extends AirMapFeature
+{
+  private boolean flipY;
+  private float maximumZ;
+  private float minimumZ;
+  private TileOverlay tileOverlay;
+  private TileOverlayOptions tileOverlayOptions;
+  private AIRMapUrlTileProvider tileProvider;
+  private String urlTemplate;
+  private float zIndex;
+  
+  public AirMapUrlTile(Context paramContext)
+  {
+    super(paramContext);
+  }
+  
+  private TileOverlayOptions createTileOverlayOptions()
+  {
+    TileOverlayOptions localTileOverlayOptions = new TileOverlayOptions();
+    localTileOverlayOptions.zIndex(zIndex);
+    tileProvider = new AIRMapUrlTileProvider(256, 256, urlTemplate);
+    localTileOverlayOptions.tileProvider(tileProvider);
+    return localTileOverlayOptions;
+  }
+  
+  public void addToMap(GoogleMap paramGoogleMap)
+  {
+    tileOverlay = paramGoogleMap.addTileOverlay(getTileOverlayOptions());
+  }
+  
+  public Object getFeature()
+  {
+    return tileOverlay;
+  }
+  
+  public TileOverlayOptions getTileOverlayOptions()
+  {
+    if (tileOverlayOptions == null) {
+      tileOverlayOptions = createTileOverlayOptions();
+    }
+    return tileOverlayOptions;
+  }
+  
+  public void removeFromMap(GoogleMap paramGoogleMap)
+  {
+    tileOverlay.remove();
+  }
+  
+  public void setFlipY(boolean paramBoolean)
+  {
+    flipY = paramBoolean;
+    if (tileOverlay != null) {
+      tileOverlay.clearTileCache();
+    }
+  }
+  
+  public void setMaximumZ(float paramFloat)
+  {
+    maximumZ = paramFloat;
+    if (tileOverlay != null) {
+      tileOverlay.clearTileCache();
+    }
+  }
+  
+  public void setMinimumZ(float paramFloat)
+  {
+    minimumZ = paramFloat;
+    if (tileOverlay != null) {
+      tileOverlay.clearTileCache();
+    }
+  }
+  
+  public void setUrlTemplate(String paramString)
+  {
+    urlTemplate = paramString;
+    if (tileProvider != null) {
+      tileProvider.setUrlTemplate(paramString);
+    }
+    if (tileOverlay != null) {
+      tileOverlay.clearTileCache();
+    }
+  }
+  
+  public void setZIndex(float paramFloat)
+  {
+    zIndex = paramFloat;
+    if (tileOverlay != null) {
+      tileOverlay.setZIndex(paramFloat);
+    }
+  }
+  
+  class AIRMapUrlTileProvider
+    extends UrlTileProvider
+  {
+    private String urlTemplate;
+    
+    public AIRMapUrlTileProvider(int paramInt1, int paramInt2, String paramString)
+    {
+      super(paramInt2);
+      urlTemplate = paramString;
+    }
+    
+    /* Error */
+    public java.net.URL getTileUrl(int paramInt1, int paramInt2, int paramInt3)
+    {
+      // Byte code:
+      //   0: aload_0
+      //   1: monitorenter
+      //   2: iload_2
+      //   3: istore 6
+      //   5: aload_0
+      //   6: getfield 15	com/airbnb/android/react/maps/AirMapUrlTile$AIRMapUrlTileProvider:this$0	Lcom/airbnb/android/react/maps/AirMapUrlTile;
+      //   9: invokestatic 29	com/airbnb/android/react/maps/AirMapUrlTile:access$000	(Lcom/airbnb/android/react/maps/AirMapUrlTile;)Z
+      //   12: iconst_1
+      //   13: if_icmpne +12 -> 25
+      //   16: iconst_1
+      //   17: iload_3
+      //   18: ishl
+      //   19: iload_2
+      //   20: isub
+      //   21: iconst_1
+      //   22: isub
+      //   23: istore 6
+      //   25: aload_0
+      //   26: getfield 20	com/airbnb/android/react/maps/AirMapUrlTile$AIRMapUrlTileProvider:urlTemplate	Ljava/lang/String;
+      //   29: ldc 31
+      //   31: iload_1
+      //   32: invokestatic 37	java/lang/Integer:toString	(I)Ljava/lang/String;
+      //   35: invokevirtual 43	java/lang/String:replace	(Ljava/lang/CharSequence;Ljava/lang/CharSequence;)Ljava/lang/String;
+      //   38: ldc 45
+      //   40: iload 6
+      //   42: invokestatic 37	java/lang/Integer:toString	(I)Ljava/lang/String;
+      //   45: invokevirtual 43	java/lang/String:replace	(Ljava/lang/CharSequence;Ljava/lang/CharSequence;)Ljava/lang/String;
+      //   48: ldc 47
+      //   50: iload_3
+      //   51: invokestatic 37	java/lang/Integer:toString	(I)Ljava/lang/String;
+      //   54: invokevirtual 43	java/lang/String:replace	(Ljava/lang/CharSequence;Ljava/lang/CharSequence;)Ljava/lang/String;
+      //   57: astore 7
+      //   59: aload_0
+      //   60: getfield 15	com/airbnb/android/react/maps/AirMapUrlTile$AIRMapUrlTileProvider:this$0	Lcom/airbnb/android/react/maps/AirMapUrlTile;
+      //   63: invokestatic 51	com/airbnb/android/react/maps/AirMapUrlTile:access$100	(Lcom/airbnb/android/react/maps/AirMapUrlTile;)F
+      //   66: fconst_0
+      //   67: fcmpl
+      //   68: ifle +28 -> 96
+      //   71: iload_3
+      //   72: i2f
+      //   73: fstore 4
+      //   75: aload_0
+      //   76: getfield 15	com/airbnb/android/react/maps/AirMapUrlTile$AIRMapUrlTileProvider:this$0	Lcom/airbnb/android/react/maps/AirMapUrlTile;
+      //   79: invokestatic 51	com/airbnb/android/react/maps/AirMapUrlTile:access$100	(Lcom/airbnb/android/react/maps/AirMapUrlTile;)F
+      //   82: fstore 5
+      //   84: fload 4
+      //   86: fload 5
+      //   88: fcmpl
+      //   89: ifle +7 -> 96
+      //   92: aload_0
+      //   93: monitorexit
+      //   94: aconst_null
+      //   95: areturn
+      //   96: aload_0
+      //   97: getfield 15	com/airbnb/android/react/maps/AirMapUrlTile$AIRMapUrlTileProvider:this$0	Lcom/airbnb/android/react/maps/AirMapUrlTile;
+      //   100: invokestatic 54	com/airbnb/android/react/maps/AirMapUrlTile:access$200	(Lcom/airbnb/android/react/maps/AirMapUrlTile;)F
+      //   103: fconst_0
+      //   104: fcmpl
+      //   105: ifle +28 -> 133
+      //   108: iload_3
+      //   109: i2f
+      //   110: fstore 4
+      //   112: aload_0
+      //   113: getfield 15	com/airbnb/android/react/maps/AirMapUrlTile$AIRMapUrlTileProvider:this$0	Lcom/airbnb/android/react/maps/AirMapUrlTile;
+      //   116: invokestatic 54	com/airbnb/android/react/maps/AirMapUrlTile:access$200	(Lcom/airbnb/android/react/maps/AirMapUrlTile;)F
+      //   119: fstore 5
+      //   121: fload 4
+      //   123: fload 5
+      //   125: fcmpg
+      //   126: ifge +7 -> 133
+      //   129: aload_0
+      //   130: monitorexit
+      //   131: aconst_null
+      //   132: areturn
+      //   133: new 56	java/net/URL
+      //   136: dup
+      //   137: aload 7
+      //   139: invokespecial 59	java/net/URL:<init>	(Ljava/lang/String;)V
+      //   142: astore 7
+      //   144: aload_0
+      //   145: monitorexit
+      //   146: aload 7
+      //   148: areturn
+      //   149: astore 7
+      //   151: new 61	java/lang/AssertionError
+      //   154: dup
+      //   155: aload 7
+      //   157: invokespecial 64	java/lang/AssertionError:<init>	(Ljava/lang/Object;)V
+      //   160: athrow
+      //   161: astore 7
+      //   163: aload_0
+      //   164: monitorexit
+      //   165: aload 7
+      //   167: athrow
+      // Local variable table:
+      //   start	length	slot	name	signature
+      //   0	168	0	this	AIRMapUrlTileProvider
+      //   0	168	1	paramInt1	int
+      //   0	168	2	paramInt2	int
+      //   0	168	3	paramInt3	int
+      //   73	49	4	f1	float
+      //   82	42	5	f2	float
+      //   3	38	6	i	int
+      //   57	90	7	localObject1	Object
+      //   149	7	7	localMalformedURLException	java.net.MalformedURLException
+      //   161	5	7	localObject2	Object
+      // Exception table:
+      //   from	to	target	type
+      //   133	144	149	java/net/MalformedURLException
+      //   5	16	161	finally
+      //   25	71	161	finally
+      //   75	84	161	finally
+      //   96	108	161	finally
+      //   112	121	161	finally
+      //   133	144	161	finally
+      //   151	161	161	finally
+    }
+    
+    public void setUrlTemplate(String paramString)
+    {
+      urlTemplate = paramString;
+    }
+  }
+}

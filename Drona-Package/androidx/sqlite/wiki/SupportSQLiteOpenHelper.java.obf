@@ -1,0 +1,226 @@
+package androidx.sqlite.db;
+
+import android.content.Context;
+import android.database.sqlite.SQLiteDatabase;
+import android.database.sqlite.SQLiteException;
+import android.os.Build.VERSION;
+import android.util.Log;
+import android.util.Pair;
+import androidx.annotation.NonNull;
+import androidx.annotation.Nullable;
+import androidx.annotation.RequiresApi;
+import java.io.File;
+import java.io.IOException;
+import java.util.Iterator;
+import java.util.List;
+
+public abstract interface SupportSQLiteOpenHelper
+{
+  public abstract void close();
+  
+  public abstract String getDatabaseName();
+  
+  public abstract SupportSQLiteDatabase getReadableDatabase();
+  
+  public abstract SupportSQLiteDatabase getWritableDatabase();
+  
+  @RequiresApi(api=16)
+  public abstract void setWriteAheadLoggingEnabled(boolean paramBoolean);
+  
+  public static abstract class Callback
+  {
+    private static final String TAG = "SupportSQLite";
+    public final int version;
+    
+    public Callback(int paramInt)
+    {
+      version = paramInt;
+    }
+    
+    private void deleteDatabaseFile(String paramString)
+    {
+      if (!paramString.equalsIgnoreCase(":memory:"))
+      {
+        if (paramString.trim().length() == 0) {
+          return;
+        }
+        StringBuilder localStringBuilder = new StringBuilder();
+        localStringBuilder.append("deleting the database file: ");
+        localStringBuilder.append(paramString);
+        Log.w("SupportSQLite", localStringBuilder.toString());
+        try
+        {
+          if (Build.VERSION.SDK_INT >= 16)
+          {
+            SQLiteDatabase.deleteDatabase(new File(paramString));
+            return;
+          }
+          try
+          {
+            if (!new File(paramString).delete())
+            {
+              localStringBuilder = new StringBuilder();
+              localStringBuilder.append("Could not delete the database file ");
+              localStringBuilder.append(paramString);
+              Log.e("SupportSQLite", localStringBuilder.toString());
+              return;
+            }
+          }
+          catch (Exception paramString)
+          {
+            Log.e("SupportSQLite", "error while deleting corrupted database file", paramString);
+            return;
+          }
+          return;
+        }
+        catch (Exception paramString)
+        {
+          Log.w("SupportSQLite", "delete failed: ", paramString);
+        }
+      }
+    }
+    
+    public void onConfigure(SupportSQLiteDatabase paramSupportSQLiteDatabase) {}
+    
+    public void onCorruption(SupportSQLiteDatabase paramSupportSQLiteDatabase)
+    {
+      Object localObject1 = new StringBuilder();
+      ((StringBuilder)localObject1).append("Corruption reported by sqlite on database: ");
+      ((StringBuilder)localObject1).append(paramSupportSQLiteDatabase.getPath());
+      Log.e("SupportSQLite", ((StringBuilder)localObject1).toString());
+      if (!paramSupportSQLiteDatabase.isOpen())
+      {
+        deleteDatabaseFile(paramSupportSQLiteDatabase.getPath());
+        return;
+      }
+      localObject1 = null;
+      Object localObject3 = null;
+      try
+      {
+        try
+        {
+          List localList = paramSupportSQLiteDatabase.getAttachedDbs();
+          localObject1 = localList;
+        }
+        finally
+        {
+          break label89;
+        }
+      }
+      catch (SQLiteException localSQLiteException)
+      {
+        label89:
+        for (;;) {}
+      }
+      localObject3 = localObject2;
+      for (;;) {}
+      try
+      {
+        paramSupportSQLiteDatabase.close();
+      }
+      catch (IOException localIOException)
+      {
+        for (;;) {}
+      }
+      if (localObject3 != null)
+      {
+        paramSupportSQLiteDatabase = localObject3.iterator();
+        while (paramSupportSQLiteDatabase.hasNext()) {
+          deleteDatabaseFile((String)nextsecond);
+        }
+      }
+      else
+      {
+        deleteDatabaseFile(paramSupportSQLiteDatabase.getPath());
+      }
+      throw localObject2;
+      if (localObject2 != null)
+      {
+        paramSupportSQLiteDatabase = localObject2.iterator();
+        while (paramSupportSQLiteDatabase.hasNext()) {
+          deleteDatabaseFile((String)nextsecond);
+        }
+      }
+      deleteDatabaseFile(paramSupportSQLiteDatabase.getPath());
+    }
+    
+    public abstract void onCreate(SupportSQLiteDatabase paramSupportSQLiteDatabase);
+    
+    public void onDowngrade(SupportSQLiteDatabase paramSupportSQLiteDatabase, int paramInt1, int paramInt2)
+    {
+      paramSupportSQLiteDatabase = new StringBuilder();
+      paramSupportSQLiteDatabase.append("Can't downgrade database from version ");
+      paramSupportSQLiteDatabase.append(paramInt1);
+      paramSupportSQLiteDatabase.append(" to ");
+      paramSupportSQLiteDatabase.append(paramInt2);
+      throw new SQLiteException(paramSupportSQLiteDatabase.toString());
+    }
+    
+    public void onOpen(SupportSQLiteDatabase paramSupportSQLiteDatabase) {}
+    
+    public abstract void onUpgrade(SupportSQLiteDatabase paramSupportSQLiteDatabase, int paramInt1, int paramInt2);
+  }
+  
+  public static class Configuration
+  {
+    @NonNull
+    public final SupportSQLiteOpenHelper.Callback callback;
+    @NonNull
+    public final Context context;
+    @Nullable
+    public final String name;
+    
+    Configuration(@NonNull Context paramContext, @Nullable String paramString, @NonNull SupportSQLiteOpenHelper.Callback paramCallback)
+    {
+      context = paramContext;
+      name = paramString;
+      callback = paramCallback;
+    }
+    
+    public static Builder builder(Context paramContext)
+    {
+      return new Builder(paramContext);
+    }
+    
+    public static class Builder
+    {
+      SupportSQLiteOpenHelper.Callback mCallback;
+      Context mContext;
+      String mName;
+      
+      Builder(@NonNull Context paramContext)
+      {
+        mContext = paramContext;
+      }
+      
+      public SupportSQLiteOpenHelper.Configuration build()
+      {
+        if (mCallback != null)
+        {
+          if (mContext != null) {
+            return new SupportSQLiteOpenHelper.Configuration(mContext, mName, mCallback);
+          }
+          throw new IllegalArgumentException("Must set a non-null context to create the configuration.");
+        }
+        throw new IllegalArgumentException("Must set a callback to create the configuration.");
+      }
+      
+      public Builder callback(@NonNull SupportSQLiteOpenHelper.Callback paramCallback)
+      {
+        mCallback = paramCallback;
+        return this;
+      }
+      
+      public Builder name(@Nullable String paramString)
+      {
+        mName = paramString;
+        return this;
+      }
+    }
+  }
+  
+  public static abstract interface Factory
+  {
+    public abstract SupportSQLiteOpenHelper create(SupportSQLiteOpenHelper.Configuration paramConfiguration);
+  }
+}

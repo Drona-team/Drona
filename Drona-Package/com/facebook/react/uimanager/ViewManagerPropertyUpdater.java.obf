@@ -1,0 +1,202 @@
+package com.facebook.react.uimanager;
+
+import android.view.View;
+import com.facebook.common.logging.FLog;
+import com.facebook.react.bridge.ReadableMap;
+import java.util.Collection;
+import java.util.HashMap;
+import java.util.Iterator;
+import java.util.Map;
+import java.util.Map.Entry;
+
+public class ViewManagerPropertyUpdater
+{
+  private static final Map<Class<?>, ShadowNodeSetter<?>> SHADOW_NODE_SETTER_MAP = new HashMap();
+  private static final String TAG = "ViewManagerPropertyUpdater";
+  private static final Map<Class<?>, ViewManagerSetter<?, ?>> VIEW_MANAGER_SETTER_MAP = new HashMap();
+  
+  public ViewManagerPropertyUpdater() {}
+  
+  public static void clear()
+  {
+    ViewManagersPropertyCache.clear();
+    VIEW_MANAGER_SETTER_MAP.clear();
+    SHADOW_NODE_SETTER_MAP.clear();
+  }
+  
+  private static <T> T findGeneratedSetter(Class<?> paramClass)
+  {
+    Object localObject1 = paramClass.getName();
+    try
+    {
+      localObject2 = new StringBuilder();
+      ((StringBuilder)localObject2).append((String)localObject1);
+      ((StringBuilder)localObject2).append("$$PropsSetter");
+      localObject2 = Class.forName(((StringBuilder)localObject2).toString()).newInstance();
+      return localObject2;
+    }
+    catch (InstantiationException|IllegalAccessException paramClass)
+    {
+      Object localObject2 = new StringBuilder();
+      ((StringBuilder)localObject2).append("Unable to instantiate methods getter for ");
+      ((StringBuilder)localObject2).append((String)localObject1);
+      throw new RuntimeException(((StringBuilder)localObject2).toString(), paramClass);
+      localObject1 = new StringBuilder();
+      ((StringBuilder)localObject1).append("Could not find generated setter for ");
+      ((StringBuilder)localObject1).append(paramClass);
+      FLog.w("ViewManagerPropertyUpdater", ((StringBuilder)localObject1).toString());
+      return null;
+    }
+    catch (ClassNotFoundException localClassNotFoundException)
+    {
+      for (;;) {}
+    }
+  }
+  
+  private static <T extends ViewManager, V extends View> ViewManagerSetter<T, V> findManagerSetter(Class<? extends ViewManager> paramClass)
+  {
+    ViewManagerSetter localViewManagerSetter = (ViewManagerSetter)VIEW_MANAGER_SETTER_MAP.get(paramClass);
+    Object localObject = localViewManagerSetter;
+    if (localViewManagerSetter == null)
+    {
+      localViewManagerSetter = (ViewManagerSetter)findGeneratedSetter(paramClass);
+      localObject = localViewManagerSetter;
+      if (localViewManagerSetter == null) {
+        localObject = new FallbackViewManagerSetter(paramClass, null);
+      }
+      VIEW_MANAGER_SETTER_MAP.put(paramClass, localObject);
+    }
+    return localObject;
+  }
+  
+  private static <T extends ReactShadowNode> ShadowNodeSetter<T> findNodeSetter(Class<? extends ReactShadowNode> paramClass)
+  {
+    ShadowNodeSetter localShadowNodeSetter = (ShadowNodeSetter)SHADOW_NODE_SETTER_MAP.get(paramClass);
+    Object localObject = localShadowNodeSetter;
+    if (localShadowNodeSetter == null)
+    {
+      localShadowNodeSetter = (ShadowNodeSetter)findGeneratedSetter(paramClass);
+      localObject = localShadowNodeSetter;
+      if (localShadowNodeSetter == null) {
+        localObject = new FallbackShadowNodeSetter(paramClass, null);
+      }
+      SHADOW_NODE_SETTER_MAP.put(paramClass, localObject);
+    }
+    return localObject;
+  }
+  
+  public static Map<String, String> getNativeProps(Class<? extends ViewManager> paramClass, Class<? extends ReactShadowNode> paramClass1)
+  {
+    HashMap localHashMap = new HashMap();
+    findManagerSetter(paramClass).getProperties(localHashMap);
+    findNodeSetter(paramClass1).getProperties(localHashMap);
+    return localHashMap;
+  }
+  
+  public static <T extends ReactShadowNode> void updateProps(T paramT, ReactStylesDiffMap paramReactStylesDiffMap)
+  {
+    ShadowNodeSetter localShadowNodeSetter = findNodeSetter(paramT.getClass());
+    paramReactStylesDiffMap = mBackingMap.getEntryIterator();
+    while (paramReactStylesDiffMap.hasNext())
+    {
+      Map.Entry localEntry = (Map.Entry)paramReactStylesDiffMap.next();
+      localShadowNodeSetter.setProperty(paramT, (String)localEntry.getKey(), localEntry.getValue());
+    }
+  }
+  
+  public static <T extends ViewManager, V extends View> void updateProps(T paramT, V paramV, ReactStylesDiffMap paramReactStylesDiffMap)
+  {
+    ViewManagerSetter localViewManagerSetter = findManagerSetter(paramT.getClass());
+    paramReactStylesDiffMap = mBackingMap.getEntryIterator();
+    while (paramReactStylesDiffMap.hasNext())
+    {
+      Map.Entry localEntry = (Map.Entry)paramReactStylesDiffMap.next();
+      localViewManagerSetter.setProperty(paramT, paramV, (String)localEntry.getKey(), localEntry.getValue());
+    }
+  }
+  
+  public static <T extends ViewManagerDelegate<V>, V extends View> void updateProps(T paramT, V paramV, ReactStylesDiffMap paramReactStylesDiffMap)
+  {
+    paramReactStylesDiffMap = mBackingMap.getEntryIterator();
+    while (paramReactStylesDiffMap.hasNext())
+    {
+      Map.Entry localEntry = (Map.Entry)paramReactStylesDiffMap.next();
+      paramT.setProperty(paramV, (String)localEntry.getKey(), localEntry.getValue());
+    }
+  }
+  
+  private static class FallbackShadowNodeSetter<T extends ReactShadowNode>
+    implements ViewManagerPropertyUpdater.ShadowNodeSetter<T>
+  {
+    private final Map<String, ViewManagersPropertyCache.PropSetter> mPropSetters;
+    
+    private FallbackShadowNodeSetter(Class<? extends ReactShadowNode> paramClass)
+    {
+      mPropSetters = ViewManagersPropertyCache.getNativePropSettersForShadowNodeClass(paramClass);
+    }
+    
+    public void getProperties(Map<String, String> paramMap)
+    {
+      Iterator localIterator = mPropSetters.values().iterator();
+      while (localIterator.hasNext())
+      {
+        ViewManagersPropertyCache.PropSetter localPropSetter = (ViewManagersPropertyCache.PropSetter)localIterator.next();
+        paramMap.put(localPropSetter.getPropName(), localPropSetter.getPropType());
+      }
+    }
+    
+    public void setProperty(ReactShadowNode paramReactShadowNode, String paramString, Object paramObject)
+    {
+      paramString = (ViewManagersPropertyCache.PropSetter)mPropSetters.get(paramString);
+      if (paramString != null) {
+        paramString.updateShadowNodeProp(paramReactShadowNode, paramObject);
+      }
+    }
+  }
+  
+  private static class FallbackViewManagerSetter<T extends ViewManager, V extends View>
+    implements ViewManagerPropertyUpdater.ViewManagerSetter<T, V>
+  {
+    private final Map<String, ViewManagersPropertyCache.PropSetter> mPropSetters;
+    
+    private FallbackViewManagerSetter(Class<? extends ViewManager> paramClass)
+    {
+      mPropSetters = ViewManagersPropertyCache.getNativePropSettersForViewManagerClass(paramClass);
+    }
+    
+    public void getProperties(Map<String, String> paramMap)
+    {
+      Iterator localIterator = mPropSetters.values().iterator();
+      while (localIterator.hasNext())
+      {
+        ViewManagersPropertyCache.PropSetter localPropSetter = (ViewManagersPropertyCache.PropSetter)localIterator.next();
+        paramMap.put(localPropSetter.getPropName(), localPropSetter.getPropType());
+      }
+    }
+    
+    public void setProperty(T paramT, V paramV, String paramString, Object paramObject)
+    {
+      paramString = (ViewManagersPropertyCache.PropSetter)mPropSetters.get(paramString);
+      if (paramString != null) {
+        paramString.updateViewProp(paramT, paramV, paramObject);
+      }
+    }
+  }
+  
+  public static abstract interface Settable
+  {
+    public abstract void getProperties(Map<String, String> paramMap);
+  }
+  
+  public static abstract interface ShadowNodeSetter<T extends ReactShadowNode>
+    extends ViewManagerPropertyUpdater.Settable
+  {
+    public abstract void setProperty(T paramT, String paramString, Object paramObject);
+  }
+  
+  public static abstract interface ViewManagerSetter<T extends ViewManager, V extends View>
+    extends ViewManagerPropertyUpdater.Settable
+  {
+    public abstract void setProperty(T paramT, V paramV, String paramString, Object paramObject);
+  }
+}

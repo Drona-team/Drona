@@ -1,0 +1,14 @@
+package com.airbnb.lottie.model.animatable;
+
+import com.airbnb.lottie.animation.keyframe.BaseKeyframeAnimation;
+import com.airbnb.lottie.value.Keyframe;
+import java.util.List;
+
+public abstract interface AnimatableValue<K, A>
+{
+  public abstract BaseKeyframeAnimation<K, A> createAnimation();
+  
+  public abstract List<Keyframe<K>> getKeyframes();
+  
+  public abstract boolean isStatic();
+}

@@ -1,0 +1,216 @@
+package com.facebook.react.views.text;
+
+import android.annotation.TargetApi;
+import android.os.Build.VERSION;
+import android.text.BoringLayout;
+import android.text.BoringLayout.Metrics;
+import android.text.Layout;
+import android.text.Layout.Alignment;
+import android.text.Spannable;
+import android.text.Spanned;
+import android.text.StaticLayout;
+import android.text.StaticLayout.Builder;
+import android.text.TextPaint;
+import androidx.annotation.Nullable;
+import com.facebook.infer.annotation.Assertions;
+import com.facebook.react.bridge.Arguments;
+import com.facebook.react.bridge.WritableMap;
+import com.facebook.react.uimanager.NativeViewHierarchyOptimizer;
+import com.facebook.react.uimanager.ReactShadowNode;
+import com.facebook.react.uimanager.ThemedReactContext;
+import com.facebook.react.uimanager.UIViewOperationQueue;
+import com.facebook.react.uimanager.annotations.ReactProp;
+import com.facebook.react.uimanager.events.RCTEventEmitter;
+import com.facebook.yoga.YogaConstants;
+import com.facebook.yoga.YogaDirection;
+import com.facebook.yoga.YogaMeasureFunction;
+import com.facebook.yoga.YogaMeasureMode;
+import com.facebook.yoga.YogaMeasureOutput;
+import com.facebook.yoga.YogaNode;
+import java.util.ArrayList;
+import java.util.Map;
+
+@TargetApi(23)
+public class ReactTextShadowNode
+  extends ReactBaseTextShadowNode
+{
+  private static final TextPaint sTextPaintInstance = new TextPaint(1);
+  @Nullable
+  private Spannable mPreparedSpannableText;
+  private boolean mShouldNotifyOnTextLayout;
+  private final YogaMeasureFunction mTextMeasureFunction = new YogaMeasureFunction()
+  {
+    public long measure(YogaNode paramAnonymousYogaNode, float paramAnonymousFloat1, YogaMeasureMode paramAnonymousYogaMeasureMode1, float paramAnonymousFloat2, YogaMeasureMode paramAnonymousYogaMeasureMode2)
+    {
+      TextPaint localTextPaint = ReactTextShadowNode.sTextPaintInstance;
+      localTextPaint.setTextSize(mTextAttributes.getEffectiveFontSize());
+      paramAnonymousYogaMeasureMode2 = (Spanned)Assertions.assertNotNull(mPreparedSpannableText, "Spannable element has not been prepared in onBeforeLayout");
+      BoringLayout.Metrics localMetrics = BoringLayout.isBoring(paramAnonymousYogaMeasureMode2, localTextPaint);
+      if (localMetrics == null) {
+        paramAnonymousFloat2 = Layout.getDesiredWidth(paramAnonymousYogaMeasureMode2, localTextPaint);
+      } else {
+        paramAnonymousFloat2 = NaN.0F;
+      }
+      int i;
+      if ((paramAnonymousYogaMeasureMode1 != YogaMeasureMode.UNDEFINED) && (paramAnonymousFloat1 >= 0.0F)) {
+        i = 0;
+      } else {
+        i = 1;
+      }
+      paramAnonymousYogaNode = Layout.Alignment.ALIGN_NORMAL;
+      int j = ReactTextShadowNode.this.getTextAlign();
+      if (j != 1) {
+        if (j != 3) {
+          if (j != 5) {
+            break label148;
+          }
+        }
+      }
+      for (;;)
+      {
+        paramAnonymousYogaNode = Layout.Alignment.ALIGN_OPPOSITE;
+        continue;
+        paramAnonymousYogaNode = Layout.Alignment.ALIGN_NORMAL;
+        continue;
+        paramAnonymousYogaNode = Layout.Alignment.ALIGN_CENTER;
+      }
+      label148:
+      if ((localMetrics == null) && ((i != 0) || ((!YogaConstants.isUndefined(paramAnonymousFloat2)) && (paramAnonymousFloat2 <= paramAnonymousFloat1))))
+      {
+        i = (int)Math.ceil(paramAnonymousFloat2);
+        if (Build.VERSION.SDK_INT < 23)
+        {
+          paramAnonymousYogaNode = new StaticLayout(paramAnonymousYogaMeasureMode2, localTextPaint, i, paramAnonymousYogaNode, 1.0F, 0.0F, mIncludeFontPadding);
+        }
+        else
+        {
+          paramAnonymousYogaNode = StaticLayout.Builder.obtain(paramAnonymousYogaMeasureMode2, 0, paramAnonymousYogaMeasureMode2.length(), localTextPaint, i).setAlignment(paramAnonymousYogaNode).setLineSpacing(0.0F, 1.0F).setIncludePad(mIncludeFontPadding).setBreakStrategy(mTextBreakStrategy).setHyphenationFrequency(mHyphenationFrequency);
+          if (Build.VERSION.SDK_INT >= 26) {
+            paramAnonymousYogaNode.setJustificationMode(mJustificationMode);
+          }
+          if (Build.VERSION.SDK_INT >= 28) {
+            paramAnonymousYogaNode.setUseLineSpacingFromFallbacks(true);
+          }
+          paramAnonymousYogaNode = paramAnonymousYogaNode.build();
+        }
+      }
+      else if ((localMetrics != null) && ((i != 0) || (width <= paramAnonymousFloat1)))
+      {
+        paramAnonymousYogaNode = BoringLayout.make(paramAnonymousYogaMeasureMode2, localTextPaint, width, paramAnonymousYogaNode, 1.0F, 0.0F, localMetrics, mIncludeFontPadding);
+      }
+      else if (Build.VERSION.SDK_INT < 23)
+      {
+        paramAnonymousYogaNode = new StaticLayout(paramAnonymousYogaMeasureMode2, localTextPaint, (int)paramAnonymousFloat1, paramAnonymousYogaNode, 1.0F, 0.0F, mIncludeFontPadding);
+      }
+      else
+      {
+        paramAnonymousYogaNode = StaticLayout.Builder.obtain(paramAnonymousYogaMeasureMode2, 0, paramAnonymousYogaMeasureMode2.length(), localTextPaint, (int)paramAnonymousFloat1).setAlignment(paramAnonymousYogaNode).setLineSpacing(0.0F, 1.0F).setIncludePad(mIncludeFontPadding).setBreakStrategy(mTextBreakStrategy).setHyphenationFrequency(mHyphenationFrequency);
+        if (Build.VERSION.SDK_INT >= 28) {
+          paramAnonymousYogaNode.setUseLineSpacingFromFallbacks(true);
+        }
+        paramAnonymousYogaNode = paramAnonymousYogaNode.build();
+      }
+      if (mShouldNotifyOnTextLayout)
+      {
+        paramAnonymousYogaMeasureMode1 = FontMetricsUtil.getFontMetrics(paramAnonymousYogaMeasureMode2, paramAnonymousYogaNode, ReactTextShadowNode.sTextPaintInstance, getThemedContext());
+        paramAnonymousYogaMeasureMode2 = Arguments.createMap();
+        paramAnonymousYogaMeasureMode2.putArray("lines", paramAnonymousYogaMeasureMode1);
+        ((RCTEventEmitter)getThemedContext().getJSModule(RCTEventEmitter.class)).receiveEvent(getReactTag(), "topTextLayout", paramAnonymousYogaMeasureMode2);
+      }
+      if ((mNumberOfLines != -1) && (mNumberOfLines < paramAnonymousYogaNode.getLineCount())) {
+        return YogaMeasureOutput.make(paramAnonymousYogaNode.getWidth(), paramAnonymousYogaNode.getLineBottom(mNumberOfLines - 1));
+      }
+      return YogaMeasureOutput.make(paramAnonymousYogaNode.getWidth(), paramAnonymousYogaNode.getHeight());
+    }
+  };
+  
+  public ReactTextShadowNode()
+  {
+    initMeasureFunction();
+  }
+  
+  private int getTextAlign()
+  {
+    int j = mTextAlign;
+    int i = j;
+    if (getLayoutDirection() == YogaDirection.RTL)
+    {
+      if (j == 5) {
+        return 3;
+      }
+      i = j;
+      if (j == 3) {
+        i = 5;
+      }
+    }
+    return i;
+  }
+  
+  private void initMeasureFunction()
+  {
+    if (!isVirtual()) {
+      setMeasureFunction(mTextMeasureFunction);
+    }
+  }
+  
+  public Iterable<? extends ReactShadowNode> calculateLayoutOnChildren()
+  {
+    if ((mInlineViews != null) && (!mInlineViews.isEmpty()))
+    {
+      Object localObject = (Spanned)Assertions.assertNotNull(mPreparedSpannableText, "Spannable element has not been prepared in onBeforeLayout");
+      int j = ((Spanned)localObject).length();
+      int i = 0;
+      localObject = (TextInlineViewPlaceholderSpan[])((Spanned)localObject).getSpans(0, j, TextInlineViewPlaceholderSpan.class);
+      ArrayList localArrayList = new ArrayList(localObject.length);
+      j = localObject.length;
+      while (i < j)
+      {
+        ReactShadowNode localReactShadowNode = localObject[i];
+        localReactShadowNode = (ReactShadowNode)mInlineViews.get(Integer.valueOf(localReactShadowNode.getReactTag()));
+        localReactShadowNode.calculateLayout();
+        localArrayList.add(localReactShadowNode);
+        i += 1;
+      }
+      return localArrayList;
+    }
+    return null;
+  }
+  
+  public boolean hoistNativeChildren()
+  {
+    return true;
+  }
+  
+  public boolean isVirtualAnchor()
+  {
+    return false;
+  }
+  
+  public void markUpdated()
+  {
+    super.markUpdated();
+    super.dirty();
+  }
+  
+  public void onBeforeLayout(NativeViewHierarchyOptimizer paramNativeViewHierarchyOptimizer)
+  {
+    mPreparedSpannableText = spannedFromShadowNode(this, null, true, paramNativeViewHierarchyOptimizer);
+    markUpdated();
+  }
+  
+  public void onCollectExtraUpdates(UIViewOperationQueue paramUIViewOperationQueue)
+  {
+    super.onCollectExtraUpdates(paramUIViewOperationQueue);
+    if (mPreparedSpannableText != null)
+    {
+      ReactTextUpdate localReactTextUpdate = new ReactTextUpdate(mPreparedSpannableText, -1, mContainsImages, getPadding(4), getPadding(1), getPadding(5), getPadding(3), getTextAlign(), mTextBreakStrategy, mJustificationMode);
+      paramUIViewOperationQueue.enqueueUpdateExtraData(getReactTag(), localReactTextUpdate);
+    }
+  }
+  
+  @ReactProp(name="onTextLayout")
+  public void setShouldNotifyOnTextLayout(boolean paramBoolean)
+  {
+    mShouldNotifyOnTextLayout = paramBoolean;
+  }
+}

@@ -1,0 +1,21 @@
+package androidx.lifecycle;
+
+import androidx.annotation.NonNull;
+
+class ReflectiveGenericLifecycleObserver
+  implements LifecycleEventObserver
+{
+  private final ClassesInfoCache.CallbackInfo mInfo;
+  private final Object mWrapped;
+  
+  ReflectiveGenericLifecycleObserver(Object paramObject)
+  {
+    mWrapped = paramObject;
+    mInfo = ClassesInfoCache.sInstance.getInfo(mWrapped.getClass());
+  }
+  
+  public void onStateChanged(@NonNull LifecycleOwner paramLifecycleOwner, @NonNull Lifecycle.Event paramEvent)
+  {
+    mInfo.invokeCallbacks(paramLifecycleOwner, paramEvent, mWrapped);
+  }
+}

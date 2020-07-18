@@ -1,0 +1,21 @@
+package com.facebook.imagepipeline.transcoder;
+
+import com.facebook.imageformat.ImageFormat;
+import com.facebook.imagepipeline.common.ResizeOptions;
+import com.facebook.imagepipeline.common.RotationOptions;
+import com.facebook.imagepipeline.image.EncodedImage;
+import java.io.IOException;
+import java.io.OutputStream;
+import javax.annotation.Nullable;
+
+public abstract interface ImageTranscoder
+{
+  public abstract boolean canResize(EncodedImage paramEncodedImage, @Nullable RotationOptions paramRotationOptions, @Nullable ResizeOptions paramResizeOptions);
+  
+  public abstract boolean canTranscode(ImageFormat paramImageFormat);
+  
+  public abstract String getIdentifier();
+  
+  public abstract ImageTranscodeResult transcode(EncodedImage paramEncodedImage, OutputStream paramOutputStream, @Nullable RotationOptions paramRotationOptions, @Nullable ResizeOptions paramResizeOptions, @Nullable ImageFormat paramImageFormat, @Nullable Integer paramInteger)
+    throws IOException;
+}

@@ -1,0 +1,86 @@
+package com.bumptech.glide.load.engine.cache;
+
+import androidx.annotation.NonNull;
+import androidx.core.util.Pools.Pool;
+import com.bumptech.glide.load.Key;
+import com.bumptech.glide.util.LruCache;
+import com.bumptech.glide.util.Preconditions;
+import com.bumptech.glide.util.Util;
+import com.bumptech.glide.util.pool.FactoryPools;
+import com.bumptech.glide.util.pool.FactoryPools.Factory;
+import com.bumptech.glide.util.pool.FactoryPools.Poolable;
+import com.bumptech.glide.util.pool.StateVerifier;
+import java.security.MessageDigest;
+import java.security.NoSuchAlgorithmException;
+
+public class SafeKeyGenerator
+{
+  private final Pools.Pool<PoolableDigestContainer> digestPool = FactoryPools.threadSafe(10, new FactoryPools.Factory()
+  {
+    public SafeKeyGenerator.PoolableDigestContainer create()
+    {
+      try
+      {
+        SafeKeyGenerator.PoolableDigestContainer localPoolableDigestContainer = new SafeKeyGenerator.PoolableDigestContainer(MessageDigest.getInstance("SHA-256"));
+        return localPoolableDigestContainer;
+      }
+      catch (NoSuchAlgorithmException localNoSuchAlgorithmException)
+      {
+        throw new RuntimeException(localNoSuchAlgorithmException);
+      }
+    }
+  });
+  private final LruCache<Key, String> loadIdToSafeHash = new LruCache(1000L);
+  
+  public SafeKeyGenerator() {}
+  
+  private String calculateHexStringDigest(Key paramKey)
+  {
+    PoolableDigestContainer localPoolableDigestContainer = (PoolableDigestContainer)Preconditions.checkNotNull(digestPool.acquire());
+    try
+    {
+      paramKey.updateDiskCacheKey(messageDigest);
+      paramKey = Util.sha256BytesToHex(messageDigest.digest());
+      return paramKey;
+    }
+    finally
+    {
+      digestPool.release(localPoolableDigestContainer);
+    }
+  }
+  
+  public String getSafeKey(Key paramKey)
+  {
+    synchronized (loadIdToSafeHash)
+    {
+      ??? = (String)loadIdToSafeHash.get(paramKey);
+      ??? = ???;
+      if (??? == null) {
+        ??? = calculateHexStringDigest(paramKey);
+      }
+      synchronized (loadIdToSafeHash)
+      {
+        loadIdToSafeHash.put(paramKey, ???);
+        return ???;
+      }
+    }
+  }
+  
+  private static final class PoolableDigestContainer
+    implements FactoryPools.Poolable
+  {
+    final MessageDigest messageDigest;
+    private final StateVerifier stateVerifier = StateVerifier.newInstance();
+    
+    PoolableDigestContainer(MessageDigest paramMessageDigest)
+    {
+      messageDigest = paramMessageDigest;
+    }
+    
+    @NonNull
+    public StateVerifier getVerifier()
+    {
+      return stateVerifier;
+    }
+  }
+}

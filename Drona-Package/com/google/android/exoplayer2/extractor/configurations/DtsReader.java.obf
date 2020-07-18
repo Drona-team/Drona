@@ -1,0 +1,129 @@
+package com.google.android.exoplayer2.extractor.ts;
+
+import com.google.android.exoplayer2.Format;
+import com.google.android.exoplayer2.audio.DtsUtil;
+import com.google.android.exoplayer2.extractor.ExtractorOutput;
+import com.google.android.exoplayer2.extractor.TrackOutput;
+import com.google.android.exoplayer2.util.ParsableByteArray;
+
+public final class DtsReader
+  implements ElementaryStreamReader
+{
+  private static final int HEADER_SIZE = 18;
+  private static final int STATE_FINDING_SYNC = 0;
+  private static final int STATE_READING_HEADER = 1;
+  private static final int STATE_READING_SAMPLE = 2;
+  private int bytesRead;
+  private Format format;
+  private String formatId;
+  private final ParsableByteArray headerScratchBytes = new ParsableByteArray(new byte[18]);
+  private final String language;
+  private TrackOutput output;
+  private long sampleDurationUs;
+  private int sampleSize;
+  private int state = 0;
+  private int syncBytes;
+  private long timeUs;
+  
+  public DtsReader(String paramString)
+  {
+    language = paramString;
+  }
+  
+  private boolean continueRead(ParsableByteArray paramParsableByteArray, byte[] paramArrayOfByte, int paramInt)
+  {
+    int i = Math.min(paramParsableByteArray.bytesLeft(), paramInt - bytesRead);
+    paramParsableByteArray.readBytes(paramArrayOfByte, bytesRead, i);
+    bytesRead += i;
+    return bytesRead == paramInt;
+  }
+  
+  private void parseHeader()
+  {
+    byte[] arrayOfByte = headerScratchBytes.data;
+    if (format == null)
+    {
+      format = DtsUtil.parseDtsFormat(arrayOfByte, formatId, language, null);
+      output.format(format);
+    }
+    sampleSize = DtsUtil.getDtsFrameSize(arrayOfByte);
+    sampleDurationUs = ((int)(DtsUtil.parseDtsAudioSampleCount(arrayOfByte) * 1000000L / format.sampleRate));
+  }
+  
+  private boolean skipToNextSync(ParsableByteArray paramParsableByteArray)
+  {
+    while (paramParsableByteArray.bytesLeft() > 0)
+    {
+      syncBytes <<= 8;
+      syncBytes |= paramParsableByteArray.readUnsignedByte();
+      if (DtsUtil.isSyncWord(syncBytes))
+      {
+        headerScratchBytes.data[0] = ((byte)(syncBytes >> 24 & 0xFF));
+        headerScratchBytes.data[1] = ((byte)(syncBytes >> 16 & 0xFF));
+        headerScratchBytes.data[2] = ((byte)(syncBytes >> 8 & 0xFF));
+        headerScratchBytes.data[3] = ((byte)(syncBytes & 0xFF));
+        bytesRead = 4;
+        syncBytes = 0;
+        return true;
+      }
+    }
+    return false;
+  }
+  
+  public void consume(ParsableByteArray paramParsableByteArray)
+  {
+    while (paramParsableByteArray.bytesLeft() > 0) {
+      switch (state)
+      {
+      default: 
+        throw new IllegalStateException();
+      case 2: 
+        int i = Math.min(paramParsableByteArray.bytesLeft(), sampleSize - bytesRead);
+        output.sampleData(paramParsableByteArray, i);
+        bytesRead += i;
+        if (bytesRead == sampleSize)
+        {
+          output.sampleMetadata(timeUs, 1, sampleSize, 0, null);
+          timeUs += sampleDurationUs;
+          state = 0;
+        }
+        break;
+      case 1: 
+        if (continueRead(paramParsableByteArray, headerScratchBytes.data, 18))
+        {
+          parseHeader();
+          headerScratchBytes.setPosition(0);
+          output.sampleData(headerScratchBytes, 18);
+          state = 2;
+        }
+        break;
+      case 0: 
+        if (skipToNextSync(paramParsableByteArray)) {
+          state = 1;
+        }
+        break;
+      }
+    }
+  }
+  
+  public void createTracks(ExtractorOutput paramExtractorOutput, TsPayloadReader.TrackIdGenerator paramTrackIdGenerator)
+  {
+    paramTrackIdGenerator.generateNewId();
+    formatId = paramTrackIdGenerator.getFormatId();
+    output = paramExtractorOutput.track(paramTrackIdGenerator.getTrackId(), 1);
+  }
+  
+  public void packetFinished() {}
+  
+  public void packetStarted(long paramLong, boolean paramBoolean)
+  {
+    timeUs = paramLong;
+  }
+  
+  public void seek()
+  {
+    state = 0;
+    bytesRead = 0;
+    syncBytes = 0;
+  }
+}

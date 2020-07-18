@@ -1,0 +1,180 @@
+package com.bugsnag.android;
+
+import androidx.annotation.NonNull;
+import androidx.annotation.Nullable;
+import java.io.IOException;
+
+public final class HandledState
+  implements JsonStream.Streamable
+{
+  static final String REASON_ANR = "anrError";
+  static final String REASON_CALLBACK_SPECIFIED = "userCallbackSetSeverity";
+  static final String REASON_HANDLED_EXCEPTION = "handledException";
+  static final String REASON_LOG = "log";
+  static final String REASON_PROMISE_REJECTION = "unhandledPromiseRejection";
+  static final String REASON_SIGNAL = "signal";
+  static final String REASON_STRICT_MODE = "strictMode";
+  static final String REASON_UNHANDLED_EXCEPTION = "unhandledException";
+  static final String REASON_USER_SPECIFIED = "userSpecifiedSeverity";
+  @Nullable
+  private final String attributeValue;
+  private Severity currentSeverity;
+  private final Severity defaultSeverity;
+  private final String severityReasonType;
+  private final boolean unhandled;
+  
+  HandledState(String paramString1, Severity paramSeverity, boolean paramBoolean, @Nullable String paramString2)
+  {
+    severityReasonType = paramString1;
+    defaultSeverity = paramSeverity;
+    unhandled = paramBoolean;
+    attributeValue = paramString2;
+    currentSeverity = paramSeverity;
+  }
+  
+  static HandledState newInstance(String paramString)
+  {
+    return newInstance(paramString, null, null);
+  }
+  
+  static HandledState newInstance(String paramString1, @Nullable Severity paramSeverity, @Nullable String paramString2)
+  {
+    if ((paramString1.equals("strictMode")) && (Intrinsics.isEmpty(paramString2))) {
+      throw new IllegalArgumentException("No reason supplied for strictmode");
+    }
+    if ((!paramString1.equals("strictMode")) && (!paramString1.equals("log")) && (!Intrinsics.isEmpty(paramString2))) {
+      throw new IllegalArgumentException("attributeValue should not be supplied");
+    }
+    int i = -1;
+    switch (paramString1.hashCode())
+    {
+    default: 
+      break;
+    case 561970291: 
+      if (paramString1.equals("handledException")) {
+        i = 2;
+      }
+      break;
+    case 87505361: 
+      if (paramString1.equals("unhandledPromiseRejection")) {
+        i = 5;
+      }
+      break;
+    case 107332: 
+      if (paramString1.equals("log")) {
+        i = 6;
+      }
+      break;
+    case -573976797: 
+      if (paramString1.equals("anrError")) {
+        i = 7;
+      }
+      break;
+    case -1107031998: 
+      if (paramString1.equals("userSpecifiedSeverity")) {
+        i = 3;
+      }
+      break;
+    case -1591166708: 
+      if (paramString1.equals("unhandledException")) {
+        i = 0;
+      }
+      break;
+    case -1773746641: 
+      if (paramString1.equals("userCallbackSetSeverity")) {
+        i = 4;
+      }
+      break;
+    case -1876197364: 
+      if (paramString1.equals("strictMode")) {
+        i = 1;
+      }
+      break;
+    }
+    switch (i)
+    {
+    default: 
+      throw new IllegalArgumentException(String.format("Invalid argument '%s' for severityReason", new Object[] { paramString1 }));
+    case 7: 
+      return new HandledState(paramString1, Severity.ERROR, true, null);
+    case 6: 
+      return new HandledState(paramString1, paramSeverity, false, paramString2);
+    case 5: 
+      return new HandledState(paramString1, Severity.ERROR, true, null);
+    case 4: 
+      return new HandledState(paramString1, paramSeverity, false, null);
+    case 3: 
+      return new HandledState(paramString1, paramSeverity, false, null);
+    case 2: 
+      return new HandledState(paramString1, Severity.WARNING, false, null);
+    case 1: 
+      return new HandledState(paramString1, Severity.WARNING, true, paramString2);
+    }
+    return new HandledState(paramString1, Severity.ERROR, true, null);
+  }
+  
+  String calculateSeverityReasonType()
+  {
+    if (defaultSeverity == currentSeverity) {
+      return severityReasonType;
+    }
+    return "userCallbackSetSeverity";
+  }
+  
+  @Nullable
+  String getAttributeValue()
+  {
+    return attributeValue;
+  }
+  
+  Severity getCurrentSeverity()
+  {
+    return currentSeverity;
+  }
+  
+  public boolean isUnhandled()
+  {
+    return unhandled;
+  }
+  
+  void setCurrentSeverity(Severity paramSeverity)
+  {
+    currentSeverity = paramSeverity;
+  }
+  
+  public void toStream(@NonNull JsonStream paramJsonStream)
+    throws IOException
+  {
+    paramJsonStream.beginObject().name("type").value(calculateSeverityReasonType());
+    if (attributeValue != null)
+    {
+      String str1 = null;
+      String str2 = severityReasonType;
+      int i = -1;
+      int j = str2.hashCode();
+      if (j != -1876197364)
+      {
+        if ((j == 107332) && (str2.equals("log"))) {
+          i = 0;
+        }
+      }
+      else if (str2.equals("strictMode")) {
+        i = 1;
+      }
+      switch (i)
+      {
+      default: 
+        break;
+      case 1: 
+        str1 = "violationType";
+        break;
+      case 0: 
+        str1 = "level";
+      }
+      if (str1 != null) {
+        paramJsonStream.name("attributes").beginObject().name(str1).value(attributeValue).endObject();
+      }
+    }
+    paramJsonStream.endObject();
+  }
+}

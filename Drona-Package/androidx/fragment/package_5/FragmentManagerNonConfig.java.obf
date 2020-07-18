@@ -1,0 +1,50 @@
+package androidx.fragment.app;
+
+import androidx.annotation.Nullable;
+import androidx.lifecycle.ViewModelStore;
+import java.util.Collection;
+import java.util.Map;
+
+@Deprecated
+public class FragmentManagerNonConfig
+{
+  @Nullable
+  private final Map<String, FragmentManagerNonConfig> mChildNonConfigs;
+  @Nullable
+  private final Collection<Fragment> mFragments;
+  @Nullable
+  private final Map<String, ViewModelStore> mViewModelStores;
+  
+  FragmentManagerNonConfig(@Nullable Collection<Fragment> paramCollection, @Nullable Map<String, FragmentManagerNonConfig> paramMap, @Nullable Map<String, ViewModelStore> paramMap1)
+  {
+    mFragments = paramCollection;
+    mChildNonConfigs = paramMap;
+    mViewModelStores = paramMap1;
+  }
+  
+  @Nullable
+  Map<String, FragmentManagerNonConfig> getChildNonConfigs()
+  {
+    return mChildNonConfigs;
+  }
+  
+  @Nullable
+  Collection<Fragment> getFragments()
+  {
+    return mFragments;
+  }
+  
+  @Nullable
+  Map<String, ViewModelStore> getViewModelStores()
+  {
+    return mViewModelStores;
+  }
+  
+  boolean isRetaining(Fragment paramFragment)
+  {
+    if (mFragments == null) {
+      return false;
+    }
+    return mFragments.contains(paramFragment);
+  }
+}

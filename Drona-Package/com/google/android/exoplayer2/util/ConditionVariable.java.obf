@@ -1,0 +1,73 @@
+package com.google.android.exoplayer2.util;
+
+import android.os.SystemClock;
+
+public final class ConditionVariable
+{
+  private boolean isOpen;
+  
+  public ConditionVariable() {}
+  
+  public void block()
+    throws InterruptedException
+  {
+    try
+    {
+      while (!isOpen) {
+        wait();
+      }
+      return;
+    }
+    finally
+    {
+      localObject = finally;
+      throw localObject;
+    }
+  }
+  
+  public boolean block(long paramLong)
+    throws InterruptedException
+  {
+    try
+    {
+      long l1 = SystemClock.elapsedRealtime();
+      long l2 = paramLong + l1;
+      for (paramLong = l1; (!isOpen) && (paramLong < l2); paramLong = SystemClock.elapsedRealtime()) {
+        wait(l2 - paramLong);
+      }
+      boolean bool = isOpen;
+      return bool;
+    }
+    finally {}
+  }
+  
+  public boolean close()
+  {
+    try
+    {
+      boolean bool = isOpen;
+      isOpen = false;
+      return bool;
+    }
+    finally
+    {
+      localObject = finally;
+      throw localObject;
+    }
+  }
+  
+  public boolean open()
+  {
+    try
+    {
+      boolean bool = isOpen;
+      if (bool) {
+        return false;
+      }
+      isOpen = true;
+      notifyAll();
+      return true;
+    }
+    finally {}
+  }
+}

@@ -1,0 +1,226 @@
+package com.bugsnag.android;
+
+import androidx.annotation.NonNull;
+
+class DefaultDelivery
+  implements Delivery
+{
+  private static final int HTTP_REQUEST_FAILED = 0;
+  private final Connectivity connectivity;
+  
+  DefaultDelivery(Connectivity paramConnectivity)
+  {
+    connectivity = paramConnectivity;
+  }
+  
+  /* Error */
+  int deliver(String paramString, JsonStream.Streamable paramStreamable, java.util.Map<String, String> paramMap)
+    throws DeliveryFailureException
+  {
+    // Byte code:
+    //   0: aload_0
+    //   1: getfield 18	com/bugsnag/android/DefaultDelivery:connectivity	Lcom/bugsnag/android/Connectivity;
+    //   4: astore 9
+    //   6: aconst_null
+    //   7: astore 5
+    //   9: aconst_null
+    //   10: astore 7
+    //   12: aconst_null
+    //   13: astore 8
+    //   15: aconst_null
+    //   16: astore 6
+    //   18: aload 9
+    //   20: ifnull +29 -> 49
+    //   23: aload_0
+    //   24: getfield 18	com/bugsnag/android/DefaultDelivery:connectivity	Lcom/bugsnag/android/Connectivity;
+    //   27: invokeinterface 33 1 0
+    //   32: ifeq +6 -> 38
+    //   35: goto +14 -> 49
+    //   38: new 23	com/bugsnag/android/DeliveryFailureException
+    //   41: dup
+    //   42: ldc 35
+    //   44: aconst_null
+    //   45: invokespecial 38	com/bugsnag/android/DeliveryFailureException:<init>	(Ljava/lang/String;Ljava/lang/Throwable;)V
+    //   48: athrow
+    //   49: new 40	java/net/URL
+    //   52: dup
+    //   53: aload_1
+    //   54: invokespecial 43	java/net/URL:<init>	(Ljava/lang/String;)V
+    //   57: invokevirtual 47	java/net/URL:openConnection	()Ljava/net/URLConnection;
+    //   60: checkcast 49	java/net/HttpURLConnection
+    //   63: astore_1
+    //   64: aload_1
+    //   65: iconst_1
+    //   66: invokevirtual 53	java/net/HttpURLConnection:setDoOutput	(Z)V
+    //   69: aload_1
+    //   70: iconst_0
+    //   71: invokevirtual 57	java/net/HttpURLConnection:setChunkedStreamingMode	(I)V
+    //   74: aload_1
+    //   75: ldc 59
+    //   77: ldc 61
+    //   79: invokevirtual 65	java/net/HttpURLConnection:addRequestProperty	(Ljava/lang/String;Ljava/lang/String;)V
+    //   82: aload_3
+    //   83: invokeinterface 71 1 0
+    //   88: invokeinterface 77 1 0
+    //   93: astore_3
+    //   94: aload_3
+    //   95: invokeinterface 82 1 0
+    //   100: ifeq +41 -> 141
+    //   103: aload_3
+    //   104: invokeinterface 86 1 0
+    //   109: checkcast 88	java/util/Map$Entry
+    //   112: astore 5
+    //   114: aload_1
+    //   115: aload 5
+    //   117: invokeinterface 91 1 0
+    //   122: checkcast 93	java/lang/String
+    //   125: aload 5
+    //   127: invokeinterface 96 1 0
+    //   132: checkcast 93	java/lang/String
+    //   135: invokevirtual 65	java/net/HttpURLConnection:addRequestProperty	(Ljava/lang/String;Ljava/lang/String;)V
+    //   138: goto -44 -> 94
+    //   141: new 98	com/bugsnag/android/JsonStream
+    //   144: dup
+    //   145: new 100	java/io/BufferedWriter
+    //   148: dup
+    //   149: new 102	java/io/OutputStreamWriter
+    //   152: dup
+    //   153: aload_1
+    //   154: invokevirtual 106	java/net/HttpURLConnection:getOutputStream	()Ljava/io/OutputStream;
+    //   157: ldc 108
+    //   159: invokestatic 114	java/nio/charset/Charset:forName	(Ljava/lang/String;)Ljava/nio/charset/Charset;
+    //   162: invokespecial 117	java/io/OutputStreamWriter:<init>	(Ljava/io/OutputStream;Ljava/nio/charset/Charset;)V
+    //   165: invokespecial 120	java/io/BufferedWriter:<init>	(Ljava/io/Writer;)V
+    //   168: invokespecial 121	com/bugsnag/android/JsonStream:<init>	(Ljava/io/Writer;)V
+    //   171: astore_3
+    //   172: aload_2
+    //   173: aload_3
+    //   174: invokeinterface 127 2 0
+    //   179: aload_3
+    //   180: invokestatic 133	com/bugsnag/android/IOUtils:closeQuietly	(Ljava/io/Closeable;)V
+    //   183: aload_1
+    //   184: invokevirtual 137	java/net/HttpURLConnection:getResponseCode	()I
+    //   187: istore 4
+    //   189: aload_1
+    //   190: invokestatic 141	com/bugsnag/android/IOUtils:close	(Ljava/net/URLConnection;)V
+    //   193: iload 4
+    //   195: ireturn
+    //   196: astore 5
+    //   198: aload_3
+    //   199: astore_2
+    //   200: aload 5
+    //   202: astore_3
+    //   203: goto +7 -> 210
+    //   206: astore_3
+    //   207: aload 6
+    //   209: astore_2
+    //   210: aload_2
+    //   211: invokestatic 133	com/bugsnag/android/IOUtils:closeQuietly	(Ljava/io/Closeable;)V
+    //   214: aload_3
+    //   215: athrow
+    //   216: astore_2
+    //   217: goto +58 -> 275
+    //   220: astore_2
+    //   221: goto +23 -> 244
+    //   224: astore_2
+    //   225: aload_1
+    //   226: astore 5
+    //   228: aload_2
+    //   229: astore_1
+    //   230: goto +34 -> 264
+    //   233: astore_2
+    //   234: aload 5
+    //   236: astore_1
+    //   237: goto +38 -> 275
+    //   240: astore_2
+    //   241: aload 7
+    //   243: astore_1
+    //   244: aload_1
+    //   245: astore 5
+    //   247: ldc -113
+    //   249: aload_2
+    //   250: invokestatic 148	com/bugsnag/android/Logger:warn	(Ljava/lang/String;Ljava/lang/Throwable;)V
+    //   253: aload_1
+    //   254: invokestatic 141	com/bugsnag/android/IOUtils:close	(Ljava/net/URLConnection;)V
+    //   257: iconst_0
+    //   258: ireturn
+    //   259: astore_1
+    //   260: aload 8
+    //   262: astore 5
+    //   264: new 23	com/bugsnag/android/DeliveryFailureException
+    //   267: dup
+    //   268: ldc -106
+    //   270: aload_1
+    //   271: invokespecial 38	com/bugsnag/android/DeliveryFailureException:<init>	(Ljava/lang/String;Ljava/lang/Throwable;)V
+    //   274: athrow
+    //   275: aload_1
+    //   276: invokestatic 141	com/bugsnag/android/IOUtils:close	(Ljava/net/URLConnection;)V
+    //   279: aload_2
+    //   280: athrow
+    // Local variable table:
+    //   start	length	slot	name	signature
+    //   0	281	0	this	DefaultDelivery
+    //   0	281	1	paramString	String
+    //   0	281	2	paramStreamable	JsonStream.Streamable
+    //   0	281	3	paramMap	java.util.Map<String, String>
+    //   187	7	4	i	int
+    //   7	119	5	localEntry	java.util.Map.Entry
+    //   196	5	5	localObject1	Object
+    //   226	37	5	localObject2	Object
+    //   16	192	6	localObject3	Object
+    //   10	232	7	localObject4	Object
+    //   13	248	8	localObject5	Object
+    //   4	15	9	localConnectivity	Connectivity
+    // Exception table:
+    //   from	to	target	type
+    //   172	179	196	finally
+    //   141	172	206	finally
+    //   64	94	216	finally
+    //   94	138	216	finally
+    //   179	189	216	finally
+    //   210	216	216	finally
+    //   64	94	220	java/lang/Exception
+    //   94	138	220	java/lang/Exception
+    //   179	189	220	java/lang/Exception
+    //   210	216	220	java/lang/Exception
+    //   64	94	224	java/io/IOException
+    //   94	138	224	java/io/IOException
+    //   179	189	224	java/io/IOException
+    //   210	216	224	java/io/IOException
+    //   49	64	233	finally
+    //   247	253	233	finally
+    //   264	275	233	finally
+    //   49	64	240	java/lang/Exception
+    //   49	64	259	java/io/IOException
+  }
+  
+  public void deliver(@NonNull Report paramReport, @NonNull Configuration paramConfiguration)
+    throws DeliveryFailureException
+  {
+    int i = deliver(paramConfiguration.getEndpoint(), paramReport, paramConfiguration.getErrorApiHeaders());
+    if (i / 100 != 2)
+    {
+      paramReport = new StringBuilder();
+      paramReport.append("Error API request failed with status ");
+      paramReport.append(i);
+      Logger.warn(paramReport.toString(), null);
+      return;
+    }
+    Logger.info("Completed error API request");
+  }
+  
+  public void deliver(@NonNull SessionTrackingPayload paramSessionTrackingPayload, @NonNull Configuration paramConfiguration)
+    throws DeliveryFailureException
+  {
+    int i = deliver(paramConfiguration.getSessionEndpoint(), paramSessionTrackingPayload, paramConfiguration.getSessionApiHeaders());
+    if (i != 202)
+    {
+      paramSessionTrackingPayload = new StringBuilder();
+      paramSessionTrackingPayload.append("Session API request failed with status ");
+      paramSessionTrackingPayload.append(i);
+      Logger.warn(paramSessionTrackingPayload.toString(), null);
+      return;
+    }
+    Logger.info("Completed session tracking request");
+  }
+}

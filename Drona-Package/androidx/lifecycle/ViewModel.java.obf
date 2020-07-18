@@ -1,0 +1,84 @@
+package androidx.lifecycle;
+
+import androidx.annotation.MainThread;
+import androidx.annotation.Nullable;
+import java.io.Closeable;
+import java.io.IOException;
+import java.util.Collection;
+import java.util.HashMap;
+import java.util.Iterator;
+import java.util.Map;
+
+public abstract class ViewModel
+{
+  @Nullable
+  private final Map<String, Object> mBagOfTags = new HashMap();
+  private volatile boolean mCleared = false;
+  
+  public ViewModel() {}
+  
+  private static void closeWithRuntimeException(Object paramObject)
+  {
+    if ((paramObject instanceof Closeable)) {
+      try
+      {
+        ((Closeable)paramObject).close();
+        return;
+      }
+      catch (IOException paramObject)
+      {
+        throw new RuntimeException(paramObject);
+      }
+    }
+  }
+  
+  @MainThread
+  final void clear()
+  {
+    mCleared = true;
+    if (mBagOfTags != null) {
+      synchronized (mBagOfTags)
+      {
+        Iterator localIterator = mBagOfTags.values().iterator();
+        while (localIterator.hasNext()) {
+          closeWithRuntimeException(localIterator.next());
+        }
+      }
+    }
+    onCleared();
+  }
+  
+  <T> T getTag(String paramString)
+  {
+    if (mBagOfTags == null) {
+      return null;
+    }
+    synchronized (mBagOfTags)
+    {
+      paramString = mBagOfTags.get(paramString);
+      return paramString;
+    }
+  }
+  
+  protected void onCleared() {}
+  
+  <T> T setTagIfAbsent(String paramString, T paramT)
+  {
+    synchronized (mBagOfTags)
+    {
+      Object localObject = mBagOfTags.get(paramString);
+      if (localObject == null) {
+        mBagOfTags.put(paramString, paramT);
+      }
+      if (localObject == null) {
+        paramString = paramT;
+      } else {
+        paramString = localObject;
+      }
+      if (mCleared) {
+        closeWithRuntimeException(paramString);
+      }
+      return paramString;
+    }
+  }
+}

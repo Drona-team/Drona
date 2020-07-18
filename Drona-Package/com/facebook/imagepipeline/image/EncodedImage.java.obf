@@ -1,0 +1,477 @@
+package com.facebook.imagepipeline.image;
+
+import android.graphics.ColorSpace;
+import android.util.Pair;
+import com.facebook.common.internal.Preconditions;
+import com.facebook.common.internal.Supplier;
+import com.facebook.common.internal.VisibleForTesting;
+import com.facebook.common.memory.PooledByteBuffer;
+import com.facebook.common.memory.PooledByteBufferInputStream;
+import com.facebook.common.references.CloseableReference;
+import com.facebook.common.references.SharedReference;
+import com.facebook.imageformat.DefaultImageFormats;
+import com.facebook.imageformat.ImageFormat;
+import com.facebook.imageformat.ImageFormatChecker;
+import com.facebook.imagepipeline.common.BytesRange;
+import com.facebook.imageutils.HeifExifUtil;
+import com.facebook.imageutils.ImageMetaData;
+import com.facebook.imageutils.JfifUtil;
+import com.facebook.imageutils.WebpUtil;
+import java.io.Closeable;
+import java.io.FileInputStream;
+import java.io.InputStream;
+import javax.annotation.Nullable;
+import javax.annotation.concurrent.Immutable;
+
+@Immutable
+public class EncodedImage
+  implements Closeable
+{
+  public static final int DEFAULT_SAMPLE_SIZE = 1;
+  public static final int UNKNOWN_HEIGHT = -1;
+  public static final int UNKNOWN_ROTATION_ANGLE = -1;
+  public static final int UNKNOWN_STREAM_SIZE = -1;
+  public static final int UNKNOWN_WIDTH = -1;
+  @Nullable
+  private BytesRange mBytesRange;
+  @Nullable
+  private ColorSpace mColorSpace;
+  private int mExifOrientation = 0;
+  private int mHeight = -1;
+  private ImageFormat mImageFormat = ImageFormat.UNKNOWN;
+  @Nullable
+  private final Supplier<FileInputStream> mInputStreamSupplier;
+  @Nullable
+  private final CloseableReference<PooledByteBuffer> mPooledByteBufferRef;
+  private int mRotationAngle = -1;
+  private int mSampleSize = 1;
+  private int mStreamSize = -1;
+  private int mWidth = -1;
+  
+  public EncodedImage(Supplier<FileInputStream> paramSupplier)
+  {
+    Preconditions.checkNotNull(paramSupplier);
+    mPooledByteBufferRef = null;
+    mInputStreamSupplier = paramSupplier;
+  }
+  
+  public EncodedImage(Supplier<FileInputStream> paramSupplier, int paramInt)
+  {
+    this(paramSupplier);
+    mStreamSize = paramInt;
+  }
+  
+  public EncodedImage(CloseableReference<PooledByteBuffer> paramCloseableReference)
+  {
+    Preconditions.checkArgument(CloseableReference.isValid(paramCloseableReference));
+    mPooledByteBufferRef = paramCloseableReference.clone();
+    mInputStreamSupplier = null;
+  }
+  
+  @Nullable
+  public static EncodedImage cloneOrNull(EncodedImage paramEncodedImage)
+  {
+    if (paramEncodedImage != null) {
+      return paramEncodedImage.cloneOrNull();
+    }
+    return null;
+  }
+  
+  public static void closeSafely(@Nullable EncodedImage paramEncodedImage)
+  {
+    if (paramEncodedImage != null) {
+      paramEncodedImage.close();
+    }
+  }
+  
+  public static boolean isMetaDataAvailable(EncodedImage paramEncodedImage)
+  {
+    return (mRotationAngle >= 0) && (mWidth >= 0) && (mHeight >= 0);
+  }
+  
+  public static boolean isValid(@Nullable EncodedImage paramEncodedImage)
+  {
+    return (paramEncodedImage != null) && (paramEncodedImage.isValid());
+  }
+  
+  private void parseMetaDataIfNeeded()
+  {
+    if ((mWidth < 0) || (mHeight < 0)) {
+      parseMetaData();
+    }
+  }
+  
+  /* Error */
+  private ImageMetaData readImageMetaData()
+  {
+    // Byte code:
+    //   0: aload_0
+    //   1: invokevirtual 120	com/facebook/imagepipeline/image/EncodedImage:getInputStream	()Ljava/io/InputStream;
+    //   4: astore_2
+    //   5: aload_2
+    //   6: invokestatic 126	com/facebook/imageutils/BitmapUtil:decodeDimensionsAndColorSpace	(Ljava/io/InputStream;)Lcom/facebook/imageutils/ImageMetaData;
+    //   9: astore_1
+    //   10: aload_0
+    //   11: aload_1
+    //   12: invokevirtual 132	com/facebook/imageutils/ImageMetaData:getColorSpace	()Landroid/graphics/ColorSpace;
+    //   15: putfield 134	com/facebook/imagepipeline/image/EncodedImage:mColorSpace	Landroid/graphics/ColorSpace;
+    //   18: aload_1
+    //   19: invokevirtual 138	com/facebook/imageutils/ImageMetaData:getDimensions	()Landroid/util/Pair;
+    //   22: astore_3
+    //   23: aload_3
+    //   24: ifnull +31 -> 55
+    //   27: aload_0
+    //   28: aload_3
+    //   29: getfield 144	android/util/Pair:first	Ljava/lang/Object;
+    //   32: checkcast 146	java/lang/Integer
+    //   35: invokevirtual 150	java/lang/Integer:intValue	()I
+    //   38: putfield 52	com/facebook/imagepipeline/image/EncodedImage:mWidth	I
+    //   41: aload_0
+    //   42: aload_3
+    //   43: getfield 153	android/util/Pair:second	Ljava/lang/Object;
+    //   46: checkcast 146	java/lang/Integer
+    //   49: invokevirtual 150	java/lang/Integer:intValue	()I
+    //   52: putfield 54	com/facebook/imagepipeline/image/EncodedImage:mHeight	I
+    //   55: aload_2
+    //   56: ifnull +7 -> 63
+    //   59: aload_2
+    //   60: invokevirtual 156	java/io/InputStream:close	()V
+    //   63: aload_1
+    //   64: areturn
+    //   65: astore_1
+    //   66: goto +6 -> 72
+    //   69: astore_1
+    //   70: aconst_null
+    //   71: astore_2
+    //   72: aload_2
+    //   73: ifnull +7 -> 80
+    //   76: aload_2
+    //   77: invokevirtual 156	java/io/InputStream:close	()V
+    //   80: aload_1
+    //   81: athrow
+    //   82: astore_2
+    //   83: aload_1
+    //   84: areturn
+    //   85: astore_2
+    //   86: goto -6 -> 80
+    // Local variable table:
+    //   start	length	slot	name	signature
+    //   0	89	0	this	EncodedImage
+    //   9	55	1	localImageMetaData1	ImageMetaData
+    //   65	1	1	localObject	Object
+    //   69	15	1	localImageMetaData2	ImageMetaData
+    //   4	73	2	localInputStream	InputStream
+    //   82	1	2	localIOException1	java.io.IOException
+    //   85	1	2	localIOException2	java.io.IOException
+    //   22	21	3	localPair	Pair
+    // Exception table:
+    //   from	to	target	type
+    //   5	23	65	finally
+    //   27	55	65	finally
+    //   0	5	69	finally
+    //   59	63	82	java/io/IOException
+    //   76	80	85	java/io/IOException
+  }
+  
+  private Pair<Integer, Integer> readWebPImageSize()
+  {
+    Pair localPair = WebpUtil.getSize(getInputStream());
+    if (localPair != null)
+    {
+      mWidth = ((Integer)first).intValue();
+      mHeight = ((Integer)second).intValue();
+    }
+    return localPair;
+  }
+  
+  @Nullable
+  public EncodedImage cloneOrNull()
+  {
+    EncodedImage localEncodedImage;
+    CloseableReference localCloseableReference;
+    if (mInputStreamSupplier != null)
+    {
+      localEncodedImage = new EncodedImage(mInputStreamSupplier, mStreamSize);
+    }
+    else
+    {
+      localCloseableReference = CloseableReference.cloneOrNull(mPooledByteBufferRef);
+      if (localCloseableReference == null) {
+        localEncodedImage = null;
+      }
+    }
+    try
+    {
+      localEncodedImage = new EncodedImage(localCloseableReference);
+      CloseableReference.closeSafely(localCloseableReference);
+      if (localEncodedImage != null) {
+        localEncodedImage.copyMetaDataFrom(this);
+      }
+      return localEncodedImage;
+    }
+    finally
+    {
+      CloseableReference.closeSafely(localCloseableReference);
+    }
+  }
+  
+  public void close()
+  {
+    CloseableReference.closeSafely(mPooledByteBufferRef);
+  }
+  
+  public void copyMetaDataFrom(EncodedImage paramEncodedImage)
+  {
+    mImageFormat = paramEncodedImage.getImageFormat();
+    mWidth = paramEncodedImage.getWidth();
+    mHeight = paramEncodedImage.getHeight();
+    mRotationAngle = paramEncodedImage.getRotationAngle();
+    mExifOrientation = paramEncodedImage.getExifOrientation();
+    mSampleSize = paramEncodedImage.getSampleSize();
+    mStreamSize = paramEncodedImage.getSize();
+    mBytesRange = paramEncodedImage.getBytesRange();
+    mColorSpace = paramEncodedImage.getColorSpace();
+  }
+  
+  public CloseableReference<PooledByteBuffer> getByteBufferRef()
+  {
+    return CloseableReference.cloneOrNull(mPooledByteBufferRef);
+  }
+  
+  @Nullable
+  public BytesRange getBytesRange()
+  {
+    return mBytesRange;
+  }
+  
+  @Nullable
+  public ColorSpace getColorSpace()
+  {
+    parseMetaDataIfNeeded();
+    return mColorSpace;
+  }
+  
+  public int getExifOrientation()
+  {
+    parseMetaDataIfNeeded();
+    return mExifOrientation;
+  }
+  
+  public String getFirstBytesAsHexString(int paramInt)
+  {
+    Object localObject1 = getByteBufferRef();
+    if (localObject1 == null) {
+      return "";
+    }
+    paramInt = Math.min(getSize(), paramInt);
+    byte[] arrayOfByte = new byte[paramInt];
+    try
+    {
+      PooledByteBuffer localPooledByteBuffer = (PooledByteBuffer)((CloseableReference)localObject1).get();
+      if (localPooledByteBuffer == null) {
+        return "";
+      }
+      localPooledByteBuffer.read(0, arrayOfByte, 0, paramInt);
+      ((CloseableReference)localObject1).close();
+      localObject1 = new StringBuilder(arrayOfByte.length * 2);
+      int i = arrayOfByte.length;
+      paramInt = 0;
+      while (paramInt < i)
+      {
+        ((StringBuilder)localObject1).append(String.format("%02X", new Object[] { Byte.valueOf(arrayOfByte[paramInt]) }));
+        paramInt += 1;
+      }
+      return ((StringBuilder)localObject1).toString();
+    }
+    finally
+    {
+      ((CloseableReference)localObject1).close();
+    }
+  }
+  
+  public int getHeight()
+  {
+    parseMetaDataIfNeeded();
+    return mHeight;
+  }
+  
+  public ImageFormat getImageFormat()
+  {
+    parseMetaDataIfNeeded();
+    return mImageFormat;
+  }
+  
+  @Nullable
+  public InputStream getInputStream()
+  {
+    if (mInputStreamSupplier != null) {
+      return (InputStream)mInputStreamSupplier.get();
+    }
+    CloseableReference localCloseableReference = CloseableReference.cloneOrNull(mPooledByteBufferRef);
+    if (localCloseableReference != null) {
+      try
+      {
+        PooledByteBufferInputStream localPooledByteBufferInputStream = new PooledByteBufferInputStream((PooledByteBuffer)localCloseableReference.get());
+        return localPooledByteBufferInputStream;
+      }
+      finally
+      {
+        CloseableReference.closeSafely(localCloseableReference);
+      }
+    }
+    return null;
+  }
+  
+  public int getRotationAngle()
+  {
+    parseMetaDataIfNeeded();
+    return mRotationAngle;
+  }
+  
+  public int getSampleSize()
+  {
+    return mSampleSize;
+  }
+  
+  public int getSize()
+  {
+    if ((mPooledByteBufferRef != null) && (mPooledByteBufferRef.get() != null)) {
+      return ((PooledByteBuffer)mPooledByteBufferRef.get()).size();
+    }
+    return mStreamSize;
+  }
+  
+  @Nullable
+  @VisibleForTesting
+  public SharedReference<PooledByteBuffer> getUnderlyingReferenceTestOnly()
+  {
+    try
+    {
+      SharedReference localSharedReference;
+      if (mPooledByteBufferRef != null) {
+        localSharedReference = mPooledByteBufferRef.getUnderlyingReferenceTestOnly();
+      } else {
+        localSharedReference = null;
+      }
+      return localSharedReference;
+    }
+    finally
+    {
+      localObject = finally;
+      throw localObject;
+    }
+  }
+  
+  public int getWidth()
+  {
+    parseMetaDataIfNeeded();
+    return mWidth;
+  }
+  
+  public boolean isCompleteAt(int paramInt)
+  {
+    if (mImageFormat != DefaultImageFormats.JPEG) {
+      return true;
+    }
+    if (mInputStreamSupplier != null) {
+      return true;
+    }
+    Preconditions.checkNotNull(mPooledByteBufferRef);
+    PooledByteBuffer localPooledByteBuffer = (PooledByteBuffer)mPooledByteBufferRef.get();
+    return (localPooledByteBuffer.read(paramInt - 2) == -1) && (localPooledByteBuffer.read(paramInt - 1) == -39);
+  }
+  
+  public boolean isValid()
+  {
+    try
+    {
+      if (!CloseableReference.isValid(mPooledByteBufferRef))
+      {
+        Supplier localSupplier = mInputStreamSupplier;
+        if (localSupplier == null)
+        {
+          bool = false;
+          break label31;
+        }
+      }
+      boolean bool = true;
+      label31:
+      return bool;
+    }
+    finally
+    {
+      localObject = finally;
+      throw localObject;
+    }
+  }
+  
+  public void parseMetaData()
+  {
+    ImageFormat localImageFormat = ImageFormatChecker.getImageFormat_WrapIOException(getInputStream());
+    mImageFormat = localImageFormat;
+    Pair localPair;
+    if (DefaultImageFormats.isWebpFormat(localImageFormat)) {
+      localPair = readWebPImageSize();
+    } else {
+      localPair = readImageMetaData().getDimensions();
+    }
+    if ((localImageFormat == DefaultImageFormats.JPEG) && (mRotationAngle == -1))
+    {
+      if (localPair != null)
+      {
+        mExifOrientation = JfifUtil.getOrientation(getInputStream());
+        mRotationAngle = JfifUtil.getAutoRotateAngleFromOrientation(mExifOrientation);
+      }
+    }
+    else
+    {
+      if ((localImageFormat == DefaultImageFormats.HEIF) && (mRotationAngle == -1))
+      {
+        mExifOrientation = HeifExifUtil.getOrientation(getInputStream());
+        mRotationAngle = JfifUtil.getAutoRotateAngleFromOrientation(mExifOrientation);
+        return;
+      }
+      mRotationAngle = 0;
+    }
+  }
+  
+  public void setBytesRange(@Nullable BytesRange paramBytesRange)
+  {
+    mBytesRange = paramBytesRange;
+  }
+  
+  public void setExifOrientation(int paramInt)
+  {
+    mExifOrientation = paramInt;
+  }
+  
+  public void setHeight(int paramInt)
+  {
+    mHeight = paramInt;
+  }
+  
+  public void setImageFormat(ImageFormat paramImageFormat)
+  {
+    mImageFormat = paramImageFormat;
+  }
+  
+  public void setRotationAngle(int paramInt)
+  {
+    mRotationAngle = paramInt;
+  }
+  
+  public void setSampleSize(int paramInt)
+  {
+    mSampleSize = paramInt;
+  }
+  
+  public void setStreamSize(int paramInt)
+  {
+    mStreamSize = paramInt;
+  }
+  
+  public void setWidth(int paramInt)
+  {
+    mWidth = paramInt;
+  }
+}

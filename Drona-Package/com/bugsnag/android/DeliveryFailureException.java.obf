@@ -1,0 +1,20 @@
+package com.bugsnag.android;
+
+import androidx.annotation.NonNull;
+import androidx.annotation.Nullable;
+
+public class DeliveryFailureException
+  extends Exception
+{
+  private static final long serialVersionUID = 1501477209400426470L;
+  
+  public DeliveryFailureException(@NonNull String paramString)
+  {
+    super(paramString);
+  }
+  
+  public DeliveryFailureException(@NonNull String paramString, @Nullable Throwable paramThrowable)
+  {
+    super(paramString, paramThrowable);
+  }
+}

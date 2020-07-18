@@ -1,0 +1,29 @@
+package com.google.android.a;
+
+import android.os.Parcel;
+import android.os.Parcelable;
+import android.os.Parcelable.Creator;
+
+public final class c
+{
+  static
+  {
+    c.class.getClassLoader();
+  }
+  
+  private c() {}
+  
+  public static <T extends Parcelable> T a(Parcel paramParcel, Parcelable.Creator<T> paramCreator)
+  {
+    if (paramParcel.readInt() != 0) {
+      return (Parcelable)paramCreator.createFromParcel(paramParcel);
+    }
+    return null;
+  }
+  
+  public static void a(Parcel paramParcel, Parcelable paramParcelable)
+  {
+    paramParcel.writeInt(1);
+    paramParcelable.writeToParcel(paramParcel, 0);
+  }
+}

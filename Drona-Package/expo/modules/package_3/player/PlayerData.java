@@ -1,0 +1,393 @@
+package expo.modules.package_3.player;
+
+import android.content.Context;
+import android.net.Uri;
+import android.os.BaseBundle;
+import android.os.Bundle;
+import android.os.Handler;
+import android.util.Pair;
+import android.view.Surface;
+import expo.modules.package_3.AVManagerInterface;
+import expo.modules.package_3.AudioEventHandler;
+import expo.modules.package_3.AudioFocusNotAcquiredException;
+import java.lang.ref.WeakReference;
+import java.util.Map;
+import org.unimodules.core.Promise;
+import org.unimodules.core.arguments.ReadableArguments;
+
+public abstract class PlayerData
+  implements AudioEventHandler
+{
+  static final String STATUS_ANDROID_IMPLEMENTATION_KEY_PATH = "androidImplementation";
+  static final String STATUS_DID_JUST_FINISH_KEY_PATH = "didJustFinish";
+  static final String STATUS_DURATION_MILLIS_KEY_PATH = "durationMillis";
+  static final String STATUS_HEADERS_KEY_PATH = "headers";
+  static final String STATUS_IS_BUFFERING_KEY_PATH = "isBuffering";
+  static final String STATUS_IS_LOADED_KEY_PATH = "isLoaded";
+  static final String STATUS_IS_LOOPING_KEY_PATH = "isLooping";
+  static final String STATUS_IS_MUTED_KEY_PATH = "isMuted";
+  public static final String STATUS_IS_PLAYING_KEY_PATH = "isPlaying";
+  static final String STATUS_OVERRIDING_EXTENSION_KEY_PATH = "overridingExtension";
+  static final String STATUS_PLAYABLE_DURATION_MILLIS_KEY_PATH = "playableDurationMillis";
+  static final String STATUS_POSITION_MILLIS_KEY_PATH = "positionMillis";
+  static final String STATUS_PROGRESS_UPDATE_INTERVAL_MILLIS_KEY_PATH = "progressUpdateIntervalMillis";
+  static final String STATUS_RATE_KEY_PATH = "rate";
+  static final String STATUS_SHOULD_CORRECT_PITCH_KEY_PATH = "shouldCorrectPitch";
+  static final String STATUS_SHOULD_PLAY_KEY_PATH = "shouldPlay";
+  public static final String STATUS_URI_KEY_PATH = "uri";
+  static final String STATUS_VOLUME_KEY_PATH = "volume";
+  final AVManagerInterface mAVModule;
+  ErrorListener mErrorListener = null;
+  private FullscreenPresenter mFullscreenPresenter = null;
+  private Handler mHandler = new Handler();
+  boolean mIsMuted = false;
+  private int mProgressUpdateIntervalMillis = 500;
+  private Runnable mProgressUpdater = new ProgressUpdater(this, null);
+  float mRate = 1.0F;
+  final Map<String, Object> mRequestHeaders;
+  boolean mShouldCorrectPitch = false;
+  boolean mShouldPlay = false;
+  private StatusUpdateListener mStatusUpdateListener = null;
+  final Uri mUri;
+  VideoSizeUpdateListener mVideoSizeUpdateListener = null;
+  float mVolume = 1.0F;
+  
+  PlayerData(AVManagerInterface paramAVManagerInterface, Uri paramUri, Map paramMap)
+  {
+    mRequestHeaders = paramMap;
+    mAVModule = paramAVManagerInterface;
+    mUri = paramUri;
+  }
+  
+  private void callStatusUpdateListenerWithStatus(Bundle paramBundle)
+  {
+    if (mStatusUpdateListener != null) {
+      mStatusUpdateListener.onStatusUpdate(paramBundle);
+    }
+  }
+  
+  public static PlayerData createUnloadedPlayerData(AVManagerInterface paramAVManagerInterface, Context paramContext, ReadableArguments paramReadableArguments, Bundle paramBundle)
+  {
+    String str2 = paramReadableArguments.getString("uri");
+    boolean bool = paramReadableArguments.containsKey("headers");
+    String str1 = null;
+    Map localMap;
+    if (bool) {
+      localMap = paramReadableArguments.getMap("headers");
+    } else {
+      localMap = null;
+    }
+    if (paramReadableArguments.containsKey("overridingExtension")) {
+      str1 = paramReadableArguments.getString("overridingExtension");
+    }
+    paramReadableArguments = Uri.parse(str2);
+    if ((paramBundle.containsKey("androidImplementation")) && (paramBundle.getString("androidImplementation").equals("MediaPlayer"))) {
+      return new MediaPlayerData(paramAVManagerInterface, paramContext, paramReadableArguments, localMap);
+    }
+    return new SimpleExoPlayerData(paramAVManagerInterface, paramContext, paramReadableArguments, str1, localMap);
+  }
+  
+  public static Bundle getUnloadedStatus()
+  {
+    Bundle localBundle = new Bundle();
+    localBundle.putBoolean("isLoaded", false);
+    return localBundle;
+  }
+  
+  private void progressUpdateLoop()
+  {
+    if (!shouldContinueUpdatingProgress())
+    {
+      stopUpdatingProgressIfNecessary();
+      return;
+    }
+    mHandler.postDelayed(mProgressUpdater, mProgressUpdateIntervalMillis);
+  }
+  
+  abstract void applyNewStatus(Integer paramInteger, Boolean paramBoolean)
+    throws AudioFocusNotAcquiredException, IllegalStateException;
+  
+  final void beginUpdatingProgressIfNecessary()
+  {
+    mHandler.post(mProgressUpdater);
+  }
+  
+  final void callStatusUpdateListener()
+  {
+    callStatusUpdateListenerWithStatus(getStatus());
+  }
+  
+  final void callStatusUpdateListenerWithDidJustFinish()
+  {
+    Bundle localBundle = getStatus();
+    localBundle.putBoolean("didJustFinish", true);
+    callStatusUpdateListenerWithStatus(localBundle);
+  }
+  
+  abstract int getAudioSessionId();
+  
+  final int getClippedIntegerForValue(Integer paramInteger1, Integer paramInteger2, Integer paramInteger3)
+  {
+    if ((paramInteger2 == null) || (paramInteger1.intValue() >= paramInteger2.intValue()))
+    {
+      paramInteger2 = paramInteger1;
+      if (paramInteger3 != null)
+      {
+        paramInteger2 = paramInteger1;
+        if (paramInteger1.intValue() > paramInteger3.intValue()) {
+          paramInteger2 = paramInteger3;
+        }
+      }
+    }
+    return paramInteger2.intValue();
+  }
+  
+  abstract void getExtraStatusFields(Bundle paramBundle);
+  
+  abstract String getImplementationName();
+  
+  public final Bundle getStatus()
+  {
+    try
+    {
+      if (!isLoaded())
+      {
+        localBundle = getUnloadedStatus();
+        localBundle.putString("androidImplementation", getImplementationName());
+        return localBundle;
+      }
+      Bundle localBundle = new Bundle();
+      localBundle.putBoolean("isLoaded", true);
+      localBundle.putString("androidImplementation", getImplementationName());
+      localBundle.putString("uri", mUri.getPath());
+      localBundle.putInt("progressUpdateIntervalMillis", mProgressUpdateIntervalMillis);
+      localBundle.putBoolean("shouldPlay", mShouldPlay);
+      localBundle.putDouble("rate", mRate);
+      localBundle.putBoolean("shouldCorrectPitch", mShouldCorrectPitch);
+      localBundle.putDouble("volume", mVolume);
+      localBundle.putBoolean("isMuted", mIsMuted);
+      localBundle.putBoolean("didJustFinish", false);
+      getExtraStatusFields(localBundle);
+      return localBundle;
+    }
+    catch (Throwable localThrowable)
+    {
+      throw localThrowable;
+    }
+  }
+  
+  public abstract Pair getVideoWidthHeight();
+  
+  public final void handleAudioFocusGained()
+  {
+    try
+    {
+      playPlayerWithRateAndMuteIfNecessary();
+      return;
+    }
+    catch (AudioFocusNotAcquiredException localAudioFocusNotAcquiredException) {}
+  }
+  
+  public final void handleAudioFocusInterruptionBegan()
+  {
+    if (!mIsMuted) {
+      pauseImmediately();
+    }
+  }
+  
+  abstract boolean isLoaded();
+  
+  public boolean isPresentedFullscreen()
+  {
+    return mFullscreenPresenter.isBeingPresentedFullscreen();
+  }
+  
+  public abstract void load(Bundle paramBundle, LoadCompletionListener paramLoadCompletionListener);
+  
+  public final void onPause()
+  {
+    pauseImmediately();
+  }
+  
+  public final void onResume()
+  {
+    try
+    {
+      playPlayerWithRateAndMuteIfNecessary();
+      return;
+    }
+    catch (AudioFocusNotAcquiredException localAudioFocusNotAcquiredException) {}
+  }
+  
+  abstract void playPlayerWithRateAndMuteIfNecessary()
+    throws AudioFocusNotAcquiredException;
+  
+  public abstract void release();
+  
+  public final void setErrorListener(ErrorListener paramErrorListener)
+  {
+    mErrorListener = paramErrorListener;
+  }
+  
+  public final void setFullscreenPresenter(FullscreenPresenter paramFullscreenPresenter)
+  {
+    mFullscreenPresenter = paramFullscreenPresenter;
+  }
+  
+  public final void setStatus(Bundle paramBundle, Promise paramPromise)
+  {
+    if (paramBundle == null)
+    {
+      if (paramPromise != null) {
+        paramPromise.reject("E_AV_SETSTATUS", "Cannot set null status.");
+      }
+    }
+    else {
+      try
+      {
+        setStatusWithListener(paramBundle, new PlayerData.1(this, paramPromise));
+        return;
+      }
+      catch (Throwable paramBundle)
+      {
+        if (paramPromise != null) {
+          paramPromise.reject("E_AV_SETSTATUS", "Encountered an error while setting status!", paramBundle);
+        }
+      }
+    }
+  }
+  
+  public final void setStatusUpdateListener(StatusUpdateListener paramStatusUpdateListener)
+  {
+    mStatusUpdateListener = paramStatusUpdateListener;
+    if (mStatusUpdateListener != null) {
+      beginUpdatingProgressIfNecessary();
+    }
+  }
+  
+  final void setStatusWithListener(Bundle paramBundle, SetStatusCompletionListener paramSetStatusCompletionListener)
+  {
+    if (paramBundle.containsKey("progressUpdateIntervalMillis")) {
+      mProgressUpdateIntervalMillis = ((int)paramBundle.getDouble("progressUpdateIntervalMillis"));
+    }
+    boolean bool = paramBundle.containsKey("positionMillis");
+    Boolean localBoolean = null;
+    Integer localInteger;
+    if (bool) {
+      localInteger = Integer.valueOf((int)paramBundle.getDouble("positionMillis"));
+    } else {
+      localInteger = null;
+    }
+    if (paramBundle.containsKey("shouldPlay")) {
+      mShouldPlay = paramBundle.getBoolean("shouldPlay");
+    }
+    if (paramBundle.containsKey("rate")) {
+      mRate = ((float)paramBundle.getDouble("rate"));
+    }
+    if (paramBundle.containsKey("shouldCorrectPitch")) {
+      mShouldCorrectPitch = paramBundle.getBoolean("shouldCorrectPitch");
+    }
+    if (paramBundle.containsKey("volume")) {
+      mVolume = ((float)paramBundle.getDouble("volume"));
+    }
+    if (paramBundle.containsKey("isMuted")) {
+      mIsMuted = paramBundle.getBoolean("isMuted");
+    }
+    if (paramBundle.containsKey("isLooping")) {
+      localBoolean = Boolean.valueOf(paramBundle.getBoolean("isLooping"));
+    }
+    try
+    {
+      applyNewStatus(localInteger, localBoolean);
+      mAVModule.abandonAudioFocusIfUnused();
+      paramSetStatusCompletionListener.onSetStatusComplete();
+      return;
+    }
+    catch (Throwable paramBundle)
+    {
+      mAVModule.abandonAudioFocusIfUnused();
+      paramSetStatusCompletionListener.onSetStatusError(paramBundle.toString());
+    }
+  }
+  
+  public final void setVideoSizeUpdateListener(VideoSizeUpdateListener paramVideoSizeUpdateListener)
+  {
+    mVideoSizeUpdateListener = paramVideoSizeUpdateListener;
+  }
+  
+  abstract boolean shouldContinueUpdatingProgress();
+  
+  final boolean shouldPlayerPlay()
+  {
+    return (mShouldPlay) && (mRate > 0.0D);
+  }
+  
+  final void stopUpdatingProgressIfNecessary()
+  {
+    mHandler.removeCallbacks(mProgressUpdater);
+  }
+  
+  public void toggleFullscreen()
+  {
+    mFullscreenPresenter.setFullscreenMode(isPresentedFullscreen() ^ true);
+  }
+  
+  public abstract void tryUpdateVideoSurface(Surface paramSurface);
+  
+  public abstract interface ErrorListener
+  {
+    public abstract void onError(String paramString);
+  }
+  
+  public abstract interface FullscreenPresenter
+  {
+    public abstract boolean isBeingPresentedFullscreen();
+    
+    public abstract void setFullscreenMode(boolean paramBoolean);
+  }
+  
+  public abstract interface LoadCompletionListener
+  {
+    public abstract void onLoadError(String paramString);
+    
+    public abstract void onLoadSuccess(Bundle paramBundle);
+  }
+  
+  class ProgressUpdater
+    implements Runnable
+  {
+    private WeakReference<expo.modules.av.player.PlayerData> mPlayerDataWeakReference;
+    
+    private ProgressUpdater(PlayerData paramPlayerData)
+    {
+      mPlayerDataWeakReference = new WeakReference(paramPlayerData);
+    }
+    
+    public void run()
+    {
+      PlayerData localPlayerData = (PlayerData)mPlayerDataWeakReference.get();
+      if (localPlayerData != null)
+      {
+        localPlayerData.callStatusUpdateListener();
+        localPlayerData.progressUpdateLoop();
+      }
+    }
+  }
+  
+  abstract interface SetStatusCompletionListener
+  {
+    public abstract void onSetStatusComplete();
+    
+    public abstract void onSetStatusError(String paramString);
+  }
+  
+  public abstract interface StatusUpdateListener
+  {
+    public abstract void onStatusUpdate(Bundle paramBundle);
+  }
+  
+  public abstract interface VideoSizeUpdateListener
+  {
+    public abstract void onVideoSizeUpdate(Pair paramPair);
+  }
+}

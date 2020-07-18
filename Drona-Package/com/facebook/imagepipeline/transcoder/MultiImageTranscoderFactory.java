@@ -1,0 +1,74 @@
+package com.facebook.imagepipeline.transcoder;
+
+import com.facebook.imageformat.ImageFormat;
+import com.facebook.imagepipeline.nativecode.NativeImageTranscoderFactory;
+import javax.annotation.Nullable;
+
+public class MultiImageTranscoderFactory
+  implements ImageTranscoderFactory
+{
+  @Nullable
+  private final Integer mImageTranscoderType;
+  private final int mMaxBitmapSize;
+  @Nullable
+  private final ImageTranscoderFactory mPrimaryImageTranscoderFactory;
+  private final boolean mUseDownSamplingRatio;
+  
+  public MultiImageTranscoderFactory(int paramInt, boolean paramBoolean, ImageTranscoderFactory paramImageTranscoderFactory, Integer paramInteger)
+  {
+    mMaxBitmapSize = paramInt;
+    mUseDownSamplingRatio = paramBoolean;
+    mPrimaryImageTranscoderFactory = paramImageTranscoderFactory;
+    mImageTranscoderType = paramInteger;
+  }
+  
+  private ImageTranscoder getCustomImageTranscoder(ImageFormat paramImageFormat, boolean paramBoolean)
+  {
+    if (mPrimaryImageTranscoderFactory == null) {
+      return null;
+    }
+    return mPrimaryImageTranscoderFactory.createImageTranscoder(paramImageFormat, paramBoolean);
+  }
+  
+  private ImageTranscoder getImageTranscoderWithType(ImageFormat paramImageFormat, boolean paramBoolean)
+  {
+    if (mImageTranscoderType == null) {
+      return null;
+    }
+    switch (mImageTranscoderType.intValue())
+    {
+    default: 
+      throw new IllegalArgumentException("Invalid ImageTranscoderType");
+    case 1: 
+      return getSimpleImageTranscoder(paramImageFormat, paramBoolean);
+    }
+    return getNativeImageTranscoder(paramImageFormat, paramBoolean);
+  }
+  
+  private ImageTranscoder getNativeImageTranscoder(ImageFormat paramImageFormat, boolean paramBoolean)
+  {
+    return NativeImageTranscoderFactory.getNativeImageTranscoderFactory(mMaxBitmapSize, mUseDownSamplingRatio).createImageTranscoder(paramImageFormat, paramBoolean);
+  }
+  
+  private ImageTranscoder getSimpleImageTranscoder(ImageFormat paramImageFormat, boolean paramBoolean)
+  {
+    return new SimpleImageTranscoderFactory(mMaxBitmapSize).createImageTranscoder(paramImageFormat, paramBoolean);
+  }
+  
+  public ImageTranscoder createImageTranscoder(ImageFormat paramImageFormat, boolean paramBoolean)
+  {
+    Object localObject2 = getCustomImageTranscoder(paramImageFormat, paramBoolean);
+    Object localObject1 = localObject2;
+    if (localObject2 == null) {
+      localObject1 = getImageTranscoderWithType(paramImageFormat, paramBoolean);
+    }
+    localObject2 = localObject1;
+    if (localObject1 == null) {
+      localObject2 = getNativeImageTranscoder(paramImageFormat, paramBoolean);
+    }
+    if (localObject2 == null) {
+      return getSimpleImageTranscoder(paramImageFormat, paramBoolean);
+    }
+    return localObject2;
+  }
+}

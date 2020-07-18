@@ -1,0 +1,83 @@
+package com.facebook.react.modules.network;
+
+import androidx.annotation.Nullable;
+import java.io.IOException;
+import okhttp3.MediaType;
+import okhttp3.ResponseBody;
+import okio.Buffer;
+import okio.BufferedSource;
+import okio.ForwardingSource;
+import okio.Okio;
+import okio.Source;
+
+public class ProgressResponseBody
+  extends ResponseBody
+{
+  @Nullable
+  private BufferedSource mBufferedSource;
+  private final ProgressListener mProgressListener;
+  private final ResponseBody mResponseBody;
+  private long mTotalBytesRead;
+  
+  public ProgressResponseBody(ResponseBody paramResponseBody, ProgressListener paramProgressListener)
+  {
+    mResponseBody = paramResponseBody;
+    mProgressListener = paramProgressListener;
+    mTotalBytesRead = 0L;
+  }
+  
+  private Source source(Source paramSource)
+  {
+    (Source)new ForwardingSource(paramSource)
+    {
+      public long read(Buffer paramAnonymousBuffer, long paramAnonymousLong)
+        throws IOException
+      {
+        long l1 = super.read(paramAnonymousBuffer, paramAnonymousLong);
+        paramAnonymousBuffer = ProgressResponseBody.this;
+        long l2 = mTotalBytesRead;
+        boolean bool1 = l1 < -1L;
+        if (bool1) {
+          paramAnonymousLong = l1;
+        } else {
+          paramAnonymousLong = 0L;
+        }
+        ProgressResponseBody.access$002(paramAnonymousBuffer, l2 + paramAnonymousLong);
+        paramAnonymousBuffer = mProgressListener;
+        paramAnonymousLong = mTotalBytesRead;
+        l2 = mResponseBody.contentLength();
+        boolean bool2;
+        if (!bool1) {
+          bool2 = true;
+        } else {
+          bool2 = false;
+        }
+        paramAnonymousBuffer.onProgress(paramAnonymousLong, l2, bool2);
+        return l1;
+      }
+    };
+  }
+  
+  public long contentLength()
+  {
+    return mResponseBody.contentLength();
+  }
+  
+  public MediaType contentType()
+  {
+    return mResponseBody.contentType();
+  }
+  
+  public BufferedSource source()
+  {
+    if (mBufferedSource == null) {
+      mBufferedSource = Okio.buffer(source((Source)mResponseBody.source()));
+    }
+    return mBufferedSource;
+  }
+  
+  public long totalBytesRead()
+  {
+    return mTotalBytesRead;
+  }
+}

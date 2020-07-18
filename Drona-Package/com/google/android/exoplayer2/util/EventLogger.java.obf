@@ -1,0 +1,703 @@
+package com.google.android.exoplayer2.util;
+
+import android.os.SystemClock;
+import android.view.Surface;
+import androidx.annotation.Nullable;
+import com.google.android.exoplayer2.ExoPlaybackException;
+import com.google.android.exoplayer2.Format;
+import com.google.android.exoplayer2.PlaybackParameters;
+import com.google.android.exoplayer2.Timeline;
+import com.google.android.exoplayer2.Timeline.Period;
+import com.google.android.exoplayer2.Timeline.Window;
+import com.google.android.exoplayer2.analytics.AnalyticsListener;
+import com.google.android.exoplayer2.analytics.AnalyticsListener.EventTime;
+import com.google.android.exoplayer2.decoder.DecoderCounters;
+import com.google.android.exoplayer2.metadata.Metadata;
+import com.google.android.exoplayer2.source.MediaSource.MediaPeriodId;
+import com.google.android.exoplayer2.source.MediaSourceEventListener.LoadEventInfo;
+import com.google.android.exoplayer2.source.MediaSourceEventListener.MediaLoadData;
+import com.google.android.exoplayer2.source.TrackGroup;
+import com.google.android.exoplayer2.source.TrackGroupArray;
+import com.google.android.exoplayer2.trackselection.MappingTrackSelector;
+import com.google.android.exoplayer2.trackselection.MappingTrackSelector.MappedTrackInfo;
+import com.google.android.exoplayer2.trackselection.TrackSelection;
+import com.google.android.exoplayer2.trackselection.TrackSelectionArray;
+import java.io.IOException;
+import java.text.NumberFormat;
+import java.util.Locale;
+
+public class EventLogger
+  implements AnalyticsListener
+{
+  private static final String DEFAULT_TAG = "EventLogger";
+  private static final int MAX_TIMELINE_ITEM_LINES = 3;
+  private static final NumberFormat TIME_FORMAT = NumberFormat.getInstance(Locale.US);
+  private final Timeline.Period period;
+  private final long startTimeMs;
+  private final String tag;
+  @Nullable
+  private final MappingTrackSelector trackSelector;
+  private final Timeline.Window window;
+  
+  static
+  {
+    TIME_FORMAT.setMinimumFractionDigits(2);
+    TIME_FORMAT.setMaximumFractionDigits(2);
+    TIME_FORMAT.setGroupingUsed(false);
+  }
+  
+  public EventLogger(@Nullable MappingTrackSelector paramMappingTrackSelector)
+  {
+    this(paramMappingTrackSelector, "EventLogger");
+  }
+  
+  public EventLogger(@Nullable MappingTrackSelector paramMappingTrackSelector, String paramString)
+  {
+    trackSelector = paramMappingTrackSelector;
+    tag = paramString;
+    window = new Timeline.Window();
+    period = new Timeline.Period();
+    startTimeMs = SystemClock.elapsedRealtime();
+  }
+  
+  private static String getAdaptiveSupportString(int paramInt1, int paramInt2)
+  {
+    if (paramInt1 < 2) {
+      return "N/A";
+    }
+    if (paramInt2 != 0)
+    {
+      if (paramInt2 != 8)
+      {
+        if (paramInt2 != 16) {
+          return "?";
+        }
+        return "YES";
+      }
+      return "YES_NOT_SEAMLESS";
+    }
+    return "NO";
+  }
+  
+  private static String getDiscontinuityReasonString(int paramInt)
+  {
+    switch (paramInt)
+    {
+    default: 
+      return "?";
+    case 4: 
+      return "INTERNAL";
+    case 3: 
+      return "AD_INSERTION";
+    case 2: 
+      return "SEEK_ADJUSTMENT";
+    case 1: 
+      return "SEEK";
+    }
+    return "PERIOD_TRANSITION";
+  }
+  
+  private String getEventString(AnalyticsListener.EventTime paramEventTime, String paramString)
+  {
+    StringBuilder localStringBuilder = new StringBuilder();
+    localStringBuilder.append(paramString);
+    localStringBuilder.append(" [");
+    localStringBuilder.append(getEventTimeString(paramEventTime));
+    localStringBuilder.append("]");
+    return localStringBuilder.toString();
+  }
+  
+  private String getEventString(AnalyticsListener.EventTime paramEventTime, String paramString1, String paramString2)
+  {
+    StringBuilder localStringBuilder = new StringBuilder();
+    localStringBuilder.append(paramString1);
+    localStringBuilder.append(" [");
+    localStringBuilder.append(getEventTimeString(paramEventTime));
+    localStringBuilder.append(", ");
+    localStringBuilder.append(paramString2);
+    localStringBuilder.append("]");
+    return localStringBuilder.toString();
+  }
+  
+  private String getEventTimeString(AnalyticsListener.EventTime paramEventTime)
+  {
+    Object localObject1 = new StringBuilder();
+    ((StringBuilder)localObject1).append("window=");
+    ((StringBuilder)localObject1).append(windowIndex);
+    Object localObject2 = ((StringBuilder)localObject1).toString();
+    localObject1 = localObject2;
+    if (mediaPeriodId != null)
+    {
+      localObject1 = new StringBuilder();
+      ((StringBuilder)localObject1).append((String)localObject2);
+      ((StringBuilder)localObject1).append(", period=");
+      ((StringBuilder)localObject1).append(timeline.getIndexOfPeriod(mediaPeriodId.periodUid));
+      localObject2 = ((StringBuilder)localObject1).toString();
+      localObject1 = localObject2;
+      if (mediaPeriodId.isAd())
+      {
+        localObject1 = new StringBuilder();
+        ((StringBuilder)localObject1).append((String)localObject2);
+        ((StringBuilder)localObject1).append(", adGroup=");
+        ((StringBuilder)localObject1).append(mediaPeriodId.adGroupIndex);
+        localObject1 = ((StringBuilder)localObject1).toString();
+        localObject2 = new StringBuilder();
+        ((StringBuilder)localObject2).append((String)localObject1);
+        ((StringBuilder)localObject2).append(", ad=");
+        ((StringBuilder)localObject2).append(mediaPeriodId.adIndexInAdGroup);
+        localObject1 = ((StringBuilder)localObject2).toString();
+      }
+    }
+    localObject2 = new StringBuilder();
+    ((StringBuilder)localObject2).append(getTimeString(realtimeMs - startTimeMs));
+    ((StringBuilder)localObject2).append(", ");
+    ((StringBuilder)localObject2).append(getTimeString(currentPlaybackPositionMs));
+    ((StringBuilder)localObject2).append(", ");
+    ((StringBuilder)localObject2).append((String)localObject1);
+    return ((StringBuilder)localObject2).toString();
+  }
+  
+  private static String getFormatSupportString(int paramInt)
+  {
+    switch (paramInt)
+    {
+    default: 
+      return "?";
+    case 4: 
+      return "YES";
+    case 3: 
+      return "NO_EXCEEDS_CAPABILITIES";
+    case 2: 
+      return "NO_UNSUPPORTED_DRM";
+    case 1: 
+      return "NO_UNSUPPORTED_TYPE";
+    }
+    return "NO";
+  }
+  
+  private static String getRepeatModeString(int paramInt)
+  {
+    switch (paramInt)
+    {
+    default: 
+      return "?";
+    case 2: 
+      return "ALL";
+    case 1: 
+      return "ONE";
+    }
+    return "OFF";
+  }
+  
+  private static String getStateString(int paramInt)
+  {
+    switch (paramInt)
+    {
+    default: 
+      return "?";
+    case 4: 
+      return "ENDED";
+    case 3: 
+      return "READY";
+    case 2: 
+      return "BUFFERING";
+    }
+    return "IDLE";
+  }
+  
+  private static String getTimeString(long paramLong)
+  {
+    if (paramLong == -9223372036854775807L) {
+      return "?";
+    }
+    return TIME_FORMAT.format((float)paramLong / 1000.0F);
+  }
+  
+  private static String getTimelineChangeReasonString(int paramInt)
+  {
+    switch (paramInt)
+    {
+    default: 
+      return "?";
+    case 2: 
+      return "DYNAMIC";
+    case 1: 
+      return "RESET";
+    }
+    return "PREPARED";
+  }
+  
+  private static String getTrackStatusString(@Nullable TrackSelection paramTrackSelection, TrackGroup paramTrackGroup, int paramInt)
+  {
+    boolean bool;
+    if ((paramTrackSelection != null) && (paramTrackSelection.getTrackGroup() == paramTrackGroup) && (paramTrackSelection.indexOf(paramInt) != -1)) {
+      bool = true;
+    } else {
+      bool = false;
+    }
+    return getTrackStatusString(bool);
+  }
+  
+  private static String getTrackStatusString(boolean paramBoolean)
+  {
+    if (paramBoolean) {
+      return "[X]";
+    }
+    return "[ ]";
+  }
+  
+  private static String getTrackTypeString(int paramInt)
+  {
+    switch (paramInt)
+    {
+    default: 
+      if (paramInt >= 10000)
+      {
+        StringBuilder localStringBuilder = new StringBuilder();
+        localStringBuilder.append("custom (");
+        localStringBuilder.append(paramInt);
+        localStringBuilder.append(")");
+        return localStringBuilder.toString();
+      }
+      break;
+    case 6: 
+      return "none";
+    case 5: 
+      return "camera motion";
+    case 4: 
+      return "metadata";
+    case 3: 
+      return "text";
+    case 2: 
+      return "video";
+    case 1: 
+      return "audio";
+    case 0: 
+      return "default";
+    }
+    return "?";
+  }
+  
+  private void logd(AnalyticsListener.EventTime paramEventTime, String paramString)
+  {
+    logd(getEventString(paramEventTime, paramString));
+  }
+  
+  private void logd(AnalyticsListener.EventTime paramEventTime, String paramString1, String paramString2)
+  {
+    logd(getEventString(paramEventTime, paramString1, paramString2));
+  }
+  
+  private void loge(AnalyticsListener.EventTime paramEventTime, String paramString1, String paramString2, @Nullable Throwable paramThrowable)
+  {
+    loge(getEventString(paramEventTime, paramString1, paramString2), paramThrowable);
+  }
+  
+  private void loge(AnalyticsListener.EventTime paramEventTime, String paramString, @Nullable Throwable paramThrowable)
+  {
+    loge(getEventString(paramEventTime, paramString), paramThrowable);
+  }
+  
+  private void printInternalError(AnalyticsListener.EventTime paramEventTime, String paramString, Exception paramException)
+  {
+    loge(paramEventTime, "internalError", paramString, paramException);
+  }
+  
+  private void printMetadata(Metadata paramMetadata, String paramString)
+  {
+    int i = 0;
+    while (i < paramMetadata.length())
+    {
+      StringBuilder localStringBuilder = new StringBuilder();
+      localStringBuilder.append(paramString);
+      localStringBuilder.append(paramMetadata.get(i));
+      logd(localStringBuilder.toString());
+      i += 1;
+    }
+  }
+  
+  protected void logd(String paramString)
+  {
+    Log.d(tag, paramString);
+  }
+  
+  protected void loge(String paramString, @Nullable Throwable paramThrowable)
+  {
+    Log.e(tag, paramString, paramThrowable);
+  }
+  
+  public void onAudioSessionId(AnalyticsListener.EventTime paramEventTime, int paramInt)
+  {
+    logd(paramEventTime, "audioSessionId", Integer.toString(paramInt));
+  }
+  
+  public void onAudioUnderrun(AnalyticsListener.EventTime paramEventTime, int paramInt, long paramLong1, long paramLong2)
+  {
+    StringBuilder localStringBuilder = new StringBuilder();
+    localStringBuilder.append(paramInt);
+    localStringBuilder.append(", ");
+    localStringBuilder.append(paramLong1);
+    localStringBuilder.append(", ");
+    localStringBuilder.append(paramLong2);
+    localStringBuilder.append("]");
+    loge(paramEventTime, "audioTrackUnderrun", localStringBuilder.toString(), null);
+  }
+  
+  public void onBandwidthEstimate(AnalyticsListener.EventTime paramEventTime, int paramInt, long paramLong1, long paramLong2) {}
+  
+  public void onDecoderDisabled(AnalyticsListener.EventTime paramEventTime, int paramInt, DecoderCounters paramDecoderCounters)
+  {
+    logd(paramEventTime, "decoderDisabled", getTrackTypeString(paramInt));
+  }
+  
+  public void onDecoderEnabled(AnalyticsListener.EventTime paramEventTime, int paramInt, DecoderCounters paramDecoderCounters)
+  {
+    logd(paramEventTime, "decoderEnabled", getTrackTypeString(paramInt));
+  }
+  
+  public void onDecoderInitialized(AnalyticsListener.EventTime paramEventTime, int paramInt, String paramString, long paramLong)
+  {
+    StringBuilder localStringBuilder = new StringBuilder();
+    localStringBuilder.append(getTrackTypeString(paramInt));
+    localStringBuilder.append(", ");
+    localStringBuilder.append(paramString);
+    logd(paramEventTime, "decoderInitialized", localStringBuilder.toString());
+  }
+  
+  public void onDecoderInputFormatChanged(AnalyticsListener.EventTime paramEventTime, int paramInt, Format paramFormat)
+  {
+    StringBuilder localStringBuilder = new StringBuilder();
+    localStringBuilder.append(getTrackTypeString(paramInt));
+    localStringBuilder.append(", ");
+    localStringBuilder.append(Format.toLogString(paramFormat));
+    logd(paramEventTime, "decoderInputFormatChanged", localStringBuilder.toString());
+  }
+  
+  public void onDownstreamFormatChanged(AnalyticsListener.EventTime paramEventTime, MediaSourceEventListener.MediaLoadData paramMediaLoadData)
+  {
+    logd(paramEventTime, "downstreamFormatChanged", Format.toLogString(trackFormat));
+  }
+  
+  public void onDrmKeysLoaded(AnalyticsListener.EventTime paramEventTime)
+  {
+    logd(paramEventTime, "drmKeysLoaded");
+  }
+  
+  public void onDrmKeysRemoved(AnalyticsListener.EventTime paramEventTime)
+  {
+    logd(paramEventTime, "drmKeysRemoved");
+  }
+  
+  public void onDrmKeysRestored(AnalyticsListener.EventTime paramEventTime)
+  {
+    logd(paramEventTime, "drmKeysRestored");
+  }
+  
+  public void onDrmSessionAcquired(AnalyticsListener.EventTime paramEventTime)
+  {
+    logd(paramEventTime, "drmSessionAcquired");
+  }
+  
+  public void onDrmSessionManagerError(AnalyticsListener.EventTime paramEventTime, Exception paramException)
+  {
+    printInternalError(paramEventTime, "drmSessionManagerError", paramException);
+  }
+  
+  public void onDrmSessionReleased(AnalyticsListener.EventTime paramEventTime)
+  {
+    logd(paramEventTime, "drmSessionReleased");
+  }
+  
+  public void onDroppedVideoFrames(AnalyticsListener.EventTime paramEventTime, int paramInt, long paramLong)
+  {
+    logd(paramEventTime, "droppedFrames", Integer.toString(paramInt));
+  }
+  
+  public void onLoadCanceled(AnalyticsListener.EventTime paramEventTime, MediaSourceEventListener.LoadEventInfo paramLoadEventInfo, MediaSourceEventListener.MediaLoadData paramMediaLoadData) {}
+  
+  public void onLoadCompleted(AnalyticsListener.EventTime paramEventTime, MediaSourceEventListener.LoadEventInfo paramLoadEventInfo, MediaSourceEventListener.MediaLoadData paramMediaLoadData) {}
+  
+  public void onLoadError(AnalyticsListener.EventTime paramEventTime, MediaSourceEventListener.LoadEventInfo paramLoadEventInfo, MediaSourceEventListener.MediaLoadData paramMediaLoadData, IOException paramIOException, boolean paramBoolean)
+  {
+    printInternalError(paramEventTime, "loadError", paramIOException);
+  }
+  
+  public void onLoadStarted(AnalyticsListener.EventTime paramEventTime, MediaSourceEventListener.LoadEventInfo paramLoadEventInfo, MediaSourceEventListener.MediaLoadData paramMediaLoadData) {}
+  
+  public void onLoadingChanged(AnalyticsListener.EventTime paramEventTime, boolean paramBoolean)
+  {
+    logd(paramEventTime, "loading", Boolean.toString(paramBoolean));
+  }
+  
+  public void onMediaPeriodCreated(AnalyticsListener.EventTime paramEventTime)
+  {
+    logd(paramEventTime, "mediaPeriodCreated");
+  }
+  
+  public void onMediaPeriodReleased(AnalyticsListener.EventTime paramEventTime)
+  {
+    logd(paramEventTime, "mediaPeriodReleased");
+  }
+  
+  public void onMetadata(AnalyticsListener.EventTime paramEventTime, Metadata paramMetadata)
+  {
+    StringBuilder localStringBuilder = new StringBuilder();
+    localStringBuilder.append("metadata [");
+    localStringBuilder.append(getEventTimeString(paramEventTime));
+    localStringBuilder.append(", ");
+    logd(localStringBuilder.toString());
+    printMetadata(paramMetadata, "  ");
+    logd("]");
+  }
+  
+  public void onPlaybackParametersChanged(AnalyticsListener.EventTime paramEventTime, PlaybackParameters paramPlaybackParameters)
+  {
+    logd(paramEventTime, "playbackParameters", Util.formatInvariant("speed=%.2f, pitch=%.2f, skipSilence=%s", new Object[] { Float.valueOf(speed), Float.valueOf(pitch), Boolean.valueOf(skipSilence) }));
+  }
+  
+  public void onPlayerError(AnalyticsListener.EventTime paramEventTime, ExoPlaybackException paramExoPlaybackException)
+  {
+    loge(paramEventTime, "playerFailed", paramExoPlaybackException);
+  }
+  
+  public void onPlayerStateChanged(AnalyticsListener.EventTime paramEventTime, boolean paramBoolean, int paramInt)
+  {
+    StringBuilder localStringBuilder = new StringBuilder();
+    localStringBuilder.append(paramBoolean);
+    localStringBuilder.append(", ");
+    localStringBuilder.append(getStateString(paramInt));
+    logd(paramEventTime, "state", localStringBuilder.toString());
+  }
+  
+  public void onPositionDiscontinuity(AnalyticsListener.EventTime paramEventTime, int paramInt)
+  {
+    logd(paramEventTime, "positionDiscontinuity", getDiscontinuityReasonString(paramInt));
+  }
+  
+  public void onReadingStarted(AnalyticsListener.EventTime paramEventTime)
+  {
+    logd(paramEventTime, "mediaPeriodReadingStarted");
+  }
+  
+  public void onRenderedFirstFrame(AnalyticsListener.EventTime paramEventTime, @Nullable Surface paramSurface)
+  {
+    logd(paramEventTime, "renderedFirstFrame", String.valueOf(paramSurface));
+  }
+  
+  public void onRepeatModeChanged(AnalyticsListener.EventTime paramEventTime, int paramInt)
+  {
+    logd(paramEventTime, "repeatMode", getRepeatModeString(paramInt));
+  }
+  
+  public void onSeekProcessed(AnalyticsListener.EventTime paramEventTime)
+  {
+    logd(paramEventTime, "seekProcessed");
+  }
+  
+  public void onSeekStarted(AnalyticsListener.EventTime paramEventTime)
+  {
+    logd(paramEventTime, "seekStarted");
+  }
+  
+  public void onShuffleModeChanged(AnalyticsListener.EventTime paramEventTime, boolean paramBoolean)
+  {
+    logd(paramEventTime, "shuffleModeEnabled", Boolean.toString(paramBoolean));
+  }
+  
+  public void onSurfaceSizeChanged(AnalyticsListener.EventTime paramEventTime, int paramInt1, int paramInt2)
+  {
+    StringBuilder localStringBuilder = new StringBuilder();
+    localStringBuilder.append(paramInt1);
+    localStringBuilder.append(", ");
+    localStringBuilder.append(paramInt2);
+    logd(paramEventTime, "surfaceSizeChanged", localStringBuilder.toString());
+  }
+  
+  public void onTimelineChanged(AnalyticsListener.EventTime paramEventTime, int paramInt)
+  {
+    int k = timeline.getPeriodCount();
+    int j = timeline.getWindowCount();
+    StringBuilder localStringBuilder = new StringBuilder();
+    localStringBuilder.append("timelineChanged [");
+    localStringBuilder.append(getEventTimeString(paramEventTime));
+    localStringBuilder.append(", periodCount=");
+    localStringBuilder.append(k);
+    localStringBuilder.append(", windowCount=");
+    localStringBuilder.append(j);
+    localStringBuilder.append(", reason=");
+    localStringBuilder.append(getTimelineChangeReasonString(paramInt));
+    logd(localStringBuilder.toString());
+    int i = 0;
+    paramInt = 0;
+    while (paramInt < Math.min(k, 3))
+    {
+      timeline.getPeriod(paramInt, period);
+      localStringBuilder = new StringBuilder();
+      localStringBuilder.append("  period [");
+      localStringBuilder.append(getTimeString(period.getDurationMs()));
+      localStringBuilder.append("]");
+      logd(localStringBuilder.toString());
+      paramInt += 1;
+    }
+    paramInt = i;
+    if (k > 3)
+    {
+      logd("  ...");
+      paramInt = i;
+    }
+    while (paramInt < Math.min(j, 3))
+    {
+      timeline.getWindow(paramInt, window);
+      localStringBuilder = new StringBuilder();
+      localStringBuilder.append("  window [");
+      localStringBuilder.append(getTimeString(window.getDurationMs()));
+      localStringBuilder.append(", ");
+      localStringBuilder.append(window.isSeekable);
+      localStringBuilder.append(", ");
+      localStringBuilder.append(window.isDynamic);
+      localStringBuilder.append("]");
+      logd(localStringBuilder.toString());
+      paramInt += 1;
+    }
+    if (j > 3) {
+      logd("  ...");
+    }
+    logd("]");
+  }
+  
+  public void onTracksChanged(AnalyticsListener.EventTime paramEventTime, TrackGroupArray paramTrackGroupArray, TrackSelectionArray paramTrackSelectionArray)
+  {
+    if (trackSelector != null) {
+      paramTrackGroupArray = trackSelector.getCurrentMappedTrackInfo();
+    } else {
+      paramTrackGroupArray = null;
+    }
+    if (paramTrackGroupArray == null)
+    {
+      logd(paramEventTime, "tracksChanged", "[]");
+      return;
+    }
+    Object localObject1 = new StringBuilder();
+    ((StringBuilder)localObject1).append("tracksChanged [");
+    ((StringBuilder)localObject1).append(getEventTimeString(paramEventTime));
+    ((StringBuilder)localObject1).append(", ");
+    logd(((StringBuilder)localObject1).toString());
+    int m = paramTrackGroupArray.getRendererCount();
+    int i = 0;
+    Object localObject2;
+    int j;
+    while (i < m)
+    {
+      localObject1 = paramTrackGroupArray.getTrackGroups(i);
+      paramEventTime = paramTrackSelectionArray.get(i);
+      if (length > 0)
+      {
+        localObject2 = new StringBuilder();
+        ((StringBuilder)localObject2).append("  Renderer:");
+        ((StringBuilder)localObject2).append(i);
+        ((StringBuilder)localObject2).append(" [");
+        logd(((StringBuilder)localObject2).toString());
+        j = 0;
+        while (j < length)
+        {
+          localObject2 = ((TrackGroupArray)localObject1).get(j);
+          String str = getAdaptiveSupportString(length, paramTrackGroupArray.getAdaptiveSupport(i, j, false));
+          Object localObject3 = new StringBuilder();
+          ((StringBuilder)localObject3).append("    Group:");
+          ((StringBuilder)localObject3).append(j);
+          ((StringBuilder)localObject3).append(", adaptive_supported=");
+          ((StringBuilder)localObject3).append(str);
+          ((StringBuilder)localObject3).append(" [");
+          logd(((StringBuilder)localObject3).toString());
+          int k = 0;
+          while (k < length)
+          {
+            str = getTrackStatusString(paramEventTime, (TrackGroup)localObject2, k);
+            localObject3 = getFormatSupportString(paramTrackGroupArray.getTrackSupport(i, j, k));
+            StringBuilder localStringBuilder = new StringBuilder();
+            localStringBuilder.append("      ");
+            localStringBuilder.append(str);
+            localStringBuilder.append(" Track:");
+            localStringBuilder.append(k);
+            localStringBuilder.append(", ");
+            localStringBuilder.append(Format.toLogString(((TrackGroup)localObject2).getFormat(k)));
+            localStringBuilder.append(", supported=");
+            localStringBuilder.append((String)localObject3);
+            logd(localStringBuilder.toString());
+            k += 1;
+          }
+          logd("    ]");
+          j += 1;
+        }
+        if (paramEventTime != null)
+        {
+          j = 0;
+          while (j < paramEventTime.length())
+          {
+            localObject1 = getFormatmetadata;
+            if (localObject1 != null)
+            {
+              logd("    Metadata [");
+              printMetadata((Metadata)localObject1, "      ");
+              logd("    ]");
+              break;
+            }
+            j += 1;
+          }
+        }
+        logd("  ]");
+      }
+      i += 1;
+    }
+    paramEventTime = paramTrackGroupArray.getUnmappedTrackGroups();
+    if (length > 0)
+    {
+      logd("  Renderer:None [");
+      i = 0;
+      while (i < length)
+      {
+        paramTrackGroupArray = new StringBuilder();
+        paramTrackGroupArray.append("    Group:");
+        paramTrackGroupArray.append(i);
+        paramTrackGroupArray.append(" [");
+        logd(paramTrackGroupArray.toString());
+        paramTrackGroupArray = paramEventTime.get(i);
+        j = 0;
+        while (j < length)
+        {
+          paramTrackSelectionArray = getTrackStatusString(false);
+          localObject1 = getFormatSupportString(0);
+          localObject2 = new StringBuilder();
+          ((StringBuilder)localObject2).append("      ");
+          ((StringBuilder)localObject2).append(paramTrackSelectionArray);
+          ((StringBuilder)localObject2).append(" Track:");
+          ((StringBuilder)localObject2).append(j);
+          ((StringBuilder)localObject2).append(", ");
+          ((StringBuilder)localObject2).append(Format.toLogString(paramTrackGroupArray.getFormat(j)));
+          ((StringBuilder)localObject2).append(", supported=");
+          ((StringBuilder)localObject2).append((String)localObject1);
+          logd(((StringBuilder)localObject2).toString());
+          j += 1;
+        }
+        logd("    ]");
+        i += 1;
+      }
+      logd("  ]");
+    }
+    logd("]");
+  }
+  
+  public void onUpstreamDiscarded(AnalyticsListener.EventTime paramEventTime, MediaSourceEventListener.MediaLoadData paramMediaLoadData)
+  {
+    logd(paramEventTime, "upstreamDiscarded", Format.toLogString(trackFormat));
+  }
+  
+  public void onVideoSizeChanged(AnalyticsListener.EventTime paramEventTime, int paramInt1, int paramInt2, int paramInt3, float paramFloat)
+  {
+    StringBuilder localStringBuilder = new StringBuilder();
+    localStringBuilder.append(paramInt1);
+    localStringBuilder.append(", ");
+    localStringBuilder.append(paramInt2);
+    logd(paramEventTime, "videoSizeChanged", localStringBuilder.toString());
+  }
+}

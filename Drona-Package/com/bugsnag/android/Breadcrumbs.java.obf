@@ -1,0 +1,75 @@
+package com.bugsnag.android;
+
+import androidx.annotation.NonNull;
+import java.io.IOException;
+import java.util.Iterator;
+import java.util.Observable;
+import java.util.Queue;
+import java.util.concurrent.ConcurrentLinkedQueue;
+
+class Breadcrumbs
+  extends Observable
+  implements JsonStream.Streamable
+{
+  private static final int MAX_PAYLOAD_SIZE = 4096;
+  private final Configuration configuration;
+  final Queue<Breadcrumb> store = new ConcurrentLinkedQueue();
+  
+  Breadcrumbs(Configuration paramConfiguration)
+  {
+    configuration = paramConfiguration;
+  }
+  
+  private void addToStore(@NonNull Breadcrumb paramBreadcrumb)
+  {
+    try
+    {
+      if (paramBreadcrumb.payloadSize() > 4096)
+      {
+        Logger.warn("Dropping breadcrumb because payload exceeds 4KB limit");
+        return;
+      }
+      store.add(paramBreadcrumb);
+      pruneBreadcrumbs();
+      setChanged();
+      notifyObservers(new NativeInterface.Message(NativeInterface.MessageType.ADD_BREADCRUMB, paramBreadcrumb));
+      return;
+    }
+    catch (IOException paramBreadcrumb)
+    {
+      Logger.warn("Dropping breadcrumb because it could not be serialized", paramBreadcrumb);
+    }
+  }
+  
+  private void pruneBreadcrumbs()
+  {
+    int i = configuration.getMaxBreadcrumbs();
+    while (store.size() > i) {
+      store.poll();
+    }
+  }
+  
+  void add(@NonNull Breadcrumb paramBreadcrumb)
+  {
+    addToStore(paramBreadcrumb);
+  }
+  
+  void clear()
+  {
+    store.clear();
+    setChanged();
+    notifyObservers(new NativeInterface.Message(NativeInterface.MessageType.CLEAR_BREADCRUMBS, null));
+  }
+  
+  public void toStream(@NonNull JsonStream paramJsonStream)
+    throws IOException
+  {
+    pruneBreadcrumbs();
+    paramJsonStream.beginArray();
+    Iterator localIterator = store.iterator();
+    while (localIterator.hasNext()) {
+      ((Breadcrumb)localIterator.next()).toStream(paramJsonStream);
+    }
+    paramJsonStream.endArray();
+  }
+}

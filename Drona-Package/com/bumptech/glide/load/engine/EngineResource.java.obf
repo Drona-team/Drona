@@ -1,0 +1,155 @@
+package com.bumptech.glide.load.engine;
+
+import androidx.annotation.NonNull;
+import com.bumptech.glide.load.Key;
+import com.bumptech.glide.util.Preconditions;
+
+class EngineResource<Z>
+  implements Resource<Z>
+{
+  private int acquired;
+  private final boolean isCacheable;
+  private final boolean isRecyclable;
+  private boolean isRecycled;
+  private Key key;
+  private ResourceListener listener;
+  private final Resource<Z> resource;
+  
+  EngineResource(Resource<Z> paramResource, boolean paramBoolean1, boolean paramBoolean2)
+  {
+    resource = ((Resource)Preconditions.checkNotNull(paramResource));
+    isCacheable = paramBoolean1;
+    isRecyclable = paramBoolean2;
+  }
+  
+  void acquire()
+  {
+    try
+    {
+      if (!isRecycled)
+      {
+        acquired += 1;
+        return;
+      }
+      throw new IllegalStateException("Cannot acquire a recycled resource");
+    }
+    finally {}
+  }
+  
+  @NonNull
+  public Z get()
+  {
+    return resource.get();
+  }
+  
+  Resource<Z> getResource()
+  {
+    return resource;
+  }
+  
+  @NonNull
+  public Class<Z> getResourceClass()
+  {
+    return resource.getResourceClass();
+  }
+  
+  public int getSize()
+  {
+    return resource.getSize();
+  }
+  
+  boolean isCacheable()
+  {
+    return isCacheable;
+  }
+  
+  public void recycle()
+  {
+    try
+    {
+      if (acquired <= 0)
+      {
+        if (!isRecycled)
+        {
+          isRecycled = true;
+          if (isRecyclable) {
+            resource.recycle();
+          }
+          return;
+        }
+        throw new IllegalStateException("Cannot recycle a resource that has already been recycled");
+      }
+      throw new IllegalStateException("Cannot recycle a resource while it is still acquired");
+    }
+    finally {}
+  }
+  
+  void release()
+  {
+    synchronized (listener)
+    {
+      try
+      {
+        if (acquired > 0)
+        {
+          int i = acquired - 1;
+          acquired = i;
+          if (i == 0) {
+            listener.onResourceReleased(key, this);
+          }
+          return;
+        }
+        throw new IllegalStateException("Cannot release a recycled or not yet acquired resource");
+      }
+      finally {}
+    }
+  }
+  
+  void setResourceListener(Key paramKey, ResourceListener paramResourceListener)
+  {
+    try
+    {
+      key = paramKey;
+      listener = paramResourceListener;
+      return;
+    }
+    finally
+    {
+      paramKey = finally;
+      throw paramKey;
+    }
+  }
+  
+  public String toString()
+  {
+    try
+    {
+      Object localObject1 = new StringBuilder();
+      ((StringBuilder)localObject1).append("EngineResource{isCacheable=");
+      ((StringBuilder)localObject1).append(isCacheable);
+      ((StringBuilder)localObject1).append(", listener=");
+      ((StringBuilder)localObject1).append(listener);
+      ((StringBuilder)localObject1).append(", key=");
+      ((StringBuilder)localObject1).append(key);
+      ((StringBuilder)localObject1).append(", acquired=");
+      ((StringBuilder)localObject1).append(acquired);
+      ((StringBuilder)localObject1).append(", isRecycled=");
+      ((StringBuilder)localObject1).append(isRecycled);
+      ((StringBuilder)localObject1).append(", resource=");
+      ((StringBuilder)localObject1).append(resource);
+      ((StringBuilder)localObject1).append('}');
+      localObject1 = ((StringBuilder)localObject1).toString();
+      return localObject1;
+    }
+    finally
+    {
+      localObject2 = finally;
+      throw localObject2;
+    }
+  }
+  
+  static abstract interface ResourceListener
+  {
+    public abstract void onResourceReleased(Key paramKey, EngineResource<?> paramEngineResource);
+  }
+}

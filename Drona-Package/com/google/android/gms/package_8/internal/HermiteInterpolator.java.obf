@@ -1,0 +1,8 @@
+package com.google.android.gms.ads.internal;
+
+public abstract interface zzj
+{
+  public abstract void zzlc();
+  
+  public abstract void zzld();
+}

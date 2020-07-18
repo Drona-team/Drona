@@ -1,0 +1,1249 @@
+package com.google.android.exoplayer2.source;
+
+import android.net.Uri;
+import android.os.Handler;
+import androidx.annotation.Nullable;
+import com.google.android.exoplayer2.Format;
+import com.google.android.exoplayer2.FormatHolder;
+import com.google.android.exoplayer2.SeekParameters;
+import com.google.android.exoplayer2.decoder.DecoderInputBuffer;
+import com.google.android.exoplayer2.extractor.Extractor;
+import com.google.android.exoplayer2.extractor.ExtractorOutput;
+import com.google.android.exoplayer2.extractor.PositionHolder;
+import com.google.android.exoplayer2.extractor.SeekMap;
+import com.google.android.exoplayer2.extractor.SeekMap.SeekPoints;
+import com.google.android.exoplayer2.extractor.SeekPoint;
+import com.google.android.exoplayer2.extractor.TrackOutput;
+import com.google.android.exoplayer2.trackselection.TrackSelection;
+import com.google.android.exoplayer2.upstream.Allocator;
+import com.google.android.exoplayer2.upstream.DataSource;
+import com.google.android.exoplayer2.upstream.DataSpec;
+import com.google.android.exoplayer2.upstream.LoadErrorHandlingPolicy;
+import com.google.android.exoplayer2.upstream.Loader;
+import com.google.android.exoplayer2.upstream.Loader.Callback;
+import com.google.android.exoplayer2.upstream.Loader.LoadErrorAction;
+import com.google.android.exoplayer2.upstream.Loader.Loadable;
+import com.google.android.exoplayer2.upstream.Loader.ReleaseCallback;
+import com.google.android.exoplayer2.upstream.StatsDataSource;
+import com.google.android.exoplayer2.util.Assertions;
+import com.google.android.exoplayer2.util.ConditionVariable;
+import com.google.android.exoplayer2.util.MimeTypes;
+import com.google.android.exoplayer2.util.Util;
+import java.io.IOException;
+import java.util.Arrays;
+
+final class ExtractorMediaPeriod
+  implements MediaPeriod, ExtractorOutput, Loader.Callback<ExtractingLoadable>, Loader.ReleaseCallback, SampleQueue.UpstreamFormatChangedListener
+{
+  private static final long DEFAULT_LAST_SAMPLE_DURATION_US = 10000L;
+  private final Allocator allocator;
+  @Nullable
+  private MediaPeriod.Callback callback;
+  private final long continueLoadingCheckIntervalBytes;
+  @Nullable
+  private final String customCacheKey;
+  private final DataSource dataSource;
+  private int dataType;
+  private long durationUs;
+  private int enabledTrackCount;
+  private final MediaSourceEventListener.EventDispatcher eventDispatcher;
+  private int extractedSamplesCountAtStartOfLoad;
+  private final ExtractorHolder extractorHolder;
+  private final Handler handler;
+  private boolean haveAudioVideoTracks;
+  private long lastSeekPositionUs;
+  private long length;
+  private final Listener listener;
+  private final ConditionVariable loadCondition;
+  private final LoadErrorHandlingPolicy loadErrorHandlingPolicy;
+  private final Loader loader;
+  private boolean loadingFinished;
+  private final Runnable maybeFinishPrepareRunnable;
+  private boolean notifiedReadingStarted;
+  private boolean notifyDiscontinuity;
+  private final Runnable onContinueLoadingRequestedRunnable;
+  private boolean pendingDeferredRetry;
+  private long pendingResetPositionUs;
+  private boolean prepared;
+  @Nullable
+  private PreparedState preparedState;
+  private boolean released;
+  private int[] sampleQueueTrackIds;
+  private SampleQueue[] sampleQueues;
+  private boolean sampleQueuesBuilt;
+  @Nullable
+  private SeekMap seekMap;
+  private boolean seenFirstTrackSelection;
+  private final Uri uri;
+  
+  public ExtractorMediaPeriod(Uri paramUri, DataSource paramDataSource, Extractor[] paramArrayOfExtractor, LoadErrorHandlingPolicy paramLoadErrorHandlingPolicy, MediaSourceEventListener.EventDispatcher paramEventDispatcher, Listener paramListener, Allocator paramAllocator, @Nullable String paramString, int paramInt)
+  {
+    uri = paramUri;
+    dataSource = paramDataSource;
+    loadErrorHandlingPolicy = paramLoadErrorHandlingPolicy;
+    eventDispatcher = paramEventDispatcher;
+    listener = paramListener;
+    allocator = paramAllocator;
+    customCacheKey = paramString;
+    continueLoadingCheckIntervalBytes = paramInt;
+    loader = new Loader("Loader:ExtractorMediaPeriod");
+    extractorHolder = new ExtractorHolder(paramArrayOfExtractor);
+    loadCondition = new ConditionVariable();
+    maybeFinishPrepareRunnable = new -..Lambda.ExtractorMediaPeriod.Ll7lI30pD07GZk92Lo8XgkQMAAY(this);
+    onContinueLoadingRequestedRunnable = new -..Lambda.ExtractorMediaPeriod.Hd-sBytb6cpkhM49l8dYCND3wmk(this);
+    handler = new Handler();
+    sampleQueueTrackIds = new int[0];
+    sampleQueues = new SampleQueue[0];
+    pendingResetPositionUs = -9223372036854775807L;
+    length = -1L;
+    durationUs = -9223372036854775807L;
+    dataType = 1;
+    paramEventDispatcher.mediaPeriodCreated();
+  }
+  
+  private boolean configureRetry(ExtractingLoadable paramExtractingLoadable, int paramInt)
+  {
+    if ((length == -1L) && ((seekMap == null) || (seekMap.getDurationUs() == -9223372036854775807L)))
+    {
+      boolean bool = prepared;
+      paramInt = 0;
+      if ((bool) && (!suppressRead()))
+      {
+        pendingDeferredRetry = true;
+        return false;
+      }
+      notifyDiscontinuity = prepared;
+      lastSeekPositionUs = 0L;
+      extractedSamplesCountAtStartOfLoad = 0;
+      SampleQueue[] arrayOfSampleQueue = sampleQueues;
+      int i = arrayOfSampleQueue.length;
+      while (paramInt < i)
+      {
+        arrayOfSampleQueue[paramInt].reset();
+        paramInt += 1;
+      }
+      paramExtractingLoadable.setLoadPosition(0L, 0L);
+      return true;
+    }
+    extractedSamplesCountAtStartOfLoad = paramInt;
+    return true;
+  }
+  
+  private void copyLengthFromLoader(ExtractingLoadable paramExtractingLoadable)
+  {
+    if (length == -1L) {
+      length = length;
+    }
+  }
+  
+  private int getExtractedSamplesCount()
+  {
+    SampleQueue[] arrayOfSampleQueue = sampleQueues;
+    int k = arrayOfSampleQueue.length;
+    int i = 0;
+    int j = 0;
+    while (i < k)
+    {
+      j += arrayOfSampleQueue[i].getWriteIndex();
+      i += 1;
+    }
+    return j;
+  }
+  
+  private long getLargestQueuedTimestampUs()
+  {
+    SampleQueue[] arrayOfSampleQueue = sampleQueues;
+    int j = arrayOfSampleQueue.length;
+    long l = Long.MIN_VALUE;
+    int i = 0;
+    while (i < j)
+    {
+      l = Math.max(l, arrayOfSampleQueue[i].getLargestQueuedTimestampUs());
+      i += 1;
+    }
+    return l;
+  }
+  
+  private PreparedState getPreparedState()
+  {
+    return (PreparedState)Assertions.checkNotNull(preparedState);
+  }
+  
+  private boolean isPendingReset()
+  {
+    return pendingResetPositionUs != -9223372036854775807L;
+  }
+  
+  private void maybeFinishPrepare()
+  {
+    SeekMap localSeekMap = seekMap;
+    if ((!released) && (!prepared) && (sampleQueuesBuilt))
+    {
+      if (localSeekMap == null) {
+        return;
+      }
+      Object localObject1 = sampleQueues;
+      int j = localObject1.length;
+      int i = 0;
+      while (i < j)
+      {
+        if (localObject1[i].getUpstreamFormat() == null) {
+          return;
+        }
+        i += 1;
+      }
+      loadCondition.close();
+      j = sampleQueues.length;
+      localObject1 = new TrackGroup[j];
+      boolean[] arrayOfBoolean = new boolean[j];
+      durationUs = localSeekMap.getDurationUs();
+      i = 0;
+      for (;;)
+      {
+        int m = 1;
+        if (i >= j) {
+          break;
+        }
+        Object localObject2 = sampleQueues[i].getUpstreamFormat();
+        localObject1[i] = new TrackGroup(new Format[] { localObject2 });
+        localObject2 = sampleMimeType;
+        int k = m;
+        if (!MimeTypes.isVideo((String)localObject2)) {
+          if (MimeTypes.isAudio((String)localObject2)) {
+            k = m;
+          } else {
+            k = 0;
+          }
+        }
+        arrayOfBoolean[i] = k;
+        haveAudioVideoTracks = (k | haveAudioVideoTracks);
+        i += 1;
+      }
+      if ((length == -1L) && (localSeekMap.getDurationUs() == -9223372036854775807L)) {
+        i = 7;
+      } else {
+        i = 1;
+      }
+      dataType = i;
+      preparedState = new PreparedState(localSeekMap, new TrackGroupArray((TrackGroup[])localObject1), arrayOfBoolean);
+      prepared = true;
+      listener.onSourceInfoRefreshed(durationUs, localSeekMap.isSeekable());
+      ((MediaPeriod.Callback)Assertions.checkNotNull(callback)).onPrepared(this);
+      return;
+    }
+  }
+  
+  private void maybeNotifyDownstreamFormat(int paramInt)
+  {
+    Object localObject = getPreparedState();
+    boolean[] arrayOfBoolean = trackNotifiedDownstreamFormats;
+    if (arrayOfBoolean[paramInt] == 0)
+    {
+      localObject = tracks.get(paramInt).getFormat(0);
+      eventDispatcher.downstreamFormatChanged(MimeTypes.getTrackType(sampleMimeType), (Format)localObject, 0, null, lastSeekPositionUs);
+      arrayOfBoolean[paramInt] = true;
+    }
+  }
+  
+  private void maybeStartDeferredRetry(int paramInt)
+  {
+    Object localObject = getPreparedStatetrackIsAudioVideoFlags;
+    if ((pendingDeferredRetry) && (localObject[paramInt] != 0))
+    {
+      if (sampleQueues[paramInt].hasNextSample()) {
+        return;
+      }
+      pendingResetPositionUs = 0L;
+      paramInt = 0;
+      pendingDeferredRetry = false;
+      notifyDiscontinuity = true;
+      lastSeekPositionUs = 0L;
+      extractedSamplesCountAtStartOfLoad = 0;
+      localObject = sampleQueues;
+      int i = localObject.length;
+      while (paramInt < i)
+      {
+        localObject[paramInt].reset();
+        paramInt += 1;
+      }
+      ((MediaPeriod.Callback)Assertions.checkNotNull(callback)).onContinueLoadingRequested(this);
+      return;
+    }
+  }
+  
+  private boolean seekInsideBufferUs(boolean[] paramArrayOfBoolean, long paramLong)
+  {
+    int k = sampleQueues.length;
+    int i = 0;
+    for (;;)
+    {
+      int j = 1;
+      if (i >= k) {
+        break;
+      }
+      SampleQueue localSampleQueue = sampleQueues[i];
+      localSampleQueue.rewind();
+      if (localSampleQueue.advanceTo(paramLong, true, false) == -1) {
+        j = 0;
+      }
+      if ((j == 0) && ((paramArrayOfBoolean[i] != 0) || (!haveAudioVideoTracks))) {
+        return false;
+      }
+      i += 1;
+    }
+    return true;
+  }
+  
+  private void startLoading()
+  {
+    ExtractingLoadable localExtractingLoadable = new ExtractingLoadable(uri, dataSource, extractorHolder, this, loadCondition);
+    if (prepared)
+    {
+      SeekMap localSeekMap = getPreparedStateseekMap;
+      Assertions.checkState(isPendingReset());
+      if ((durationUs != -9223372036854775807L) && (pendingResetPositionUs >= durationUs))
+      {
+        loadingFinished = true;
+        pendingResetPositionUs = -9223372036854775807L;
+        return;
+      }
+      localExtractingLoadable.setLoadPosition(getSeekPointspendingResetPositionUs).first.position, pendingResetPositionUs);
+      pendingResetPositionUs = -9223372036854775807L;
+    }
+    extractedSamplesCountAtStartOfLoad = getExtractedSamplesCount();
+    long l = loader.startLoading(localExtractingLoadable, this, loadErrorHandlingPolicy.getMinimumLoadableRetryCount(dataType));
+    eventDispatcher.loadStarted(dataSpec, 1, -1, null, 0, null, seekTimeUs, durationUs, l);
+  }
+  
+  private boolean suppressRead()
+  {
+    return (notifyDiscontinuity) || (isPendingReset());
+  }
+  
+  public boolean continueLoading(long paramLong)
+  {
+    if ((!loadingFinished) && (!pendingDeferredRetry) && ((!prepared) || (enabledTrackCount != 0)))
+    {
+      boolean bool = loadCondition.open();
+      if (!loader.isLoading())
+      {
+        startLoading();
+        bool = true;
+      }
+      return bool;
+    }
+    return false;
+  }
+  
+  public void discardBuffer(long paramLong, boolean paramBoolean)
+  {
+    if (isPendingReset()) {
+      return;
+    }
+    boolean[] arrayOfBoolean = getPreparedStatetrackEnabledStates;
+    int j = sampleQueues.length;
+    int i = 0;
+    while (i < j)
+    {
+      sampleQueues[i].discardTo(paramLong, paramBoolean, arrayOfBoolean[i]);
+      i += 1;
+    }
+  }
+  
+  public void endTracks()
+  {
+    sampleQueuesBuilt = true;
+    handler.post(maybeFinishPrepareRunnable);
+  }
+  
+  public long getAdjustedSeekPositionUs(long paramLong, SeekParameters paramSeekParameters)
+  {
+    Object localObject = getPreparedStateseekMap;
+    if (!((SeekMap)localObject).isSeekable()) {
+      return 0L;
+    }
+    localObject = ((SeekMap)localObject).getSeekPoints(paramLong);
+    return Util.resolveSeekPositionUs(paramLong, paramSeekParameters, first.timeUs, second.timeUs);
+  }
+  
+  public long getBufferedPositionUs()
+  {
+    boolean[] arrayOfBoolean = getPreparedStatetrackIsAudioVideoFlags;
+    if (loadingFinished) {
+      return Long.MIN_VALUE;
+    }
+    if (isPendingReset()) {
+      return pendingResetPositionUs;
+    }
+    if (haveAudioVideoTracks)
+    {
+      l1 = Long.MAX_VALUE;
+      int j = sampleQueues.length;
+      int i = 0;
+      for (;;)
+      {
+        l2 = l1;
+        if (i >= j) {
+          break;
+        }
+        l2 = l1;
+        if (arrayOfBoolean[i] != 0) {
+          l2 = Math.min(l1, sampleQueues[i].getLargestQueuedTimestampUs());
+        }
+        i += 1;
+        l1 = l2;
+      }
+    }
+    long l2 = getLargestQueuedTimestampUs();
+    long l1 = l2;
+    if (l2 == Long.MIN_VALUE) {
+      l1 = lastSeekPositionUs;
+    }
+    return l1;
+  }
+  
+  public long getNextLoadPositionUs()
+  {
+    if (enabledTrackCount == 0) {
+      return Long.MIN_VALUE;
+    }
+    return getBufferedPositionUs();
+  }
+  
+  public TrackGroupArray getTrackGroups()
+  {
+    return getPreparedStatetracks;
+  }
+  
+  boolean isReady(int paramInt)
+  {
+    return (!suppressRead()) && ((loadingFinished) || (sampleQueues[paramInt].hasNextSample()));
+  }
+  
+  void maybeThrowError()
+    throws IOException
+  {
+    loader.maybeThrowError(loadErrorHandlingPolicy.getMinimumLoadableRetryCount(dataType));
+  }
+  
+  public void maybeThrowPrepareError()
+    throws IOException
+  {
+    maybeThrowError();
+  }
+  
+  public void onLoadCanceled(ExtractingLoadable paramExtractingLoadable, long paramLong1, long paramLong2, boolean paramBoolean)
+  {
+    eventDispatcher.loadCanceled(dataSpec, dataSource.getLastOpenedUri(), dataSource.getLastResponseHeaders(), 1, -1, null, 0, null, seekTimeUs, durationUs, paramLong1, paramLong2, dataSource.getBytesRead());
+    if (!paramBoolean)
+    {
+      copyLengthFromLoader(paramExtractingLoadable);
+      paramExtractingLoadable = sampleQueues;
+      int j = paramExtractingLoadable.length;
+      int i = 0;
+      while (i < j)
+      {
+        paramExtractingLoadable[i].reset();
+        i += 1;
+      }
+      if (enabledTrackCount > 0) {
+        ((MediaPeriod.Callback)Assertions.checkNotNull(callback)).onContinueLoadingRequested(this);
+      }
+    }
+  }
+  
+  public void onLoadCompleted(ExtractingLoadable paramExtractingLoadable, long paramLong1, long paramLong2)
+  {
+    if (durationUs == -9223372036854775807L)
+    {
+      SeekMap localSeekMap = (SeekMap)Assertions.checkNotNull(seekMap);
+      long l = getLargestQueuedTimestampUs();
+      if (l == Long.MIN_VALUE) {
+        l = 0L;
+      } else {
+        l += 10000L;
+      }
+      durationUs = l;
+      listener.onSourceInfoRefreshed(durationUs, localSeekMap.isSeekable());
+    }
+    eventDispatcher.loadCompleted(dataSpec, dataSource.getLastOpenedUri(), dataSource.getLastResponseHeaders(), 1, -1, null, 0, null, seekTimeUs, durationUs, paramLong1, paramLong2, dataSource.getBytesRead());
+    copyLengthFromLoader(paramExtractingLoadable);
+    loadingFinished = true;
+    ((MediaPeriod.Callback)Assertions.checkNotNull(callback)).onContinueLoadingRequested(this);
+  }
+  
+  public Loader.LoadErrorAction onLoadError(ExtractingLoadable paramExtractingLoadable, long paramLong1, long paramLong2, IOException paramIOException, int paramInt)
+  {
+    copyLengthFromLoader(paramExtractingLoadable);
+    long l = loadErrorHandlingPolicy.getRetryDelayMsFor(dataType, durationUs, paramIOException, paramInt);
+    Loader.LoadErrorAction localLoadErrorAction;
+    if (l == -9223372036854775807L)
+    {
+      localLoadErrorAction = Loader.DONT_RETRY_FATAL;
+    }
+    else
+    {
+      paramInt = getExtractedSamplesCount();
+      boolean bool;
+      if (paramInt > extractedSamplesCountAtStartOfLoad) {
+        bool = true;
+      } else {
+        bool = false;
+      }
+      if (configureRetry(paramExtractingLoadable, paramInt)) {
+        localLoadErrorAction = Loader.createRetryAction(bool, l);
+      } else {
+        localLoadErrorAction = Loader.DONT_RETRY;
+      }
+    }
+    eventDispatcher.loadError(dataSpec, dataSource.getLastOpenedUri(), dataSource.getLastResponseHeaders(), 1, -1, null, 0, null, seekTimeUs, durationUs, paramLong1, paramLong2, dataSource.getBytesRead(), paramIOException, localLoadErrorAction.isRetry() ^ true);
+    return localLoadErrorAction;
+  }
+  
+  public void onLoaderReleased()
+  {
+    SampleQueue[] arrayOfSampleQueue = sampleQueues;
+    int j = arrayOfSampleQueue.length;
+    int i = 0;
+    while (i < j)
+    {
+      arrayOfSampleQueue[i].reset();
+      i += 1;
+    }
+    extractorHolder.release();
+  }
+  
+  public void onUpstreamFormatChanged(Format paramFormat)
+  {
+    handler.post(maybeFinishPrepareRunnable);
+  }
+  
+  public void prepare(MediaPeriod.Callback paramCallback, long paramLong)
+  {
+    callback = paramCallback;
+    loadCondition.open();
+    startLoading();
+  }
+  
+  int readData(int paramInt, FormatHolder paramFormatHolder, DecoderInputBuffer paramDecoderInputBuffer, boolean paramBoolean)
+  {
+    if (suppressRead()) {
+      return -3;
+    }
+    maybeNotifyDownstreamFormat(paramInt);
+    int i = sampleQueues[paramInt].read(paramFormatHolder, paramDecoderInputBuffer, paramBoolean, loadingFinished, lastSeekPositionUs);
+    if (i == -3) {
+      maybeStartDeferredRetry(paramInt);
+    }
+    return i;
+  }
+  
+  public long readDiscontinuity()
+  {
+    if (!notifiedReadingStarted)
+    {
+      eventDispatcher.readingStarted();
+      notifiedReadingStarted = true;
+    }
+    if ((notifyDiscontinuity) && ((loadingFinished) || (getExtractedSamplesCount() > extractedSamplesCountAtStartOfLoad)))
+    {
+      notifyDiscontinuity = false;
+      return lastSeekPositionUs;
+    }
+    return -9223372036854775807L;
+  }
+  
+  public void reevaluateBuffer(long paramLong) {}
+  
+  public void release()
+  {
+    if (prepared)
+    {
+      SampleQueue[] arrayOfSampleQueue = sampleQueues;
+      int j = arrayOfSampleQueue.length;
+      int i = 0;
+      while (i < j)
+      {
+        arrayOfSampleQueue[i].discardToEnd();
+        i += 1;
+      }
+    }
+    loader.release(this);
+    handler.removeCallbacksAndMessages(null);
+    callback = null;
+    released = true;
+    eventDispatcher.mediaPeriodReleased();
+  }
+  
+  public void seekMap(SeekMap paramSeekMap)
+  {
+    seekMap = paramSeekMap;
+    handler.post(maybeFinishPrepareRunnable);
+  }
+  
+  public long seekToUs(long paramLong)
+  {
+    Object localObject2 = getPreparedState();
+    Object localObject1 = seekMap;
+    localObject2 = trackIsAudioVideoFlags;
+    if (!((SeekMap)localObject1).isSeekable()) {
+      paramLong = 0L;
+    }
+    int i = 0;
+    notifyDiscontinuity = false;
+    lastSeekPositionUs = paramLong;
+    if (isPendingReset())
+    {
+      pendingResetPositionUs = paramLong;
+      return paramLong;
+    }
+    if ((dataType != 7) && (seekInsideBufferUs((boolean[])localObject2, paramLong))) {
+      return paramLong;
+    }
+    pendingDeferredRetry = false;
+    pendingResetPositionUs = paramLong;
+    loadingFinished = false;
+    if (loader.isLoading())
+    {
+      loader.cancelLoading();
+      return paramLong;
+    }
+    localObject1 = sampleQueues;
+    int j = localObject1.length;
+    while (i < j)
+    {
+      localObject1[i].reset();
+      i += 1;
+    }
+    return paramLong;
+  }
+  
+  public long selectTracks(TrackSelection[] paramArrayOfTrackSelection, boolean[] paramArrayOfBoolean1, SampleStream[] paramArrayOfSampleStream, boolean[] paramArrayOfBoolean2, long paramLong)
+  {
+    Object localObject = getPreparedState();
+    TrackGroupArray localTrackGroupArray = tracks;
+    localObject = trackEnabledStates;
+    int j = enabledTrackCount;
+    int n = 0;
+    int i1 = 0;
+    int m = 0;
+    int i = 0;
+    while (i < paramArrayOfTrackSelection.length)
+    {
+      if ((paramArrayOfSampleStream[i] != null) && ((paramArrayOfTrackSelection[i] == null) || (paramArrayOfBoolean1[i] == 0)))
+      {
+        k = track;
+        Assertions.checkState(localObject[k]);
+        enabledTrackCount -= 1;
+        localObject[k] = 0;
+        paramArrayOfSampleStream[i] = null;
+      }
+      i += 1;
+    }
+    if (seenFirstTrackSelection) {
+      if (j != 0) {}
+    }
+    for (;;)
+    {
+      i = 1;
+      break;
+      do
+      {
+        i = 0;
+        break;
+      } while (paramLong == 0L);
+    }
+    j = 0;
+    for (int k = i; j < paramArrayOfTrackSelection.length; k = i)
+    {
+      i = k;
+      if (paramArrayOfSampleStream[j] == null)
+      {
+        i = k;
+        if (paramArrayOfTrackSelection[j] != null)
+        {
+          paramArrayOfBoolean1 = paramArrayOfTrackSelection[j];
+          boolean bool;
+          if (paramArrayOfBoolean1.length() == 1) {
+            bool = true;
+          } else {
+            bool = false;
+          }
+          Assertions.checkState(bool);
+          if (paramArrayOfBoolean1.getIndexInTrackGroup(0) == 0) {
+            bool = true;
+          } else {
+            bool = false;
+          }
+          Assertions.checkState(bool);
+          int i2 = localTrackGroupArray.indexOf(paramArrayOfBoolean1.getTrackGroup());
+          Assertions.checkState(localObject[i2] ^ 0x1);
+          enabledTrackCount += 1;
+          localObject[i2] = 1;
+          paramArrayOfSampleStream[j] = new SampleStreamImpl(i2);
+          paramArrayOfBoolean2[j] = true;
+          i = k;
+          if (k == 0)
+          {
+            paramArrayOfBoolean1 = sampleQueues[i2];
+            paramArrayOfBoolean1.rewind();
+            if ((paramArrayOfBoolean1.advanceTo(paramLong, true, true) == -1) && (paramArrayOfBoolean1.getReadIndex() != 0)) {
+              i = 1;
+            } else {
+              i = 0;
+            }
+          }
+        }
+      }
+      j += 1;
+    }
+    long l;
+    if (enabledTrackCount == 0)
+    {
+      pendingDeferredRetry = false;
+      notifyDiscontinuity = false;
+      if (loader.isLoading())
+      {
+        paramArrayOfTrackSelection = sampleQueues;
+        j = paramArrayOfTrackSelection.length;
+        i = m;
+        while (i < j)
+        {
+          paramArrayOfTrackSelection[i].discardToEnd();
+          i += 1;
+        }
+        loader.cancelLoading();
+        l = paramLong;
+      }
+      else
+      {
+        paramArrayOfTrackSelection = sampleQueues;
+        j = paramArrayOfTrackSelection.length;
+        i = n;
+        for (;;)
+        {
+          l = paramLong;
+          if (i >= j) {
+            break;
+          }
+          paramArrayOfTrackSelection[i].reset();
+          i += 1;
+        }
+      }
+    }
+    else
+    {
+      l = paramLong;
+      if (k != 0)
+      {
+        paramLong = seekToUs(paramLong);
+        i = i1;
+        for (;;)
+        {
+          l = paramLong;
+          if (i >= paramArrayOfSampleStream.length) {
+            break;
+          }
+          if (paramArrayOfSampleStream[i] != null) {
+            paramArrayOfBoolean2[i] = true;
+          }
+          i += 1;
+        }
+      }
+    }
+    seenFirstTrackSelection = true;
+    return l;
+  }
+  
+  int skipData(int paramInt, long paramLong)
+  {
+    boolean bool = suppressRead();
+    int i = 0;
+    if (bool) {
+      return 0;
+    }
+    maybeNotifyDownstreamFormat(paramInt);
+    SampleQueue localSampleQueue = sampleQueues[paramInt];
+    if ((loadingFinished) && (paramLong > localSampleQueue.getLargestQueuedTimestampUs()))
+    {
+      i = localSampleQueue.advanceToEnd();
+    }
+    else
+    {
+      int j = localSampleQueue.advanceTo(paramLong, true, true);
+      if (j != -1) {
+        i = j;
+      }
+    }
+    if (i == 0) {
+      maybeStartDeferredRetry(paramInt);
+    }
+    return i;
+  }
+  
+  public TrackOutput track(int paramInt1, int paramInt2)
+  {
+    int i = sampleQueues.length;
+    paramInt2 = 0;
+    while (paramInt2 < i)
+    {
+      if (sampleQueueTrackIds[paramInt2] == paramInt1) {
+        return sampleQueues[paramInt2];
+      }
+      paramInt2 += 1;
+    }
+    SampleQueue localSampleQueue = new SampleQueue(allocator);
+    localSampleQueue.setUpstreamFormatChangeListener(this);
+    Object localObject = sampleQueueTrackIds;
+    paramInt2 = i + 1;
+    sampleQueueTrackIds = Arrays.copyOf((int[])localObject, paramInt2);
+    sampleQueueTrackIds[i] = paramInt1;
+    localObject = (SampleQueue[])Arrays.copyOf(sampleQueues, paramInt2);
+    localObject[i] = localSampleQueue;
+    sampleQueues = ((SampleQueue[])Util.castNonNullTypeArray((Object[])localObject));
+    return localSampleQueue;
+  }
+  
+  final class ExtractingLoadable
+    implements Loader.Loadable
+  {
+    private final StatsDataSource dataSource;
+    private DataSpec dataSpec;
+    private final ExtractorMediaPeriod.ExtractorHolder extractorHolder;
+    private final ExtractorOutput extractorOutput;
+    private long length;
+    private volatile boolean loadCanceled;
+    private final ConditionVariable loadCondition;
+    private boolean pendingExtractorSeek;
+    private final PositionHolder positionHolder;
+    private long seekTimeUs;
+    private final Uri uri;
+    
+    public ExtractingLoadable(Uri paramUri, DataSource paramDataSource, ExtractorMediaPeriod.ExtractorHolder paramExtractorHolder, ExtractorOutput paramExtractorOutput, ConditionVariable paramConditionVariable)
+    {
+      uri = paramUri;
+      dataSource = new StatsDataSource(paramDataSource);
+      extractorHolder = paramExtractorHolder;
+      extractorOutput = paramExtractorOutput;
+      loadCondition = paramConditionVariable;
+      positionHolder = new PositionHolder();
+      pendingExtractorSeek = true;
+      length = -1L;
+      dataSpec = new DataSpec(paramUri, positionHolder.position, -1L, customCacheKey);
+    }
+    
+    private void setLoadPosition(long paramLong1, long paramLong2)
+    {
+      positionHolder.position = paramLong1;
+      seekTimeUs = paramLong2;
+      pendingExtractorSeek = true;
+    }
+    
+    public void cancelLoad()
+    {
+      loadCanceled = true;
+    }
+    
+    /* Error */
+    public void load()
+      throws IOException, java.lang.InterruptedException
+    {
+      // Byte code:
+      //   0: iconst_0
+      //   1: istore_1
+      //   2: iload_1
+      //   3: ifne +383 -> 386
+      //   6: aload_0
+      //   7: getfield 97	com/google/android/exoplayer2/source/ExtractorMediaPeriod$ExtractingLoadable:loadCanceled	Z
+      //   10: ifne +376 -> 386
+      //   13: aconst_null
+      //   14: astore 8
+      //   16: aload_0
+      //   17: getfield 58	com/google/android/exoplayer2/source/ExtractorMediaPeriod$ExtractingLoadable:positionHolder	Lcom/google/android/exoplayer2/extractor/PositionHolder;
+      //   20: getfield 69	com/google/android/exoplayer2/extractor/PositionHolder:position	J
+      //   23: lstore 6
+      //   25: aload_0
+      //   26: new 66	com/google/android/exoplayer2/upstream/DataSpec
+      //   29: dup
+      //   30: aload_0
+      //   31: getfield 40	com/google/android/exoplayer2/source/ExtractorMediaPeriod$ExtractingLoadable:uri	Landroid/net/Uri;
+      //   34: lload 6
+      //   36: ldc2_w 61
+      //   39: aload_0
+      //   40: getfield 35	com/google/android/exoplayer2/source/ExtractorMediaPeriod$ExtractingLoadable:this$0	Lcom/google/android/exoplayer2/source/ExtractorMediaPeriod;
+      //   43: invokestatic 73	com/google/android/exoplayer2/source/ExtractorMediaPeriod:access$600	(Lcom/google/android/exoplayer2/source/ExtractorMediaPeriod;)Ljava/lang/String;
+      //   46: invokespecial 76	com/google/android/exoplayer2/upstream/DataSpec:<init>	(Landroid/net/Uri;JJLjava/lang/String;)V
+      //   49: putfield 78	com/google/android/exoplayer2/source/ExtractorMediaPeriod$ExtractingLoadable:dataSpec	Lcom/google/android/exoplayer2/upstream/DataSpec;
+      //   52: aload_0
+      //   53: aload_0
+      //   54: getfield 47	com/google/android/exoplayer2/source/ExtractorMediaPeriod$ExtractingLoadable:dataSource	Lcom/google/android/exoplayer2/upstream/StatsDataSource;
+      //   57: aload_0
+      //   58: getfield 78	com/google/android/exoplayer2/source/ExtractorMediaPeriod$ExtractingLoadable:dataSpec	Lcom/google/android/exoplayer2/upstream/DataSpec;
+      //   61: invokevirtual 106	com/google/android/exoplayer2/upstream/StatsDataSource:open	(Lcom/google/android/exoplayer2/upstream/DataSpec;)J
+      //   64: putfield 64	com/google/android/exoplayer2/source/ExtractorMediaPeriod$ExtractingLoadable:length	J
+      //   67: aload_0
+      //   68: getfield 64	com/google/android/exoplayer2/source/ExtractorMediaPeriod$ExtractingLoadable:length	J
+      //   71: ldc2_w 61
+      //   74: lcmp
+      //   75: ifeq +14 -> 89
+      //   78: aload_0
+      //   79: aload_0
+      //   80: getfield 64	com/google/android/exoplayer2/source/ExtractorMediaPeriod$ExtractingLoadable:length	J
+      //   83: lload 6
+      //   85: ladd
+      //   86: putfield 64	com/google/android/exoplayer2/source/ExtractorMediaPeriod$ExtractingLoadable:length	J
+      //   89: aload_0
+      //   90: getfield 47	com/google/android/exoplayer2/source/ExtractorMediaPeriod$ExtractingLoadable:dataSource	Lcom/google/android/exoplayer2/upstream/StatsDataSource;
+      //   93: invokevirtual 110	com/google/android/exoplayer2/upstream/StatsDataSource:getUri	()Landroid/net/Uri;
+      //   96: invokestatic 116	com/google/android/exoplayer2/util/Assertions:checkNotNull	(Ljava/lang/Object;)Ljava/lang/Object;
+      //   99: checkcast 118	android/net/Uri
+      //   102: astore 10
+      //   104: new 120	com/google/android/exoplayer2/extractor/DefaultExtractorInput
+      //   107: dup
+      //   108: aload_0
+      //   109: getfield 47	com/google/android/exoplayer2/source/ExtractorMediaPeriod$ExtractingLoadable:dataSource	Lcom/google/android/exoplayer2/upstream/StatsDataSource;
+      //   112: lload 6
+      //   114: aload_0
+      //   115: getfield 64	com/google/android/exoplayer2/source/ExtractorMediaPeriod$ExtractingLoadable:length	J
+      //   118: invokespecial 123	com/google/android/exoplayer2/extractor/DefaultExtractorInput:<init>	(Lcom/google/android/exoplayer2/upstream/DataSource;JJ)V
+      //   121: astore 9
+      //   123: iload_1
+      //   124: istore_3
+      //   125: aload_0
+      //   126: getfield 49	com/google/android/exoplayer2/source/ExtractorMediaPeriod$ExtractingLoadable:extractorHolder	Lcom/google/android/exoplayer2/source/ExtractorMediaPeriod$ExtractorHolder;
+      //   129: aload 9
+      //   131: aload_0
+      //   132: getfield 51	com/google/android/exoplayer2/source/ExtractorMediaPeriod$ExtractingLoadable:extractorOutput	Lcom/google/android/exoplayer2/extractor/ExtractorOutput;
+      //   135: aload 10
+      //   137: invokevirtual 129	com/google/android/exoplayer2/source/ExtractorMediaPeriod$ExtractorHolder:selectExtractor	(Lcom/google/android/exoplayer2/extractor/ExtractorInput;Lcom/google/android/exoplayer2/extractor/ExtractorOutput;Landroid/net/Uri;)Lcom/google/android/exoplayer2/extractor/Extractor;
+      //   140: astore 8
+      //   142: iload_1
+      //   143: istore_2
+      //   144: lload 6
+      //   146: lstore 4
+      //   148: iload_1
+      //   149: istore_3
+      //   150: aload_0
+      //   151: getfield 60	com/google/android/exoplayer2/source/ExtractorMediaPeriod$ExtractingLoadable:pendingExtractorSeek	Z
+      //   154: ifeq +31 -> 185
+      //   157: iload_1
+      //   158: istore_3
+      //   159: aload 8
+      //   161: lload 6
+      //   163: aload_0
+      //   164: getfield 87	com/google/android/exoplayer2/source/ExtractorMediaPeriod$ExtractingLoadable:seekTimeUs	J
+      //   167: invokeinterface 134 5 0
+      //   172: iload_1
+      //   173: istore_3
+      //   174: aload_0
+      //   175: iconst_0
+      //   176: putfield 60	com/google/android/exoplayer2/source/ExtractorMediaPeriod$ExtractingLoadable:pendingExtractorSeek	Z
+      //   179: lload 6
+      //   181: lstore 4
+      //   183: iload_1
+      //   184: istore_2
+      //   185: iload_2
+      //   186: ifne +113 -> 299
+      //   189: iload_2
+      //   190: istore_3
+      //   191: aload_0
+      //   192: getfield 97	com/google/android/exoplayer2/source/ExtractorMediaPeriod$ExtractingLoadable:loadCanceled	Z
+      //   195: ifne +104 -> 299
+      //   198: iload_2
+      //   199: istore_3
+      //   200: aload_0
+      //   201: getfield 53	com/google/android/exoplayer2/source/ExtractorMediaPeriod$ExtractingLoadable:loadCondition	Lcom/google/android/exoplayer2/util/ConditionVariable;
+      //   204: invokevirtual 139	com/google/android/exoplayer2/util/ConditionVariable:block	()V
+      //   207: iload_2
+      //   208: istore_3
+      //   209: aload 8
+      //   211: aload 9
+      //   213: aload_0
+      //   214: getfield 58	com/google/android/exoplayer2/source/ExtractorMediaPeriod$ExtractingLoadable:positionHolder	Lcom/google/android/exoplayer2/extractor/PositionHolder;
+      //   217: invokeinterface 143 3 0
+      //   222: istore_1
+      //   223: lload 4
+      //   225: lstore 6
+      //   227: aload 9
+      //   229: invokeinterface 149 1 0
+      //   234: aload_0
+      //   235: getfield 35	com/google/android/exoplayer2/source/ExtractorMediaPeriod$ExtractingLoadable:this$0	Lcom/google/android/exoplayer2/source/ExtractorMediaPeriod;
+      //   238: invokestatic 153	com/google/android/exoplayer2/source/ExtractorMediaPeriod:access$700	(Lcom/google/android/exoplayer2/source/ExtractorMediaPeriod;)J
+      //   241: lload 4
+      //   243: ladd
+      //   244: lcmp
+      //   245: ifle +38 -> 283
+      //   248: aload 9
+      //   250: invokeinterface 149 1 0
+      //   255: lstore 6
+      //   257: aload_0
+      //   258: getfield 53	com/google/android/exoplayer2/source/ExtractorMediaPeriod$ExtractingLoadable:loadCondition	Lcom/google/android/exoplayer2/util/ConditionVariable;
+      //   261: invokevirtual 157	com/google/android/exoplayer2/util/ConditionVariable:close	()Z
+      //   264: pop
+      //   265: aload_0
+      //   266: getfield 35	com/google/android/exoplayer2/source/ExtractorMediaPeriod$ExtractingLoadable:this$0	Lcom/google/android/exoplayer2/source/ExtractorMediaPeriod;
+      //   269: invokestatic 161	com/google/android/exoplayer2/source/ExtractorMediaPeriod:access$900	(Lcom/google/android/exoplayer2/source/ExtractorMediaPeriod;)Landroid/os/Handler;
+      //   272: aload_0
+      //   273: getfield 35	com/google/android/exoplayer2/source/ExtractorMediaPeriod$ExtractingLoadable:this$0	Lcom/google/android/exoplayer2/source/ExtractorMediaPeriod;
+      //   276: invokestatic 165	com/google/android/exoplayer2/source/ExtractorMediaPeriod:access$800	(Lcom/google/android/exoplayer2/source/ExtractorMediaPeriod;)Ljava/lang/Runnable;
+      //   279: invokevirtual 171	android/os/Handler:post	(Ljava/lang/Runnable;)Z
+      //   282: pop
+      //   283: iload_1
+      //   284: istore_2
+      //   285: lload 6
+      //   287: lstore 4
+      //   289: goto -104 -> 185
+      //   292: astore 8
+      //   294: iload_1
+      //   295: istore_3
+      //   296: goto +41 -> 337
+      //   299: iload_2
+      //   300: iconst_1
+      //   301: if_icmpne +8 -> 309
+      //   304: iconst_0
+      //   305: istore_1
+      //   306: goto +19 -> 325
+      //   309: aload_0
+      //   310: getfield 58	com/google/android/exoplayer2/source/ExtractorMediaPeriod$ExtractingLoadable:positionHolder	Lcom/google/android/exoplayer2/extractor/PositionHolder;
+      //   313: aload 9
+      //   315: invokeinterface 149 1 0
+      //   320: putfield 69	com/google/android/exoplayer2/extractor/PositionHolder:position	J
+      //   323: iload_2
+      //   324: istore_1
+      //   325: aload_0
+      //   326: getfield 47	com/google/android/exoplayer2/source/ExtractorMediaPeriod$ExtractingLoadable:dataSource	Lcom/google/android/exoplayer2/upstream/StatsDataSource;
+      //   329: invokestatic 176	com/google/android/exoplayer2/util/Util:closeQuietly	(Lcom/google/android/exoplayer2/upstream/DataSource;)V
+      //   332: goto -330 -> 2
+      //   335: astore 8
+      //   337: iload_3
+      //   338: istore_1
+      //   339: goto +13 -> 352
+      //   342: astore 10
+      //   344: aload 8
+      //   346: astore 9
+      //   348: aload 10
+      //   350: astore 8
+      //   352: iload_1
+      //   353: iconst_1
+      //   354: if_icmpeq +22 -> 376
+      //   357: aload 9
+      //   359: ifnull +17 -> 376
+      //   362: aload_0
+      //   363: getfield 58	com/google/android/exoplayer2/source/ExtractorMediaPeriod$ExtractingLoadable:positionHolder	Lcom/google/android/exoplayer2/extractor/PositionHolder;
+      //   366: aload 9
+      //   368: invokeinterface 149 1 0
+      //   373: putfield 69	com/google/android/exoplayer2/extractor/PositionHolder:position	J
+      //   376: aload_0
+      //   377: getfield 47	com/google/android/exoplayer2/source/ExtractorMediaPeriod$ExtractingLoadable:dataSource	Lcom/google/android/exoplayer2/upstream/StatsDataSource;
+      //   380: invokestatic 176	com/google/android/exoplayer2/util/Util:closeQuietly	(Lcom/google/android/exoplayer2/upstream/DataSource;)V
+      //   383: aload 8
+      //   385: athrow
+      //   386: return
+      // Local variable table:
+      //   start	length	slot	name	signature
+      //   0	387	0	this	ExtractingLoadable
+      //   1	354	1	i	int
+      //   143	181	2	j	int
+      //   124	214	3	k	int
+      //   146	142	4	l1	long
+      //   23	263	6	l2	long
+      //   14	196	8	localExtractor	Extractor
+      //   292	1	8	localObject1	Object
+      //   335	10	8	localObject2	Object
+      //   350	34	8	localObject3	Object
+      //   121	246	9	localObject4	Object
+      //   102	34	10	localUri	Uri
+      //   342	7	10	localObject5	Object
+      // Exception table:
+      //   from	to	target	type
+      //   227	283	292	finally
+      //   125	142	335	finally
+      //   150	157	335	finally
+      //   159	172	335	finally
+      //   174	179	335	finally
+      //   191	198	335	finally
+      //   200	207	335	finally
+      //   209	223	335	finally
+      //   16	89	342	finally
+      //   89	123	342	finally
+    }
+  }
+  
+  private static final class ExtractorHolder
+  {
+    @Nullable
+    private Extractor extractor;
+    private final Extractor[] extractors;
+    
+    public ExtractorHolder(Extractor[] paramArrayOfExtractor)
+    {
+      extractors = paramArrayOfExtractor;
+    }
+    
+    public void release()
+    {
+      if (extractor != null)
+      {
+        extractor.release();
+        extractor = null;
+      }
+    }
+    
+    /* Error */
+    public Extractor selectExtractor(com.google.android.exoplayer2.extractor.ExtractorInput paramExtractorInput, ExtractorOutput paramExtractorOutput, Uri paramUri)
+      throws IOException, java.lang.InterruptedException
+    {
+      // Byte code:
+      //   0: aload_0
+      //   1: getfield 23	com/google/android/exoplayer2/source/ExtractorMediaPeriod$ExtractorHolder:extractor	Lcom/google/android/exoplayer2/extractor/Extractor;
+      //   4: ifnull +8 -> 12
+      //   7: aload_0
+      //   8: getfield 23	com/google/android/exoplayer2/source/ExtractorMediaPeriod$ExtractorHolder:extractor	Lcom/google/android/exoplayer2/extractor/Extractor;
+      //   11: areturn
+      //   12: aload_0
+      //   13: getfield 19	com/google/android/exoplayer2/source/ExtractorMediaPeriod$ExtractorHolder:extractors	[Lcom/google/android/exoplayer2/extractor/Extractor;
+      //   16: astore 6
+      //   18: aload 6
+      //   20: arraylength
+      //   21: istore 5
+      //   23: iconst_0
+      //   24: istore 4
+      //   26: iload 4
+      //   28: iload 5
+      //   30: if_icmpge +60 -> 90
+      //   33: aload 6
+      //   35: iload 4
+      //   37: aaload
+      //   38: astore 7
+      //   40: aload 7
+      //   42: aload_1
+      //   43: invokeinterface 39 2 0
+      //   48: ifeq +27 -> 75
+      //   51: aload_0
+      //   52: aload 7
+      //   54: putfield 23	com/google/android/exoplayer2/source/ExtractorMediaPeriod$ExtractorHolder:extractor	Lcom/google/android/exoplayer2/extractor/Extractor;
+      //   57: aload_1
+      //   58: invokeinterface 44 1 0
+      //   63: goto +27 -> 90
+      //   66: astore_2
+      //   67: aload_1
+      //   68: invokeinterface 44 1 0
+      //   73: aload_2
+      //   74: athrow
+      //   75: aload_1
+      //   76: invokeinterface 44 1 0
+      //   81: iload 4
+      //   83: iconst_1
+      //   84: iadd
+      //   85: istore 4
+      //   87: goto -61 -> 26
+      //   90: aload_0
+      //   91: getfield 23	com/google/android/exoplayer2/source/ExtractorMediaPeriod$ExtractorHolder:extractor	Lcom/google/android/exoplayer2/extractor/Extractor;
+      //   94: ifnull +18 -> 112
+      //   97: aload_0
+      //   98: getfield 23	com/google/android/exoplayer2/source/ExtractorMediaPeriod$ExtractorHolder:extractor	Lcom/google/android/exoplayer2/extractor/Extractor;
+      //   101: aload_2
+      //   102: invokeinterface 48 2 0
+      //   107: aload_0
+      //   108: getfield 23	com/google/android/exoplayer2/source/ExtractorMediaPeriod$ExtractorHolder:extractor	Lcom/google/android/exoplayer2/extractor/Extractor;
+      //   111: areturn
+      //   112: new 50	java/lang/StringBuilder
+      //   115: dup
+      //   116: invokespecial 51	java/lang/StringBuilder:<init>	()V
+      //   119: astore_1
+      //   120: aload_1
+      //   121: ldc 53
+      //   123: invokevirtual 57	java/lang/StringBuilder:append	(Ljava/lang/String;)Ljava/lang/StringBuilder;
+      //   126: pop
+      //   127: aload_1
+      //   128: aload_0
+      //   129: getfield 19	com/google/android/exoplayer2/source/ExtractorMediaPeriod$ExtractorHolder:extractors	[Lcom/google/android/exoplayer2/extractor/Extractor;
+      //   132: invokestatic 63	com/google/android/exoplayer2/util/Util:getCommaDelimitedSimpleClassNames	([Ljava/lang/Object;)Ljava/lang/String;
+      //   135: invokevirtual 57	java/lang/StringBuilder:append	(Ljava/lang/String;)Ljava/lang/StringBuilder;
+      //   138: pop
+      //   139: aload_1
+      //   140: ldc 65
+      //   142: invokevirtual 57	java/lang/StringBuilder:append	(Ljava/lang/String;)Ljava/lang/StringBuilder;
+      //   145: pop
+      //   146: new 67	com/google/android/exoplayer2/source/UnrecognizedInputFormatException
+      //   149: dup
+      //   150: aload_1
+      //   151: invokevirtual 71	java/lang/StringBuilder:toString	()Ljava/lang/String;
+      //   154: aload_3
+      //   155: invokespecial 74	com/google/android/exoplayer2/source/UnrecognizedInputFormatException:<init>	(Ljava/lang/String;Landroid/net/Uri;)V
+      //   158: athrow
+      //   159: astore 7
+      //   161: goto -86 -> 75
+      // Local variable table:
+      //   start	length	slot	name	signature
+      //   0	164	0	this	ExtractorHolder
+      //   0	164	1	paramExtractorInput	com.google.android.exoplayer2.extractor.ExtractorInput
+      //   0	164	2	paramExtractorOutput	ExtractorOutput
+      //   0	164	3	paramUri	Uri
+      //   24	62	4	i	int
+      //   21	10	5	j	int
+      //   16	18	6	arrayOfExtractor	Extractor[]
+      //   38	15	7	localExtractor	Extractor
+      //   159	1	7	localEOFException	java.io.EOFException
+      // Exception table:
+      //   from	to	target	type
+      //   40	57	66	finally
+      //   40	57	159	java/io/EOFException
+    }
+  }
+  
+  static abstract interface Listener
+  {
+    public abstract void onSourceInfoRefreshed(long paramLong, boolean paramBoolean);
+  }
+  
+  private static final class PreparedState
+  {
+    public final SeekMap seekMap;
+    public final boolean[] trackEnabledStates;
+    public final boolean[] trackIsAudioVideoFlags;
+    public final boolean[] trackNotifiedDownstreamFormats;
+    public final TrackGroupArray tracks;
+    
+    public PreparedState(SeekMap paramSeekMap, TrackGroupArray paramTrackGroupArray, boolean[] paramArrayOfBoolean)
+    {
+      seekMap = paramSeekMap;
+      tracks = paramTrackGroupArray;
+      trackIsAudioVideoFlags = paramArrayOfBoolean;
+      trackEnabledStates = new boolean[length];
+      trackNotifiedDownstreamFormats = new boolean[length];
+    }
+  }
+  
+  private final class SampleStreamImpl
+    implements SampleStream
+  {
+    private final int track;
+    
+    public SampleStreamImpl(int paramInt)
+    {
+      track = paramInt;
+    }
+    
+    public boolean isReady()
+    {
+      return isReady(track);
+    }
+    
+    public void maybeThrowError()
+      throws IOException
+    {
+      ExtractorMediaPeriod.this.maybeThrowError();
+    }
+    
+    public int readData(FormatHolder paramFormatHolder, DecoderInputBuffer paramDecoderInputBuffer, boolean paramBoolean)
+    {
+      return readData(track, paramFormatHolder, paramDecoderInputBuffer, paramBoolean);
+    }
+    
+    public int skipData(long paramLong)
+    {
+      return skipData(track, paramLong);
+    }
+  }
+}

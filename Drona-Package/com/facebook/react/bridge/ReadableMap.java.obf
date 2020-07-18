@@ -1,0 +1,44 @@
+package com.facebook.react.bridge;
+
+import androidx.annotation.NonNull;
+import androidx.annotation.Nullable;
+import java.util.HashMap;
+import java.util.Iterator;
+import java.util.Map.Entry;
+
+public abstract interface ReadableMap
+{
+  @Nullable
+  public abstract ReadableArray getArray(@NonNull String paramString);
+  
+  public abstract boolean getBoolean(@NonNull String paramString);
+  
+  public abstract double getDouble(@NonNull String paramString);
+  
+  @NonNull
+  public abstract Dynamic getDynamic(@NonNull String paramString);
+  
+  @NonNull
+  public abstract Iterator<Map.Entry<String, Object>> getEntryIterator();
+  
+  public abstract int getInt(@NonNull String paramString);
+  
+  @Nullable
+  public abstract ReadableMap getMap(@NonNull String paramString);
+  
+  @Nullable
+  public abstract String getString(@NonNull String paramString);
+  
+  @NonNull
+  public abstract ReadableType getType(@NonNull String paramString);
+  
+  public abstract boolean hasKey(@NonNull String paramString);
+  
+  public abstract boolean isNull(@NonNull String paramString);
+  
+  @NonNull
+  public abstract ReadableMapKeySetIterator keySetIterator();
+  
+  @NonNull
+  public abstract HashMap<String, Object> toHashMap();
+}

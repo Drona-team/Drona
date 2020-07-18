@@ -1,0 +1,197 @@
+package com.facebook.react.views.text;
+
+import android.content.Context;
+import android.os.Build.VERSION;
+import android.text.BoringLayout;
+import android.text.BoringLayout.Metrics;
+import android.text.Layout;
+import android.text.Layout.Alignment;
+import android.text.Spannable;
+import android.text.SpannableStringBuilder;
+import android.text.Spanned;
+import android.text.StaticLayout;
+import android.text.StaticLayout.Builder;
+import android.text.TextPaint;
+import android.util.LruCache;
+import com.facebook.react.bridge.ReadableArray;
+import com.facebook.react.bridge.ReadableMap;
+import com.facebook.react.uimanager.PixelUtil;
+import com.facebook.react.uimanager.ReactStylesDiffMap;
+import com.facebook.yoga.YogaConstants;
+import com.facebook.yoga.YogaMeasureMode;
+import com.facebook.yoga.YogaMeasureOutput;
+import java.util.ArrayList;
+import java.util.Iterator;
+import java.util.List;
+
+public class TextLayoutManager
+{
+  private static LruCache<String, Spannable> sSpannableCache = new LruCache(100);
+  private static final Object sSpannableCacheLock;
+  private static final TextPaint sTextPaintInstance = new TextPaint(1);
+  private static final int spannableCacheSize = 100;
+  
+  static
+  {
+    sSpannableCacheLock = new Object();
+  }
+  
+  public TextLayoutManager() {}
+  
+  private static void buildSpannableFromFragment(Context paramContext, ReadableArray paramReadableArray, SpannableStringBuilder paramSpannableStringBuilder, List<SetSpanOperation> paramList)
+  {
+    int j = paramReadableArray.size();
+    int i = 0;
+    while (i < j)
+    {
+      ReadableMap localReadableMap = paramReadableArray.getMap(i);
+      int k = paramSpannableStringBuilder.length();
+      TextAttributeProps localTextAttributeProps = new TextAttributeProps(new ReactStylesDiffMap(localReadableMap.getMap("textAttributes")));
+      paramSpannableStringBuilder.append(TextTransform.apply(localReadableMap.getString("string"), mTextTransform));
+      int m = paramSpannableStringBuilder.length();
+      if (m >= k)
+      {
+        if (mIsColorSet) {
+          paramList.add(new SetSpanOperation(k, m, new ReactForegroundColorSpan(mColor)));
+        }
+        if (mIsBackgroundColorSet) {
+          paramList.add(new SetSpanOperation(k, m, new ReactBackgroundColorSpan(mBackgroundColor)));
+        }
+        if ((Build.VERSION.SDK_INT >= 21) && (!Float.isNaN(mLetterSpacing))) {
+          paramList.add(new SetSpanOperation(k, m, new CustomLetterSpacingSpan(mLetterSpacing)));
+        }
+        paramList.add(new SetSpanOperation(k, m, new ReactAbsoluteSizeSpan(mFontSize)));
+        if ((mFontStyle != -1) || (mFontWeight != -1) || (mFontFamily != null)) {
+          paramList.add(new SetSpanOperation(k, m, new CustomStyleSpan(mFontStyle, mFontWeight, mFontFamily, paramContext.getAssets())));
+        }
+        if (mIsUnderlineTextDecorationSet) {
+          paramList.add(new SetSpanOperation(k, m, new ReactUnderlineSpan()));
+        }
+        if (mIsLineThroughTextDecorationSet) {
+          paramList.add(new SetSpanOperation(k, m, new ReactStrikethroughSpan()));
+        }
+        if ((mTextShadowOffsetDx != 0.0F) || (mTextShadowOffsetDy != 0.0F)) {
+          paramList.add(new SetSpanOperation(k, m, new ShadowStyleSpan(mTextShadowOffsetDx, mTextShadowOffsetDy, mTextShadowRadius, mTextShadowColor)));
+        }
+        if (!Float.isNaN(localTextAttributeProps.getEffectiveLineHeight())) {
+          paramList.add(new SetSpanOperation(k, m, new CustomLineHeightSpan(localTextAttributeProps.getEffectiveLineHeight())));
+        }
+        paramList.add(new SetSpanOperation(k, m, new ReactTagSpan(localReadableMap.getInt("reactTag"))));
+      }
+      i += 1;
+    }
+  }
+  
+  private static Spannable createSpannableFromAttributedString(Context paramContext, ReadableMap paramReadableMap)
+  {
+    SpannableStringBuilder localSpannableStringBuilder = new SpannableStringBuilder();
+    ArrayList localArrayList = new ArrayList();
+    buildSpannableFromFragment(paramContext, paramReadableMap.getArray("fragments"), localSpannableStringBuilder, localArrayList);
+    paramContext = localArrayList.iterator();
+    int i = 0;
+    while (paramContext.hasNext())
+    {
+      ((SetSpanOperation)paramContext.next()).execute(localSpannableStringBuilder, i);
+      i += 1;
+    }
+    return localSpannableStringBuilder;
+  }
+  
+  protected static Spannable getOrCreateSpannableForText(Context arg0, ReadableMap paramReadableMap)
+  {
+    String str = paramReadableMap.toString();
+    synchronized (sSpannableCacheLock)
+    {
+      Spannable localSpannable = (Spannable)sSpannableCache.get(str);
+      if (localSpannable != null) {
+        return localSpannable;
+      }
+      paramReadableMap = createSpannableFromAttributedString(???, paramReadableMap);
+      synchronized (sSpannableCacheLock)
+      {
+        sSpannableCache.put(str, paramReadableMap);
+        return paramReadableMap;
+      }
+    }
+  }
+  
+  public static long measureText(Context paramContext, ReadableMap paramReadableMap1, ReadableMap paramReadableMap2, float paramFloat1, YogaMeasureMode paramYogaMeasureMode1, float paramFloat2, YogaMeasureMode paramYogaMeasureMode2)
+  {
+    paramYogaMeasureMode2 = sTextPaintInstance;
+    paramContext = getOrCreateSpannableForText(paramContext, paramReadableMap1);
+    if (paramContext != null)
+    {
+      paramReadableMap1 = BoringLayout.isBoring(paramContext, paramYogaMeasureMode2);
+      if (paramReadableMap1 == null) {
+        paramFloat2 = Layout.getDesiredWidth(paramContext, paramYogaMeasureMode2);
+      } else {
+        paramFloat2 = NaN.0F;
+      }
+      int i;
+      if ((paramYogaMeasureMode1 != YogaMeasureMode.UNDEFINED) && (paramFloat1 >= 0.0F)) {
+        i = 0;
+      } else {
+        i = 1;
+      }
+      if ((paramReadableMap1 == null) && ((i != 0) || ((!YogaConstants.isUndefined(paramFloat2)) && (paramFloat2 <= paramFloat1))))
+      {
+        i = (int)Math.ceil(paramFloat2);
+        if (Build.VERSION.SDK_INT < 23) {
+          paramContext = new StaticLayout(paramContext, paramYogaMeasureMode2, i, Layout.Alignment.ALIGN_NORMAL, 1.0F, 0.0F, true);
+        } else {
+          paramContext = StaticLayout.Builder.obtain(paramContext, 0, paramContext.length(), paramYogaMeasureMode2, i).setAlignment(Layout.Alignment.ALIGN_NORMAL).setLineSpacing(0.0F, 1.0F).setIncludePad(true).setBreakStrategy(1).setHyphenationFrequency(1).build();
+        }
+      }
+      else if ((paramReadableMap1 != null) && ((i != 0) || (width <= paramFloat1)))
+      {
+        paramContext = BoringLayout.make(paramContext, paramYogaMeasureMode2, width, Layout.Alignment.ALIGN_NORMAL, 1.0F, 0.0F, paramReadableMap1, true);
+      }
+      else if (Build.VERSION.SDK_INT < 23)
+      {
+        paramContext = new StaticLayout(paramContext, paramYogaMeasureMode2, (int)paramFloat1, Layout.Alignment.ALIGN_NORMAL, 1.0F, 0.0F, true);
+      }
+      else
+      {
+        paramContext = StaticLayout.Builder.obtain(paramContext, 0, paramContext.length(), paramYogaMeasureMode2, (int)paramFloat1).setAlignment(Layout.Alignment.ALIGN_NORMAL).setLineSpacing(0.0F, 1.0F).setIncludePad(true).setBreakStrategy(1).setHyphenationFrequency(1).build();
+      }
+      if (paramReadableMap2.hasKey("maximumNumberOfLines")) {
+        i = paramReadableMap2.getInt("maximumNumberOfLines");
+      } else {
+        i = -1;
+      }
+      paramFloat2 = paramContext.getWidth();
+      if ((i != -1) && (i != 0) && (i < paramContext.getLineCount())) {
+        paramFloat1 = paramContext.getLineBottom(i - 1);
+      } else {
+        paramFloat1 = paramContext.getHeight();
+      }
+      return YogaMeasureOutput.make(PixelUtil.toSPFromPixel(paramFloat2), PixelUtil.toSPFromPixel(paramFloat1));
+    }
+    throw new IllegalStateException("Spannable element has not been prepared in onBeforeLayout");
+  }
+  
+  public static class SetSpanOperation
+  {
+    protected int end;
+    protected int start;
+    protected ReactSpan what;
+    
+    SetSpanOperation(int paramInt1, int paramInt2, ReactSpan paramReactSpan)
+    {
+      start = paramInt1;
+      end = paramInt2;
+      what = paramReactSpan;
+    }
+    
+    public void execute(SpannableStringBuilder paramSpannableStringBuilder, int paramInt)
+    {
+      int i;
+      if (start == 0) {
+        i = 18;
+      } else {
+        i = 34;
+      }
+      paramSpannableStringBuilder.setSpan(what, start, end, paramInt << 16 & 0xFF0000 | i & 0xFF00FFFF);
+    }
+  }
+}

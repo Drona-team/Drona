@@ -1,0 +1,21 @@
+package com.google.android.gms.auth.api.signin.internal;
+
+import android.os.RemoteException;
+import com.google.android.gms.auth.api.signin.GoogleSignInAccount;
+import com.google.android.gms.auth.api.signin.GoogleSignInResult;
+import com.google.android.gms.common.api.Status;
+
+final class zzj
+  extends zzc
+{
+  zzj(zzi paramZzi) {}
+  
+  public final void zzc(GoogleSignInAccount paramGoogleSignInAccount, Status paramStatus)
+    throws RemoteException
+  {
+    if (paramGoogleSignInAccount != null) {
+      zzp.zzd(zzbk.val$context).zzc(zzbk.zzbj, paramGoogleSignInAccount);
+    }
+    zzbk.setResult(new GoogleSignInResult(paramGoogleSignInAccount, paramStatus));
+  }
+}

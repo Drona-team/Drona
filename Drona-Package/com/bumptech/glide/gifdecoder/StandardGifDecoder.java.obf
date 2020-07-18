@@ -1,0 +1,1013 @@
+package com.bumptech.glide.gifdecoder;
+
+import android.graphics.Bitmap;
+import android.graphics.Bitmap.Config;
+import android.util.Log;
+import androidx.annotation.ColorInt;
+import androidx.annotation.NonNull;
+import androidx.annotation.Nullable;
+import java.io.ByteArrayOutputStream;
+import java.io.IOException;
+import java.io.InputStream;
+import java.nio.ByteBuffer;
+import java.nio.ByteOrder;
+import java.util.Arrays;
+import java.util.Iterator;
+import java.util.List;
+
+public class StandardGifDecoder
+  implements GifDecoder
+{
+  private static final int BYTES_PER_INTEGER = 4;
+  @ColorInt
+  private static final int COLOR_TRANSPARENT_BLACK = 0;
+  private static final int INITIAL_FRAME_POINTER = -1;
+  private static final int MASK_INT_LOWEST_BYTE = 255;
+  private static final int MAX_STACK_SIZE = 4096;
+  private static final int NULL_CODE = -1;
+  private static final String TAG = "StandardGifDecoder";
+  @ColorInt
+  private int[] act;
+  @NonNull
+  private Bitmap.Config bitmapConfig = Bitmap.Config.ARGB_8888;
+  private final GifDecoder.BitmapProvider bitmapProvider;
+  private byte[] block;
+  private int downsampledHeight;
+  private int downsampledWidth;
+  private int framePointer;
+  private GifHeader header;
+  @Nullable
+  private Boolean isFirstFrameTransparent;
+  private byte[] mainPixels;
+  @ColorInt
+  private int[] mainScratch;
+  private GifHeaderParser parser;
+  @ColorInt
+  private final int[] pct = new int['?'];
+  private byte[] pixelStack;
+  private short[] prefix;
+  private Bitmap previousImage;
+  private ByteBuffer rawData;
+  private int sampleSize;
+  private boolean savePrevious;
+  private int status;
+  private byte[] suffix;
+  
+  public StandardGifDecoder(@NonNull GifDecoder.BitmapProvider paramBitmapProvider)
+  {
+    bitmapProvider = paramBitmapProvider;
+    header = new GifHeader();
+  }
+  
+  public StandardGifDecoder(@NonNull GifDecoder.BitmapProvider paramBitmapProvider, GifHeader paramGifHeader, ByteBuffer paramByteBuffer)
+  {
+    this(paramBitmapProvider, paramGifHeader, paramByteBuffer, 1);
+  }
+  
+  public StandardGifDecoder(@NonNull GifDecoder.BitmapProvider paramBitmapProvider, GifHeader paramGifHeader, ByteBuffer paramByteBuffer, int paramInt)
+  {
+    this(paramBitmapProvider);
+    setData(paramGifHeader, paramByteBuffer, paramInt);
+  }
+  
+  @ColorInt
+  private int averageColorsNear(int paramInt1, int paramInt2, int paramInt3)
+  {
+    int i1 = paramInt1;
+    int n = 0;
+    int m = 0;
+    int k = 0;
+    int j = 0;
+    int i6;
+    int i4;
+    int i3;
+    for (int i = 0; (i1 < sampleSize + paramInt1) && (i1 < mainPixels.length) && (i1 < paramInt2); i = i2)
+    {
+      i2 = mainPixels[i1];
+      int i7 = act[(i2 & 0xFF)];
+      i6 = n;
+      i5 = m;
+      i4 = k;
+      i3 = j;
+      i2 = i;
+      if (i7 != 0)
+      {
+        i6 = n + (i7 >> 24 & 0xFF);
+        i5 = m + (i7 >> 16 & 0xFF);
+        i4 = k + (i7 >> 8 & 0xFF);
+        i3 = j + (i7 & 0xFF);
+        i2 = i + 1;
+      }
+      i1 += 1;
+      n = i6;
+      m = i5;
+      k = i4;
+      j = i3;
+    }
+    int i5 = paramInt1 + paramInt3;
+    paramInt1 = i5;
+    int i2 = n;
+    while ((paramInt1 < sampleSize + i5) && (paramInt1 < mainPixels.length) && (paramInt1 < paramInt2))
+    {
+      paramInt3 = mainPixels[paramInt1];
+      i6 = act[(paramInt3 & 0xFF)];
+      i4 = i2;
+      i3 = m;
+      i1 = k;
+      n = j;
+      paramInt3 = i;
+      if (i6 != 0)
+      {
+        i4 = i2 + (i6 >> 24 & 0xFF);
+        i3 = m + (i6 >> 16 & 0xFF);
+        i1 = k + (i6 >> 8 & 0xFF);
+        n = j + (i6 & 0xFF);
+        paramInt3 = i + 1;
+      }
+      paramInt1 += 1;
+      i2 = i4;
+      m = i3;
+      k = i1;
+      j = n;
+      i = paramInt3;
+    }
+    if (i == 0) {
+      return 0;
+    }
+    return i2 / i << 24 | m / i << 16 | k / i << 8 | j / i;
+  }
+  
+  private void copyCopyIntoScratchRobust(GifFrame paramGifFrame)
+  {
+    int[] arrayOfInt1 = mainScratch;
+    int i6 = ih / sampleSize;
+    int i5 = iy / sampleSize;
+    int i4 = iw / sampleSize;
+    int i10 = ix / sampleSize;
+    int i3;
+    if (framePointer == 0) {
+      i3 = 1;
+    } else {
+      i3 = 0;
+    }
+    int i11 = sampleSize;
+    int i12 = downsampledWidth;
+    int i13 = downsampledHeight;
+    byte[] arrayOfByte = mainPixels;
+    int[] arrayOfInt2 = act;
+    Object localObject1 = isFirstFrameTransparent;
+    int j = 0;
+    int m = 0;
+    int i1 = 1;
+    int i2;
+    for (int n = 8; m < i6; n = i2)
+    {
+      int i;
+      int k;
+      if (interlace)
+      {
+        i = j;
+        i2 = i1;
+        k = n;
+        if (j >= i6)
+        {
+          i2 = i1 + 1;
+          switch (i2)
+          {
+          default: 
+            i = j;
+            k = n;
+            break;
+          case 4: 
+            i = 1;
+            k = 2;
+            break;
+          case 3: 
+            i = 2;
+            k = 4;
+            break;
+          case 2: 
+            i = 4;
+            k = n;
+          }
+        }
+        n = i + k;
+        j = i;
+        i = n;
+        i1 = i2;
+        i2 = k;
+      }
+      else
+      {
+        i = j;
+        j = m;
+        i2 = n;
+      }
+      j += i5;
+      if (i11 == 1) {
+        k = 1;
+      } else {
+        k = 0;
+      }
+      if (j < i13)
+      {
+        j *= i12;
+        int i7 = j + i10;
+        n = i7 + i4;
+        int i8 = j + i12;
+        j = n;
+        if (i8 < n) {
+          j = i8;
+        }
+        i8 = m * i11 * iw;
+        if (k != 0)
+        {
+          k = i7;
+          for (;;)
+          {
+            localObject2 = localObject1;
+            if (k >= j) {
+              break;
+            }
+            n = arrayOfInt2[(arrayOfByte[i8] & 0xFF)];
+            if (n != 0)
+            {
+              arrayOfInt1[k] = n;
+              localObject2 = localObject1;
+            }
+            else
+            {
+              localObject2 = localObject1;
+              if (i3 != 0)
+              {
+                localObject2 = localObject1;
+                if (localObject1 == null) {
+                  localObject2 = Boolean.valueOf(true);
+                }
+              }
+            }
+            i8 += i11;
+            k += 1;
+            localObject1 = localObject2;
+          }
+        }
+        int i9 = i7;
+        n = i8;
+        k = j;
+        for (;;)
+        {
+          localObject2 = localObject1;
+          if (i9 >= k) {
+            break;
+          }
+          int i14 = averageColorsNear(n, (j - i7) * i11 + i8, iw);
+          if (i14 != 0) {
+            arrayOfInt1[i9] = i14;
+          }
+          for (;;)
+          {
+            break;
+            if ((i3 != 0) && (localObject1 == null)) {
+              localObject1 = Boolean.valueOf(true);
+            }
+          }
+          n += i11;
+          i9 += 1;
+        }
+      }
+      Object localObject2 = localObject1;
+      m += 1;
+      j = i;
+      localObject1 = localObject2;
+    }
+    if (isFirstFrameTransparent == null)
+    {
+      boolean bool;
+      if (localObject1 == null) {
+        bool = false;
+      } else {
+        bool = ((Boolean)localObject1).booleanValue();
+      }
+      isFirstFrameTransparent = Boolean.valueOf(bool);
+    }
+  }
+  
+  private void copyIntoScratchFast(GifFrame paramGifFrame)
+  {
+    Object localObject = paramGifFrame;
+    int[] arrayOfInt1 = mainScratch;
+    int n = ih;
+    int i5 = iy;
+    int i6 = iw;
+    int i7 = ix;
+    int j;
+    if (framePointer == 0) {
+      j = 1;
+    } else {
+      j = 0;
+    }
+    int i8 = downsampledWidth;
+    localObject = mainPixels;
+    int[] arrayOfInt2 = act;
+    int k = 0;
+    int i = -1;
+    while (k < n)
+    {
+      int m = (k + i5) * i8;
+      int i2 = m + i7;
+      int i1 = i2 + i6;
+      int i3 = m + i8;
+      m = i1;
+      if (i3 < i1) {
+        m = i3;
+      }
+      i1 = iw;
+      i1 *= k;
+      while (i2 < m)
+      {
+        int i4 = localObject[i1];
+        int i9 = i4 & 0xFF;
+        i3 = i;
+        if (i9 != i)
+        {
+          i3 = arrayOfInt2[i9];
+          if (i3 != 0)
+          {
+            arrayOfInt1[i2] = i3;
+            i3 = i;
+          }
+          else
+          {
+            i3 = i4;
+          }
+        }
+        i1 += 1;
+        i2 += 1;
+        i = i3;
+      }
+      k += 1;
+    }
+    boolean bool;
+    if ((isFirstFrameTransparent == null) && (j != 0) && (i != -1)) {
+      bool = true;
+    } else {
+      bool = false;
+    }
+    isFirstFrameTransparent = Boolean.valueOf(bool);
+  }
+  
+  private void decodeBitmapData(GifFrame paramGifFrame)
+  {
+    StandardGifDecoder localStandardGifDecoder = this;
+    if (paramGifFrame != null) {
+      rawData.position(bufferFrameStart);
+    }
+    int i9;
+    if (paramGifFrame == null)
+    {
+      i9 = header.width * header.height;
+    }
+    else
+    {
+      j = iw;
+      i9 = ih * j;
+    }
+    if ((mainPixels == null) || (mainPixels.length < i9)) {
+      mainPixels = bitmapProvider.obtainByteArray(i9);
+    }
+    byte[] arrayOfByte1 = mainPixels;
+    if (prefix == null) {
+      prefix = new short['?'];
+    }
+    short[] arrayOfShort = prefix;
+    if (suffix == null) {
+      suffix = new byte['?'];
+    }
+    byte[] arrayOfByte2 = suffix;
+    if (pixelStack == null) {
+      pixelStack = new byte['?'];
+    }
+    byte[] arrayOfByte3 = pixelStack;
+    int j = readByte();
+    int i18 = 1 << j;
+    int i10 = i18 + 2;
+    int i8 = j + 1;
+    int i11 = (1 << i8) - 1;
+    int i13 = 0;
+    j = 0;
+    while (j < i18)
+    {
+      arrayOfShort[j] = 0;
+      arrayOfByte2[j] = ((byte)j);
+      j += 1;
+    }
+    byte[] arrayOfByte4 = block;
+    int m = i8;
+    int i3 = i10;
+    int i1 = i11;
+    int i5 = 0;
+    int k = 0;
+    int i4 = 0;
+    int i6 = 0;
+    int i7 = 0;
+    int n = -1;
+    int i2 = 0;
+    int i12 = 0;
+    j = i13;
+    paramGifFrame = localStandardGifDecoder;
+    while (j < i9)
+    {
+      i13 = i5;
+      if (i5 == 0)
+      {
+        i13 = readBlock();
+        if (i13 <= 0)
+        {
+          status = 3;
+          break;
+        }
+        i7 = 0;
+      }
+      int i14 = i6 + ((arrayOfByte4[i7] & 0xFF) << i4);
+      int i16 = i7 + 1;
+      int i17 = i13 - 1;
+      i7 = i4 + 8;
+      i5 = k;
+      i6 = i2;
+      k = i3;
+      i3 = i12;
+      i2 = i14;
+      i4 = j;
+      j = m;
+      m = i8;
+      i8 = i7;
+      for (;;)
+      {
+        if (i8 >= j)
+        {
+          i7 = i2 & i1;
+          i12 = i2 >> j;
+          i2 = i8 - j;
+          if (i7 == i18)
+          {
+            j = m;
+            k = i10;
+            i1 = i11;
+            n = -1;
+            i13 = i5;
+            i7 = i4;
+            i5 = n;
+            i8 = i2;
+            n = i5;
+            i4 = i7;
+            i5 = i13;
+            i2 = i12;
+          }
+          else
+          {
+            if (i7 == i18 + 1)
+            {
+              i13 = j;
+              j = i4;
+              i4 = i5;
+              i14 = k;
+              int i15 = i6;
+              i8 = m;
+              i5 = i17;
+              k = i4;
+              i4 = i2;
+              i6 = i12;
+              i7 = i16;
+              i2 = i15;
+              i12 = i3;
+              i3 = i14;
+              m = i13;
+              break;
+            }
+            if (n == -1)
+            {
+              arrayOfByte1[i5] = arrayOfByte2[i7];
+              i5 += 1;
+              i6 = i4 + 1;
+              n = i7;
+              i4 = i5;
+            }
+            for (;;)
+            {
+              i5 = i7;
+              paramGifFrame = this;
+              i7 = i6;
+              i13 = i4;
+              i6 = n;
+              break;
+              i13 = k;
+              if (i7 >= i13)
+              {
+                arrayOfByte3[i3] = ((byte)i6);
+                i3 += 1;
+                k = n;
+              }
+              for (k = i7; k >= i18; k = arrayOfShort[k])
+              {
+                arrayOfByte3[i3] = arrayOfByte2[k];
+                i3 += 1;
+              }
+              i14 = arrayOfByte2[k] & 0xFF;
+              int i = (byte)i14;
+              arrayOfByte1[i5] = i;
+              k = i5 + 1;
+              i4 += 1;
+              while (i3 > 0)
+              {
+                i3 -= 1;
+                arrayOfByte1[k] = arrayOfByte3[i3];
+                k += 1;
+                i4 += 1;
+              }
+              i8 = i13;
+              i6 = j;
+              i5 = i1;
+              if (i13 < 4096)
+              {
+                arrayOfShort[i13] = ((short)n);
+                arrayOfByte2[i13] = i;
+                n = i13 + 1;
+                i8 = n;
+                i6 = j;
+                i5 = i1;
+                if ((n & i1) == 0)
+                {
+                  i8 = n;
+                  i6 = j;
+                  i5 = i1;
+                  if (n < 4096)
+                  {
+                    i6 = j + 1;
+                    i5 = i1 + n;
+                    i8 = n;
+                  }
+                }
+              }
+              n = i14;
+              j = i6;
+              i6 = i4;
+              i4 = k;
+              i1 = i5;
+              k = i8;
+            }
+          }
+        }
+      }
+      i13 = k;
+      i14 = j;
+      j = i4;
+      k = i5;
+      i12 = i6;
+      i4 = i8;
+      paramGifFrame = this;
+      i8 = m;
+      i5 = i17;
+      i6 = i2;
+      i7 = i16;
+      i2 = i12;
+      i12 = i3;
+      i3 = i13;
+      m = i14;
+    }
+    Arrays.fill(arrayOfByte1, k, i9, (byte)0);
+  }
+  
+  @NonNull
+  private GifHeaderParser getHeaderParser()
+  {
+    if (parser == null) {
+      parser = new GifHeaderParser();
+    }
+    return parser;
+  }
+  
+  private Bitmap getNextBitmap()
+  {
+    if ((isFirstFrameTransparent != null) && (!isFirstFrameTransparent.booleanValue())) {
+      localObject = bitmapConfig;
+    } else {
+      localObject = Bitmap.Config.ARGB_8888;
+    }
+    Object localObject = bitmapProvider.obtain(downsampledWidth, downsampledHeight, (Bitmap.Config)localObject);
+    ((Bitmap)localObject).setHasAlpha(true);
+    return localObject;
+  }
+  
+  private int readBlock()
+  {
+    int i = readByte();
+    if (i <= 0) {
+      return i;
+    }
+    rawData.get(block, 0, Math.min(i, rawData.remaining()));
+    return i;
+  }
+  
+  private int readByte()
+  {
+    return rawData.get() & 0xFF;
+  }
+  
+  private Bitmap setPixels(GifFrame paramGifFrame1, GifFrame paramGifFrame2)
+  {
+    int[] arrayOfInt = mainScratch;
+    int i = 0;
+    if (paramGifFrame2 == null)
+    {
+      if (previousImage != null) {
+        bitmapProvider.release(previousImage);
+      }
+      previousImage = null;
+      Arrays.fill(arrayOfInt, 0);
+    }
+    if ((paramGifFrame2 != null) && (dispose == 3) && (previousImage == null)) {
+      Arrays.fill(arrayOfInt, 0);
+    }
+    if ((paramGifFrame2 != null) && (dispose > 0))
+    {
+      if (dispose == 2)
+      {
+        int j;
+        if (!transparency)
+        {
+          j = header.bgColor;
+          if ((lct != null) && (header.bgIndex == transIndex)) {
+            j = i;
+          }
+        }
+        else
+        {
+          j = i;
+          if (framePointer == 0)
+          {
+            isFirstFrameTransparent = Boolean.valueOf(true);
+            j = i;
+          }
+        }
+        int n = ih / sampleSize;
+        i = iy / sampleSize;
+        int i1 = iw / sampleSize;
+        int k = ix / sampleSize;
+        int m = i * downsampledWidth + k;
+        int i2 = downsampledWidth;
+        i = m;
+        while (i < n * i2 + m)
+        {
+          k = i;
+          while (k < i + i1)
+          {
+            arrayOfInt[k] = j;
+            k += 1;
+          }
+          i += downsampledWidth;
+        }
+      }
+      if ((dispose == 3) && (previousImage != null)) {
+        previousImage.getPixels(arrayOfInt, 0, downsampledWidth, 0, 0, downsampledWidth, downsampledHeight);
+      }
+    }
+    decodeBitmapData(paramGifFrame1);
+    if ((!interlace) && (sampleSize == 1)) {
+      copyIntoScratchFast(paramGifFrame1);
+    } else {
+      copyCopyIntoScratchRobust(paramGifFrame1);
+    }
+    if ((savePrevious) && ((dispose == 0) || (dispose == 1)))
+    {
+      if (previousImage == null) {
+        previousImage = getNextBitmap();
+      }
+      previousImage.setPixels(arrayOfInt, 0, downsampledWidth, 0, 0, downsampledWidth, downsampledHeight);
+    }
+    paramGifFrame1 = getNextBitmap();
+    paramGifFrame1.setPixels(arrayOfInt, 0, downsampledWidth, 0, 0, downsampledWidth, downsampledHeight);
+    return paramGifFrame1;
+  }
+  
+  public void advance()
+  {
+    framePointer = ((framePointer + 1) % header.frameCount);
+  }
+  
+  public void clear()
+  {
+    header = null;
+    if (mainPixels != null) {
+      bitmapProvider.release(mainPixels);
+    }
+    if (mainScratch != null) {
+      bitmapProvider.release(mainScratch);
+    }
+    if (previousImage != null) {
+      bitmapProvider.release(previousImage);
+    }
+    previousImage = null;
+    rawData = null;
+    isFirstFrameTransparent = null;
+    if (block != null) {
+      bitmapProvider.release(block);
+    }
+  }
+  
+  public int getByteSize()
+  {
+    return rawData.limit() + mainPixels.length + mainScratch.length * 4;
+  }
+  
+  public int getCurrentFrameIndex()
+  {
+    return framePointer;
+  }
+  
+  @NonNull
+  public ByteBuffer getData()
+  {
+    return rawData;
+  }
+  
+  public int getDelay(int paramInt)
+  {
+    if ((paramInt >= 0) && (paramInt < header.frameCount)) {
+      return header.frames.get(paramInt)).delay;
+    }
+    return -1;
+  }
+  
+  public int getFrameCount()
+  {
+    return header.frameCount;
+  }
+  
+  public int getHeight()
+  {
+    return header.height;
+  }
+  
+  @Deprecated
+  public int getLoopCount()
+  {
+    if (header.loopCount == -1) {
+      return 1;
+    }
+    return header.loopCount;
+  }
+  
+  public int getNetscapeLoopCount()
+  {
+    return header.loopCount;
+  }
+  
+  public int getNextDelay()
+  {
+    if ((header.frameCount > 0) && (framePointer >= 0)) {
+      return getDelay(framePointer);
+    }
+    return 0;
+  }
+  
+  @Nullable
+  public Bitmap getNextFrame()
+  {
+    for (;;)
+    {
+      try
+      {
+        Object localObject1;
+        Object localObject4;
+        if ((header.frameCount <= 0) || (framePointer < 0))
+        {
+          if (Log.isLoggable(TAG, 3))
+          {
+            localObject1 = TAG;
+            localObject4 = new StringBuilder();
+            ((StringBuilder)localObject4).append("Unable to decode frame, frameCount=");
+            ((StringBuilder)localObject4).append(header.frameCount);
+            ((StringBuilder)localObject4).append(", framePointer=");
+            ((StringBuilder)localObject4).append(framePointer);
+            Log.d((String)localObject1, ((StringBuilder)localObject4).toString());
+          }
+          status = 1;
+        }
+        if ((status != 1) && (status != 2))
+        {
+          status = 0;
+          if (block == null) {
+            block = bitmapProvider.obtainByteArray(255);
+          }
+          GifFrame localGifFrame = (GifFrame)header.frames.get(framePointer);
+          int i = framePointer - 1;
+          if (i >= 0)
+          {
+            localObject1 = (GifFrame)header.frames.get(i);
+            if (lct != null) {
+              localObject4 = lct;
+            } else {
+              localObject4 = header.gct;
+            }
+            act = ((int[])localObject4);
+            if (act == null)
+            {
+              if (Log.isLoggable(TAG, 3))
+              {
+                localObject1 = TAG;
+                localObject4 = new StringBuilder();
+                ((StringBuilder)localObject4).append("No valid color table found for frame #");
+                ((StringBuilder)localObject4).append(framePointer);
+                Log.d((String)localObject1, ((StringBuilder)localObject4).toString());
+              }
+              status = 1;
+              return null;
+            }
+            if (transparency)
+            {
+              System.arraycopy(act, 0, pct, 0, act.length);
+              act = pct;
+              act[transIndex] = 0;
+            }
+            localObject1 = setPixels(localGifFrame, (GifFrame)localObject1);
+            return localObject1;
+          }
+        }
+        else
+        {
+          if (Log.isLoggable(TAG, 3))
+          {
+            localObject1 = TAG;
+            localObject4 = new StringBuilder();
+            ((StringBuilder)localObject4).append("Unable to decode frame, status=");
+            ((StringBuilder)localObject4).append(status);
+            Log.d((String)localObject1, ((StringBuilder)localObject4).toString());
+          }
+          return null;
+        }
+      }
+      finally {}
+      Object localObject3 = null;
+    }
+  }
+  
+  public int getStatus()
+  {
+    return status;
+  }
+  
+  public int getTotalIterationCount()
+  {
+    if (header.loopCount == -1) {
+      return 1;
+    }
+    if (header.loopCount == 0) {
+      return 0;
+    }
+    return header.loopCount + 1;
+  }
+  
+  public int getWidth()
+  {
+    return header.width;
+  }
+  
+  public int read(@Nullable InputStream paramInputStream, int paramInt)
+  {
+    if (paramInputStream != null)
+    {
+      if (paramInt > 0) {
+        paramInt += 4096;
+      } else {
+        paramInt = 16384;
+      }
+      try
+      {
+        ByteArrayOutputStream localByteArrayOutputStream = new ByteArrayOutputStream(paramInt);
+        byte[] arrayOfByte = new byte['?'];
+        for (;;)
+        {
+          paramInt = paramInputStream.read(arrayOfByte, 0, arrayOfByte.length);
+          if (paramInt == -1) {
+            break;
+          }
+          localByteArrayOutputStream.write(arrayOfByte, 0, paramInt);
+        }
+        localByteArrayOutputStream.flush();
+        read(localByteArrayOutputStream.toByteArray());
+      }
+      catch (IOException localIOException)
+      {
+        Log.w(TAG, "Error reading data from stream", localIOException);
+      }
+    }
+    status = 2;
+    if (paramInputStream != null) {
+      try
+      {
+        paramInputStream.close();
+      }
+      catch (IOException paramInputStream)
+      {
+        Log.w(TAG, "Error closing stream", paramInputStream);
+      }
+    }
+    return status;
+  }
+  
+  public int read(@Nullable byte[] paramArrayOfByte)
+  {
+    try
+    {
+      header = getHeaderParser().setData(paramArrayOfByte).parseHeader();
+      if (paramArrayOfByte != null) {
+        setData(header, paramArrayOfByte);
+      }
+      int i = status;
+      return i;
+    }
+    finally {}
+  }
+  
+  public void resetFrameIndex()
+  {
+    framePointer = -1;
+  }
+  
+  public void setData(@NonNull GifHeader paramGifHeader, @NonNull ByteBuffer paramByteBuffer)
+  {
+    try
+    {
+      setData(paramGifHeader, paramByteBuffer, 1);
+      return;
+    }
+    finally
+    {
+      paramGifHeader = finally;
+      throw paramGifHeader;
+    }
+  }
+  
+  public void setData(@NonNull GifHeader paramGifHeader, @NonNull ByteBuffer paramByteBuffer, int paramInt)
+  {
+    if (paramInt > 0) {}
+    try
+    {
+      paramInt = Integer.highestOneBit(paramInt);
+      status = 0;
+      header = paramGifHeader;
+      framePointer = -1;
+      rawData = paramByteBuffer.asReadOnlyBuffer();
+      rawData.position(0);
+      rawData.order(ByteOrder.LITTLE_ENDIAN);
+      savePrevious = false;
+      paramByteBuffer = frames.iterator();
+      while (paramByteBuffer.hasNext()) {
+        if (nextdispose == 3) {
+          savePrevious = true;
+        }
+      }
+      sampleSize = paramInt;
+      downsampledWidth = (width / paramInt);
+      downsampledHeight = (height / paramInt);
+      mainPixels = bitmapProvider.obtainByteArray(width * height);
+      mainScratch = bitmapProvider.obtainIntArray(downsampledWidth * downsampledHeight);
+      return;
+    }
+    finally {}
+    paramGifHeader = new StringBuilder();
+    paramGifHeader.append("Sample size must be >=0, not: ");
+    paramGifHeader.append(paramInt);
+    throw new IllegalArgumentException(paramGifHeader.toString());
+  }
+  
+  public void setData(@NonNull GifHeader paramGifHeader, @NonNull byte[] paramArrayOfByte)
+  {
+    try
+    {
+      setData(paramGifHeader, ByteBuffer.wrap(paramArrayOfByte));
+      return;
+    }
+    finally
+    {
+      paramGifHeader = finally;
+      throw paramGifHeader;
+    }
+  }
+  
+  public void setDefaultBitmapConfig(@NonNull Bitmap.Config paramConfig)
+  {
+    if ((paramConfig != Bitmap.Config.ARGB_8888) && (paramConfig != Bitmap.Config.RGB_565))
+    {
+      StringBuilder localStringBuilder = new StringBuilder();
+      localStringBuilder.append("Unsupported format: ");
+      localStringBuilder.append(paramConfig);
+      localStringBuilder.append(", must be one of ");
+      localStringBuilder.append(Bitmap.Config.ARGB_8888);
+      localStringBuilder.append(" or ");
+      localStringBuilder.append(Bitmap.Config.RGB_565);
+      throw new IllegalArgumentException(localStringBuilder.toString());
+    }
+    bitmapConfig = paramConfig;
+  }
+}

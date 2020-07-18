@@ -1,0 +1,77 @@
+package com.facebook.drawee.backends.pipeline;
+
+import android.content.res.Resources;
+import android.graphics.drawable.BitmapDrawable;
+import android.graphics.drawable.Drawable;
+import com.facebook.drawee.drawable.OrientedDrawable;
+import com.facebook.imagepipeline.drawable.DrawableFactory;
+import com.facebook.imagepipeline.image.CloseableImage;
+import com.facebook.imagepipeline.image.CloseableStaticBitmap;
+import com.facebook.imagepipeline.systrace.FrescoSystrace;
+import javax.annotation.Nullable;
+
+public class DefaultDrawableFactory
+  implements DrawableFactory
+{
+  @Nullable
+  private final DrawableFactory mAnimatedDrawableFactory;
+  private final Resources mResources;
+  
+  public DefaultDrawableFactory(Resources paramResources, @Nullable DrawableFactory paramDrawableFactory)
+  {
+    mResources = paramResources;
+    mAnimatedDrawableFactory = paramDrawableFactory;
+  }
+  
+  private static boolean hasTransformableExifOrientation(CloseableStaticBitmap paramCloseableStaticBitmap)
+  {
+    return (paramCloseableStaticBitmap.getExifOrientation() != 1) && (paramCloseableStaticBitmap.getExifOrientation() != 0);
+  }
+  
+  private static boolean hasTransformableRotationAngle(CloseableStaticBitmap paramCloseableStaticBitmap)
+  {
+    return (paramCloseableStaticBitmap.getRotationAngle() != 0) && (paramCloseableStaticBitmap.getRotationAngle() != -1);
+  }
+  
+  @Nullable
+  public Drawable createDrawable(CloseableImage paramCloseableImage)
+  {
+    try
+    {
+      if (FrescoSystrace.isTracing()) {
+        FrescoSystrace.beginSection("DefaultDrawableFactory#createDrawable");
+      }
+      if ((paramCloseableImage instanceof CloseableStaticBitmap))
+      {
+        paramCloseableImage = (CloseableStaticBitmap)paramCloseableImage;
+        BitmapDrawable localBitmapDrawable = new BitmapDrawable(mResources, paramCloseableImage.getUnderlyingBitmap());
+        if (!hasTransformableRotationAngle(paramCloseableImage))
+        {
+          boolean bool = hasTransformableExifOrientation(paramCloseableImage);
+          if (!bool) {
+            return localBitmapDrawable;
+          }
+        }
+        paramCloseableImage = new OrientedDrawable(localBitmapDrawable, paramCloseableImage.getRotationAngle(), paramCloseableImage.getExifOrientation());
+        return paramCloseableImage;
+      }
+      if ((mAnimatedDrawableFactory != null) && (mAnimatedDrawableFactory.supportsImageType(paramCloseableImage)))
+      {
+        paramCloseableImage = mAnimatedDrawableFactory.createDrawable(paramCloseableImage);
+        return paramCloseableImage;
+      }
+      return null;
+    }
+    finally
+    {
+      if (FrescoSystrace.isTracing()) {
+        FrescoSystrace.endSection();
+      }
+    }
+  }
+  
+  public boolean supportsImageType(CloseableImage paramCloseableImage)
+  {
+    return true;
+  }
+}

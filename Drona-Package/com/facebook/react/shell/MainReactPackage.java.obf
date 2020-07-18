@@ -1,0 +1,362 @@
+package com.facebook.react.shell;
+
+import androidx.annotation.Nullable;
+import com.facebook.react.TurboReactPackage;
+import com.facebook.react.animated.NativeAnimatedModule;
+import com.facebook.react.bridge.NativeModule;
+import com.facebook.react.bridge.ReactApplicationContext;
+import com.facebook.react.module.annotations.ReactModule;
+import com.facebook.react.module.model.ReactModuleInfo;
+import com.facebook.react.module.model.ReactModuleInfoProvider;
+import com.facebook.react.modules.accessibilityinfo.AccessibilityInfoModule;
+import com.facebook.react.modules.appstate.AppStateModule;
+import com.facebook.react.modules.blob.BlobModule;
+import com.facebook.react.modules.blob.FileReaderModule;
+import com.facebook.react.modules.camera.CameraRollManager;
+import com.facebook.react.modules.camera.ImageEditingManager;
+import com.facebook.react.modules.camera.ImageStoreManager;
+import com.facebook.react.modules.clipboard.ClipboardModule;
+import com.facebook.react.modules.datepicker.DatePickerDialogModule;
+import com.facebook.react.modules.dialog.DialogModule;
+import com.facebook.react.modules.fresco.FrescoModule;
+import com.facebook.react.modules.i18nmanager.I18nManagerModule;
+import com.facebook.react.modules.image.ImageLoaderModule;
+import com.facebook.react.modules.intent.IntentModule;
+import com.facebook.react.modules.network.NetworkingModule;
+import com.facebook.react.modules.permissions.PermissionsModule;
+import com.facebook.react.modules.share.ShareModule;
+import com.facebook.react.modules.sound.SoundManagerModule;
+import com.facebook.react.modules.statusbar.StatusBarModule;
+import com.facebook.react.modules.storage.AsyncStorageModule;
+import com.facebook.react.modules.timepicker.TimePickerDialogModule;
+import com.facebook.react.modules.toast.ToastModule;
+import com.facebook.react.modules.vibration.VibrationModule;
+import com.facebook.react.modules.websocket.WebSocketModule;
+import com.facebook.react.uimanager.ViewManager;
+import com.facebook.react.views.art.ARTRenderableViewManager;
+import com.facebook.react.views.art.ARTSurfaceViewManager;
+import com.facebook.react.views.checkbox.ReactCheckBoxManager;
+import com.facebook.react.views.drawer.ReactDrawerLayoutManager;
+import com.facebook.react.views.image.ReactImageManager;
+import com.facebook.react.views.modal.ReactModalHostManager;
+import com.facebook.react.views.picker.ReactDialogPickerManager;
+import com.facebook.react.views.picker.ReactDropdownPickerManager;
+import com.facebook.react.views.progressbar.ReactProgressBarViewManager;
+import com.facebook.react.views.scroll.ReactHorizontalScrollContainerViewManager;
+import com.facebook.react.views.scroll.ReactHorizontalScrollViewManager;
+import com.facebook.react.views.scroll.ReactScrollViewManager;
+import com.facebook.react.views.slider.ReactSliderManager;
+import com.facebook.react.views.swiperefresh.SwipeRefreshLayoutManager;
+import com.facebook.react.views.switchview.ReactSwitchManager;
+import com.facebook.react.views.text.ReactRawTextManager;
+import com.facebook.react.views.text.ReactTextViewManager;
+import com.facebook.react.views.text.ReactVirtualTextViewManager;
+import com.facebook.react.views.text.frescosupport.FrescoBasedReactTextInlineImageViewManager;
+import com.facebook.react.views.textinput.ReactTextInputManager;
+import com.facebook.react.views.view.ReactViewManager;
+import com.facebook.react.views.viewpager.ReactViewPagerManager;
+import java.util.ArrayList;
+import java.util.HashMap;
+import java.util.List;
+import java.util.Map;
+
+public class MainReactPackage
+  extends TurboReactPackage
+{
+  private MainPackageConfig mConfig;
+  
+  public MainReactPackage() {}
+  
+  public MainReactPackage(MainPackageConfig paramMainPackageConfig)
+  {
+    mConfig = paramMainPackageConfig;
+  }
+  
+  public List<ViewManager> createViewManagers(ReactApplicationContext paramReactApplicationContext)
+  {
+    paramReactApplicationContext = new ArrayList();
+    paramReactApplicationContext.add(ARTRenderableViewManager.createARTGroupViewManager());
+    paramReactApplicationContext.add(ARTRenderableViewManager.createARTShapeViewManager());
+    paramReactApplicationContext.add(ARTRenderableViewManager.createARTTextViewManager());
+    paramReactApplicationContext.add(new ReactCheckBoxManager());
+    paramReactApplicationContext.add(new ReactDialogPickerManager());
+    paramReactApplicationContext.add(new ReactDrawerLayoutManager());
+    paramReactApplicationContext.add(new ReactDropdownPickerManager());
+    paramReactApplicationContext.add(new ReactHorizontalScrollViewManager());
+    paramReactApplicationContext.add(new ReactHorizontalScrollContainerViewManager());
+    paramReactApplicationContext.add(new ReactProgressBarViewManager());
+    paramReactApplicationContext.add(new ReactScrollViewManager());
+    paramReactApplicationContext.add(new ReactSliderManager());
+    paramReactApplicationContext.add(new ReactSwitchManager());
+    paramReactApplicationContext.add(new SwipeRefreshLayoutManager());
+    paramReactApplicationContext.add(new ARTSurfaceViewManager());
+    paramReactApplicationContext.add(new FrescoBasedReactTextInlineImageViewManager());
+    paramReactApplicationContext.add(new ReactImageManager());
+    paramReactApplicationContext.add(new ReactModalHostManager());
+    paramReactApplicationContext.add(new ReactRawTextManager());
+    paramReactApplicationContext.add(new ReactTextInputManager());
+    paramReactApplicationContext.add(new ReactTextViewManager());
+    paramReactApplicationContext.add(new ReactViewManager());
+    paramReactApplicationContext.add(new ReactViewPagerManager());
+    paramReactApplicationContext.add(new ReactVirtualTextViewManager());
+    return paramReactApplicationContext;
+  }
+  
+  @Nullable
+  public NativeModule getModule(String paramString, ReactApplicationContext paramReactApplicationContext)
+  {
+    switch (paramString.hashCode())
+    {
+    default: 
+      break;
+    case 1922110066: 
+      if (paramString.equals("Vibration")) {
+        i = 23;
+      }
+      break;
+    case 1721274886: 
+      if (paramString.equals("NativeAnimatedModule")) {
+        i = 15;
+      }
+      break;
+    case 1555425035: 
+      if (paramString.equals("ShareModule")) {
+        i = 18;
+      }
+      break;
+    case 1547941001: 
+      if (paramString.equals("BlobModule")) {
+        i = 2;
+      }
+      break;
+    case 1515242260: 
+      if (paramString.equals("Networking")) {
+        i = 16;
+      }
+      break;
+    case 1221389072: 
+      if (paramString.equals("AppState")) {
+        i = 1;
+      }
+      break;
+    case 563961875: 
+      if (paramString.equals("IntentAndroid")) {
+        i = 14;
+      }
+      break;
+    case 403570038: 
+      if (paramString.equals("Clipboard")) {
+        i = 6;
+      }
+      break;
+    case 283572496: 
+      if (paramString.equals("ImageEditingManager")) {
+        i = 11;
+      }
+      break;
+    case 174691539: 
+      if (paramString.equals("DatePickerAndroid")) {
+        i = 7;
+      }
+      break;
+    case 163245714: 
+      if (paramString.equals("FrescoModule")) {
+        i = 9;
+      }
+      break;
+    case -254310125: 
+      if (paramString.equals("WebSocketModule")) {
+        i = 24;
+      }
+      break;
+    case -382654004: 
+      if (paramString.equals("StatusBarManager")) {
+        i = 19;
+      }
+      break;
+    case -457866500: 
+      if (paramString.equals("AccessibilityInfo")) {
+        i = 0;
+      }
+      break;
+    case -570370161: 
+      if (paramString.equals("I18nManager")) {
+        i = 10;
+      }
+      break;
+    case -657277650: 
+      if (paramString.equals("ImageLoader")) {
+        i = 12;
+      }
+      break;
+    case -1062061717: 
+      if (paramString.equals("PermissionsAndroid")) {
+        i = 17;
+      }
+      break;
+    case -1344126773: 
+      if (paramString.equals("FileReaderModule")) {
+        i = 3;
+      }
+      break;
+    case -1399423980: 
+      if (paramString.equals("TimePickerAndroid")) {
+        i = 21;
+      }
+      break;
+    case -1505215509: 
+      if (paramString.equals("CameraRollManager")) {
+        i = 5;
+      }
+      break;
+    case -1654566518: 
+      if (paramString.equals("DialogManagerAndroid")) {
+        i = 8;
+      }
+      break;
+    case -1850625090: 
+      if (paramString.equals("SoundManager")) {
+        i = 20;
+      }
+      break;
+    case -1962922905: 
+      if (paramString.equals("ImageStoreManager")) {
+        i = 13;
+      }
+      break;
+    case -2033388651: 
+      if (paramString.equals("AsyncSQLiteDBStorage")) {
+        i = 4;
+      }
+      break;
+    case -2115067288: 
+      if (paramString.equals("ToastAndroid")) {
+        i = 22;
+      }
+      break;
+    }
+    int i = -1;
+    paramString = null;
+    switch (i)
+    {
+    default: 
+      return null;
+    case 24: 
+      return new WebSocketModule(paramReactApplicationContext);
+    case 23: 
+      return new VibrationModule(paramReactApplicationContext);
+    case 22: 
+      return new ToastModule(paramReactApplicationContext);
+    case 21: 
+      return new TimePickerDialogModule(paramReactApplicationContext);
+    case 20: 
+      return new SoundManagerModule(paramReactApplicationContext);
+    case 19: 
+      return new StatusBarModule(paramReactApplicationContext);
+    case 18: 
+      return new ShareModule(paramReactApplicationContext);
+    case 17: 
+      return new PermissionsModule(paramReactApplicationContext);
+    case 16: 
+      return new NetworkingModule(paramReactApplicationContext);
+    case 15: 
+      return new NativeAnimatedModule(paramReactApplicationContext);
+    case 14: 
+      return new IntentModule(paramReactApplicationContext);
+    case 13: 
+      return new ImageStoreManager(paramReactApplicationContext);
+    case 12: 
+      return new ImageLoaderModule(paramReactApplicationContext);
+    case 11: 
+      return new ImageEditingManager(paramReactApplicationContext);
+    case 10: 
+      return new I18nManagerModule(paramReactApplicationContext);
+    case 9: 
+      if (mConfig != null) {
+        paramString = mConfig.getFrescoConfig();
+      }
+      return new FrescoModule(paramReactApplicationContext, true, paramString);
+    case 8: 
+      return new DialogModule(paramReactApplicationContext);
+    case 7: 
+      return new DatePickerDialogModule(paramReactApplicationContext);
+    case 6: 
+      return new ClipboardModule(paramReactApplicationContext);
+    case 5: 
+      return new CameraRollManager(paramReactApplicationContext);
+    case 4: 
+      return new AsyncStorageModule(paramReactApplicationContext);
+    case 3: 
+      return new FileReaderModule(paramReactApplicationContext);
+    case 2: 
+      return new BlobModule(paramReactApplicationContext);
+    case 1: 
+      return new AppStateModule(paramReactApplicationContext);
+    }
+    return new AccessibilityInfoModule(paramReactApplicationContext);
+  }
+  
+  public ReactModuleInfoProvider getReactModuleInfoProvider()
+  {
+    try
+    {
+      ReactModuleInfoProvider localReactModuleInfoProvider = (ReactModuleInfoProvider)Class.forName("com.facebook.react.MainReactPackage$$ReactModuleInfoProvider").newInstance();
+      return localReactModuleInfoProvider;
+    }
+    catch (IllegalAccessException localIllegalAccessException)
+    {
+      throw new RuntimeException("No ReactModuleInfoProvider for CoreModulesPackage$$ReactModuleInfoProvider", localIllegalAccessException);
+    }
+    catch (InstantiationException localInstantiationException)
+    {
+      throw new RuntimeException("No ReactModuleInfoProvider for CoreModulesPackage$$ReactModuleInfoProvider", localInstantiationException);
+      Class[] arrayOfClass = new Class[25];
+      int i = 0;
+      arrayOfClass[0] = AccessibilityInfoModule.class;
+      arrayOfClass[1] = AppStateModule.class;
+      arrayOfClass[2] = BlobModule.class;
+      arrayOfClass[3] = FileReaderModule.class;
+      arrayOfClass[4] = AsyncStorageModule.class;
+      arrayOfClass[5] = CameraRollManager.class;
+      arrayOfClass[6] = ClipboardModule.class;
+      arrayOfClass[7] = DatePickerDialogModule.class;
+      arrayOfClass[8] = DialogModule.class;
+      arrayOfClass[9] = FrescoModule.class;
+      arrayOfClass[10] = I18nManagerModule.class;
+      arrayOfClass[11] = ImageEditingManager.class;
+      arrayOfClass[12] = ImageLoaderModule.class;
+      arrayOfClass[13] = ImageStoreManager.class;
+      arrayOfClass[14] = IntentModule.class;
+      arrayOfClass[15] = NativeAnimatedModule.class;
+      arrayOfClass[16] = NetworkingModule.class;
+      arrayOfClass[17] = PermissionsModule.class;
+      arrayOfClass[18] = ShareModule.class;
+      arrayOfClass[19] = StatusBarModule.class;
+      arrayOfClass[20] = SoundManagerModule.class;
+      arrayOfClass[21] = TimePickerDialogModule.class;
+      arrayOfClass[22] = ToastModule.class;
+      arrayOfClass[23] = VibrationModule.class;
+      arrayOfClass[24] = WebSocketModule.class;
+      final HashMap localHashMap = new HashMap();
+      int j = arrayOfClass.length;
+      while (i < j)
+      {
+        Class localClass = arrayOfClass[i];
+        ReactModule localReactModule = (ReactModule)localClass.getAnnotation(ReactModule.class);
+        localHashMap.put(localReactModule.name(), new ReactModuleInfo(localReactModule.name(), localClass.getName(), localReactModule.canOverrideExistingModule(), localReactModule.needsEagerInit(), localReactModule.hasConstants(), localReactModule.isCxxModule(), false));
+        i += 1;
+      }
+      new ReactModuleInfoProvider()
+      {
+        public Map<String, ReactModuleInfo> getReactModuleInfos()
+        {
+          return localHashMap;
+        }
+      };
+    }
+    catch (ClassNotFoundException localClassNotFoundException)
+    {
+      for (;;) {}
+    }
+  }
+}

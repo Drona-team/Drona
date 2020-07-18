@@ -1,0 +1,30 @@
+package com.facebook.react.bridge;
+
+import androidx.annotation.NonNull;
+import androidx.annotation.Nullable;
+
+public abstract interface Promise
+{
+  @Deprecated
+  public abstract void reject(String paramString);
+  
+  public abstract void reject(String paramString, @NonNull WritableMap paramWritableMap);
+  
+  public abstract void reject(String paramString1, String paramString2);
+  
+  public abstract void reject(String paramString1, String paramString2, @NonNull WritableMap paramWritableMap);
+  
+  public abstract void reject(String paramString1, String paramString2, Throwable paramThrowable);
+  
+  public abstract void reject(String paramString1, String paramString2, Throwable paramThrowable, WritableMap paramWritableMap);
+  
+  public abstract void reject(String paramString, Throwable paramThrowable);
+  
+  public abstract void reject(String paramString, Throwable paramThrowable, WritableMap paramWritableMap);
+  
+  public abstract void reject(Throwable paramThrowable);
+  
+  public abstract void reject(Throwable paramThrowable, WritableMap paramWritableMap);
+  
+  public abstract void resolve(@Nullable Object paramObject);
+}

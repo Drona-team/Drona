@@ -1,0 +1,48 @@
+package com.airbnb.lottie.value;
+
+import androidx.annotation.Nullable;
+import androidx.annotation.RestrictTo;
+import com.airbnb.lottie.animation.keyframe.BaseKeyframeAnimation;
+
+public class LottieValueCallback<T>
+{
+  @Nullable
+  private BaseKeyframeAnimation<?, ?> animation;
+  private final LottieFrameInfo<T> frameInfo = new LottieFrameInfo();
+  @Nullable
+  protected T value = null;
+  
+  public LottieValueCallback() {}
+  
+  public LottieValueCallback(@Nullable T paramT)
+  {
+    value = paramT;
+  }
+  
+  @Nullable
+  public T getValue(LottieFrameInfo<T> paramLottieFrameInfo)
+  {
+    return value;
+  }
+  
+  @Nullable
+  @RestrictTo({androidx.annotation.RestrictTo.Scope.LIBRARY})
+  public final T getValueInternal(float paramFloat1, float paramFloat2, T paramT1, T paramT2, float paramFloat3, float paramFloat4, float paramFloat5)
+  {
+    return getValue(frameInfo.set(paramFloat1, paramFloat2, paramT1, paramT2, paramFloat3, paramFloat4, paramFloat5));
+  }
+  
+  @RestrictTo({androidx.annotation.RestrictTo.Scope.LIBRARY})
+  public final void setAnimation(@Nullable BaseKeyframeAnimation<?, ?> paramBaseKeyframeAnimation)
+  {
+    animation = paramBaseKeyframeAnimation;
+  }
+  
+  public final void setValue(@Nullable T paramT)
+  {
+    value = paramT;
+    if (animation != null) {
+      animation.notifyListeners();
+    }
+  }
+}

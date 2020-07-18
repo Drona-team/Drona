@@ -1,0 +1,110 @@
+package expo.modules.imageloader;
+
+import androidx.annotation.Nullable;
+import java.util.concurrent.CountDownLatch;
+import java.util.concurrent.ExecutionException;
+import java.util.concurrent.Future;
+import java.util.concurrent.TimeUnit;
+import java.util.concurrent.TimeoutException;
+
+public class SimpleSettableFuture<T>
+  implements Future<T>
+{
+  @Nullable
+  private Exception mException;
+  private final CountDownLatch mReadyLatch = new CountDownLatch(1);
+  @Nullable
+  private T mResult;
+  
+  public SimpleSettableFuture() {}
+  
+  private void checkNotSet()
+  {
+    if (mReadyLatch.getCount() != 0L) {
+      return;
+    }
+    throw new RuntimeException("Result has already been set!");
+  }
+  
+  public boolean cancel(boolean paramBoolean)
+  {
+    throw new UnsupportedOperationException();
+  }
+  
+  @Nullable
+  public T get()
+    throws InterruptedException, ExecutionException
+  {
+    mReadyLatch.await();
+    if (mException == null) {
+      return mResult;
+    }
+    throw new ExecutionException(mException);
+  }
+  
+  @Nullable
+  public T get(long paramLong, TimeUnit paramTimeUnit)
+    throws InterruptedException, ExecutionException, TimeoutException
+  {
+    if (mReadyLatch.await(paramLong, paramTimeUnit))
+    {
+      if (mException == null) {
+        return mResult;
+      }
+      throw new ExecutionException(mException);
+    }
+    throw new TimeoutException("Timed out waiting for result");
+  }
+  
+  @Nullable
+  public T getOrThrow()
+  {
+    try
+    {
+      Object localObject = get();
+      return localObject;
+    }
+    catch (InterruptedException|ExecutionException localInterruptedException)
+    {
+      throw new RuntimeException(localInterruptedException);
+    }
+  }
+  
+  @Nullable
+  public T getOrThrow(long paramLong, TimeUnit paramTimeUnit)
+  {
+    try
+    {
+      paramTimeUnit = get(paramLong, paramTimeUnit);
+      return paramTimeUnit;
+    }
+    catch (InterruptedException|ExecutionException|TimeoutException paramTimeUnit)
+    {
+      throw new RuntimeException(paramTimeUnit);
+    }
+  }
+  
+  public boolean isCancelled()
+  {
+    return false;
+  }
+  
+  public boolean isDone()
+  {
+    return mReadyLatch.getCount() == 0L;
+  }
+  
+  public void set(@Nullable T paramT)
+  {
+    checkNotSet();
+    mResult = paramT;
+    mReadyLatch.countDown();
+  }
+  
+  public void setException(Exception paramException)
+  {
+    checkNotSet();
+    mException = paramException;
+    mReadyLatch.countDown();
+  }
+}

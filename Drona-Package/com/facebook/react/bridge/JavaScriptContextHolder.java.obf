@@ -1,0 +1,34 @@
+package com.facebook.react.bridge;
+
+import androidx.annotation.GuardedBy;
+
+public class JavaScriptContextHolder
+{
+  @GuardedBy("this")
+  private long mContext;
+  
+  public JavaScriptContextHolder(long paramLong)
+  {
+    mContext = paramLong;
+  }
+  
+  public void clear()
+  {
+    try
+    {
+      mContext = 0L;
+      return;
+    }
+    finally
+    {
+      localObject = finally;
+      throw localObject;
+    }
+  }
+  
+  @GuardedBy("this")
+  public long get()
+  {
+    return mContext;
+  }
+}

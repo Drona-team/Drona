@@ -1,0 +1,128 @@
+package com.google.android.exoplayer2.upstream.crypto;
+
+import com.google.android.exoplayer2.util.Assertions;
+import com.google.android.exoplayer2.util.Util;
+import java.nio.ByteBuffer;
+import java.security.InvalidAlgorithmParameterException;
+import java.security.InvalidKeyException;
+import java.security.NoSuchAlgorithmException;
+import javax.crypto.Cipher;
+import javax.crypto.NoSuchPaddingException;
+import javax.crypto.ShortBufferException;
+import javax.crypto.spec.IvParameterSpec;
+import javax.crypto.spec.SecretKeySpec;
+
+public final class AesFlushingCipher
+{
+  private final int blockSize;
+  private final Cipher cipher;
+  private final byte[] flushedBlock;
+  private int pendingXorBytes;
+  private final byte[] zerosBlock;
+  
+  public AesFlushingCipher(int paramInt, byte[] paramArrayOfByte, long paramLong1, long paramLong2)
+  {
+    try
+    {
+      Cipher localCipher = Cipher.getInstance("AES/CTR/NoPadding");
+      cipher = localCipher;
+      localCipher = cipher;
+      int i = localCipher.getBlockSize();
+      blockSize = i;
+      zerosBlock = new byte[blockSize];
+      flushedBlock = new byte[blockSize];
+      long l = paramLong2 / blockSize;
+      i = (int)(paramLong2 % blockSize);
+      localCipher = cipher;
+      Object localObject = cipher;
+      localObject = Util.splitAtFirst(((Cipher)localObject).getAlgorithm(), "/");
+      localObject = localObject[0];
+      paramArrayOfByte = new SecretKeySpec(paramArrayOfByte, (String)localObject);
+      localCipher.init(paramInt, paramArrayOfByte, new IvParameterSpec(getInitializationVector(paramLong1, l)));
+      if (i != 0)
+      {
+        paramArrayOfByte = new byte[i];
+        updateInPlace(paramArrayOfByte, 0, i);
+        return;
+      }
+    }
+    catch (NoSuchAlgorithmException|NoSuchPaddingException|InvalidKeyException|InvalidAlgorithmParameterException paramArrayOfByte)
+    {
+      throw new RuntimeException(paramArrayOfByte);
+    }
+  }
+  
+  private byte[] getInitializationVector(long paramLong1, long paramLong2)
+  {
+    return ByteBuffer.allocate(16).putLong(paramLong1).putLong(paramLong2).array();
+  }
+  
+  private int nonFlushingUpdate(byte[] paramArrayOfByte1, int paramInt1, int paramInt2, byte[] paramArrayOfByte2, int paramInt3)
+  {
+    Cipher localCipher = cipher;
+    try
+    {
+      paramInt1 = localCipher.update(paramArrayOfByte1, paramInt1, paramInt2, paramArrayOfByte2, paramInt3);
+      return paramInt1;
+    }
+    catch (ShortBufferException paramArrayOfByte1)
+    {
+      throw new RuntimeException(paramArrayOfByte1);
+    }
+  }
+  
+  public void update(byte[] paramArrayOfByte1, int paramInt1, int paramInt2, byte[] paramArrayOfByte2, int paramInt3)
+  {
+    int i = paramInt1;
+    paramInt1 = paramInt3;
+    boolean bool2;
+    do
+    {
+      paramInt3 = pendingXorBytes;
+      bool2 = true;
+      if (paramInt3 <= 0) {
+        break;
+      }
+      paramArrayOfByte2[paramInt1] = ((byte)(paramArrayOfByte1[i] ^ flushedBlock[(blockSize - pendingXorBytes)]));
+      paramInt1 += 1;
+      i += 1;
+      pendingXorBytes -= 1;
+      paramInt3 = paramInt2 - 1;
+      paramInt2 = paramInt3;
+    } while (paramInt3 != 0);
+    return;
+    i = nonFlushingUpdate(paramArrayOfByte1, i, paramInt2, paramArrayOfByte2, paramInt1);
+    if (paramInt2 == i) {
+      return;
+    }
+    paramInt3 = paramInt2 - i;
+    int j = blockSize;
+    paramInt2 = 0;
+    boolean bool1;
+    if (paramInt3 < j) {
+      bool1 = true;
+    } else {
+      bool1 = false;
+    }
+    Assertions.checkState(bool1);
+    paramInt1 += i;
+    pendingXorBytes = (blockSize - paramInt3);
+    if (nonFlushingUpdate(zerosBlock, 0, pendingXorBytes, flushedBlock, 0) == blockSize) {
+      bool1 = bool2;
+    } else {
+      bool1 = false;
+    }
+    Assertions.checkState(bool1);
+    while (paramInt2 < paramInt3)
+    {
+      paramArrayOfByte2[paramInt1] = flushedBlock[paramInt2];
+      paramInt2 += 1;
+      paramInt1 += 1;
+    }
+  }
+  
+  public void updateInPlace(byte[] paramArrayOfByte, int paramInt1, int paramInt2)
+  {
+    update(paramArrayOfByte, paramInt1, paramInt2, paramArrayOfByte, paramInt1);
+  }
+}

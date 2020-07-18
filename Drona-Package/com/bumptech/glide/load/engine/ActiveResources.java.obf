@@ -1,0 +1,238 @@
+package com.bumptech.glide.load.engine;
+
+import android.os.Process;
+import androidx.annotation.NonNull;
+import androidx.annotation.Nullable;
+import androidx.annotation.VisibleForTesting;
+import com.bumptech.glide.load.Key;
+import com.bumptech.glide.util.Preconditions;
+import java.lang.ref.ReferenceQueue;
+import java.lang.ref.WeakReference;
+import java.util.HashMap;
+import java.util.Map;
+import java.util.concurrent.Executor;
+import java.util.concurrent.ExecutorService;
+import java.util.concurrent.ThreadFactory;
+
+final class ActiveResources
+{
+  @VisibleForTesting
+  final Map<Key, ResourceWeakReference> activeEngineResources = new HashMap();
+  @Nullable
+  private volatile DequeuedResourceCallback cb;
+  private final boolean isActiveResourceRetentionAllowed;
+  private volatile boolean isShutdown;
+  private EngineResource.ResourceListener listener;
+  private final Executor monitorClearedResourcesExecutor;
+  private final ReferenceQueue<EngineResource<?>> resourceReferenceQueue = new ReferenceQueue();
+  
+  ActiveResources(boolean paramBoolean)
+  {
+    this(paramBoolean, java.util.concurrent.Executors.newSingleThreadExecutor(new ThreadFactory()
+    {
+      public Thread newThread(@NonNull final Runnable paramAnonymousRunnable)
+      {
+        new Thread(new Runnable()
+        {
+          public void run()
+          {
+            Process.setThreadPriority(10);
+            paramAnonymousRunnable.run();
+          }
+        }, "glide-active-resources");
+      }
+    }));
+  }
+  
+  @VisibleForTesting
+  ActiveResources(boolean paramBoolean, Executor paramExecutor)
+  {
+    isActiveResourceRetentionAllowed = paramBoolean;
+    monitorClearedResourcesExecutor = paramExecutor;
+    paramExecutor.execute(new Runnable()
+    {
+      public void run()
+      {
+        cleanReferenceQueue();
+      }
+    });
+  }
+  
+  void activate(Key paramKey, EngineResource<?> paramEngineResource)
+  {
+    try
+    {
+      paramEngineResource = new ResourceWeakReference(paramKey, paramEngineResource, resourceReferenceQueue, isActiveResourceRetentionAllowed);
+      paramKey = (ResourceWeakReference)activeEngineResources.put(paramKey, paramEngineResource);
+      if (paramKey != null) {
+        paramKey.reset();
+      }
+      return;
+    }
+    finally {}
+  }
+  
+  void cleanReferenceQueue()
+  {
+    while (!isShutdown)
+    {
+      try
+      {
+        cleanupActiveReference((ResourceWeakReference)resourceReferenceQueue.remove());
+        DequeuedResourceCallback localDequeuedResourceCallback = cb;
+        if (localDequeuedResourceCallback == null) {
+          continue;
+        }
+        localDequeuedResourceCallback.onResourceDequeued();
+      }
+      catch (InterruptedException localInterruptedException)
+      {
+        for (;;) {}
+      }
+      Thread.currentThread().interrupt();
+    }
+  }
+  
+  void cleanupActiveReference(@NonNull ResourceWeakReference paramResourceWeakReference)
+  {
+    synchronized (listener)
+    {
+      try
+      {
+        activeEngineResources.remove(key);
+        if ((isCacheable) && (resource != null))
+        {
+          EngineResource localEngineResource = new EngineResource(resource, true, false);
+          localEngineResource.setResourceListener(key, listener);
+          listener.onResourceReleased(key, localEngineResource);
+          return;
+        }
+        return;
+      }
+      finally {}
+    }
+  }
+  
+  void deactivate(Key paramKey)
+  {
+    try
+    {
+      paramKey = (ResourceWeakReference)activeEngineResources.remove(paramKey);
+      if (paramKey != null) {
+        paramKey.reset();
+      }
+      return;
+    }
+    finally {}
+  }
+  
+  @Nullable
+  EngineResource<?> get(Key paramKey)
+  {
+    try
+    {
+      paramKey = (ResourceWeakReference)activeEngineResources.get(paramKey);
+      if (paramKey == null) {
+        return null;
+      }
+      EngineResource localEngineResource = (EngineResource)paramKey.get();
+      if (localEngineResource == null) {
+        cleanupActiveReference(paramKey);
+      }
+      return localEngineResource;
+    }
+    finally {}
+  }
+  
+  @VisibleForTesting
+  void setDequeuedResourceCallback(DequeuedResourceCallback paramDequeuedResourceCallback)
+  {
+    cb = paramDequeuedResourceCallback;
+  }
+  
+  /* Error */
+  void setListener(EngineResource.ResourceListener paramResourceListener)
+  {
+    // Byte code:
+    //   0: aload_1
+    //   1: monitorenter
+    //   2: aload_0
+    //   3: monitorenter
+    //   4: aload_0
+    //   5: aload_1
+    //   6: putfield 119	com/bumptech/glide/load/engine/ActiveResources:listener	Lcom/bumptech/glide/load/engine/EngineResource$ResourceListener;
+    //   9: aload_0
+    //   10: monitorexit
+    //   11: aload_1
+    //   12: monitorexit
+    //   13: return
+    //   14: astore_2
+    //   15: aload_0
+    //   16: monitorexit
+    //   17: aload_2
+    //   18: athrow
+    //   19: astore_2
+    //   20: aload_1
+    //   21: monitorexit
+    //   22: aload_2
+    //   23: athrow
+    // Local variable table:
+    //   start	length	slot	name	signature
+    //   0	24	0	this	ActiveResources
+    //   0	24	1	paramResourceListener	EngineResource.ResourceListener
+    //   14	4	2	localObject1	Object
+    //   19	4	2	localObject2	Object
+    // Exception table:
+    //   from	to	target	type
+    //   4	11	14	finally
+    //   15	17	14	finally
+    //   2	4	19	finally
+    //   11	13	19	finally
+    //   17	19	19	finally
+    //   20	22	19	finally
+  }
+  
+  @VisibleForTesting
+  void shutdown()
+  {
+    isShutdown = true;
+    if ((monitorClearedResourcesExecutor instanceof ExecutorService)) {
+      com.bumptech.glide.util.Executors.shutdownAndAwaitTermination((ExecutorService)monitorClearedResourcesExecutor);
+    }
+  }
+  
+  @VisibleForTesting
+  static abstract interface DequeuedResourceCallback
+  {
+    public abstract void onResourceDequeued();
+  }
+  
+  @VisibleForTesting
+  static final class ResourceWeakReference
+    extends WeakReference<EngineResource<?>>
+  {
+    final boolean isCacheable;
+    final Key key;
+    @Nullable
+    Resource<?> resource;
+    
+    ResourceWeakReference(@NonNull Key paramKey, @NonNull EngineResource<?> paramEngineResource, @NonNull ReferenceQueue<? super EngineResource<?>> paramReferenceQueue, boolean paramBoolean)
+    {
+      super(paramReferenceQueue);
+      key = ((Key)Preconditions.checkNotNull(paramKey));
+      if ((paramEngineResource.isCacheable()) && (paramBoolean)) {
+        paramKey = (Resource)Preconditions.checkNotNull(paramEngineResource.getResource());
+      } else {
+        paramKey = null;
+      }
+      resource = paramKey;
+      isCacheable = paramEngineResource.isCacheable();
+    }
+    
+    void reset()
+    {
+      resource = null;
+      clear();
+    }
+  }
+}

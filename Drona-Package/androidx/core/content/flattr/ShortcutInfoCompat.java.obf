@@ -1,0 +1,359 @@
+package androidx.core.content.pm;
+
+import android.content.ComponentName;
+import android.content.Context;
+import android.content.Intent;
+import android.content.pm.ApplicationInfo;
+import android.content.pm.PackageManager;
+import android.content.pm.PackageManager.NameNotFoundException;
+import android.content.pm.ShortcutInfo;
+import android.content.pm.ShortcutInfo.Builder;
+import android.graphics.drawable.Drawable;
+import android.os.PersistableBundle;
+import android.text.TextUtils;
+import androidx.annotation.NonNull;
+import androidx.annotation.Nullable;
+import androidx.annotation.RequiresApi;
+import androidx.annotation.RestrictTo;
+import androidx.annotation.VisibleForTesting;
+import androidx.core.app.Person;
+import androidx.core.graphics.drawable.IconCompat;
+import java.util.Arrays;
+import java.util.HashSet;
+import java.util.Set;
+
+public class ShortcutInfoCompat
+{
+  private static final String EXTRA_LONG_LIVED = "extraLongLived";
+  private static final String EXTRA_PERSON_ = "extraPerson_";
+  private static final String EXTRA_PERSON_COUNT = "extraPersonCount";
+  ComponentName mActivity;
+  Set<String> mCategories;
+  Context mContext;
+  CharSequence mDisabledMessage;
+  IconCompat mIcon;
+  String mId;
+  Intent[] mIntents;
+  boolean mIsAlwaysBadged;
+  boolean mIsLongLived;
+  CharSequence mLabel;
+  CharSequence mLongLabel;
+  Person[] mPersons;
+  
+  ShortcutInfoCompat() {}
+  
+  @RequiresApi(22)
+  @RestrictTo({androidx.annotation.RestrictTo.Scope.LIBRARY_GROUP_PREFIX})
+  private PersistableBundle buildExtrasBundle()
+  {
+    PersistableBundle localPersistableBundle = new PersistableBundle();
+    if ((mPersons != null) && (mPersons.length > 0))
+    {
+      localPersistableBundle.putInt("extraPersonCount", mPersons.length);
+      int j;
+      for (int i = 0; i < mPersons.length; i = j)
+      {
+        StringBuilder localStringBuilder = new StringBuilder();
+        localStringBuilder.append("extraPerson_");
+        j = i + 1;
+        localStringBuilder.append(j);
+        localPersistableBundle.putPersistableBundle(localStringBuilder.toString(), mPersons[i].toPersistableBundle());
+      }
+    }
+    localPersistableBundle.putBoolean("extraLongLived", mIsLongLived);
+    return localPersistableBundle;
+  }
+  
+  @Nullable
+  @RequiresApi(25)
+  @RestrictTo({androidx.annotation.RestrictTo.Scope.LIBRARY_GROUP_PREFIX})
+  @VisibleForTesting
+  static boolean getLongLivedFromExtra(@NonNull PersistableBundle paramPersistableBundle)
+  {
+    if ((paramPersistableBundle != null) && (paramPersistableBundle.containsKey("extraLongLived"))) {
+      return paramPersistableBundle.getBoolean("extraLongLived");
+    }
+    return false;
+  }
+  
+  @Nullable
+  @RequiresApi(25)
+  @RestrictTo({androidx.annotation.RestrictTo.Scope.LIBRARY_GROUP_PREFIX})
+  @VisibleForTesting
+  static Person[] getPersonsFromExtra(@NonNull PersistableBundle paramPersistableBundle)
+  {
+    if ((paramPersistableBundle != null) && (paramPersistableBundle.containsKey("extraPersonCount")))
+    {
+      int k = paramPersistableBundle.getInt("extraPersonCount");
+      Person[] arrayOfPerson = new Person[k];
+      int j;
+      for (int i = 0; i < k; i = j)
+      {
+        StringBuilder localStringBuilder = new StringBuilder();
+        localStringBuilder.append("extraPerson_");
+        j = i + 1;
+        localStringBuilder.append(j);
+        arrayOfPerson[i] = Person.fromPersistableBundle(paramPersistableBundle.getPersistableBundle(localStringBuilder.toString()));
+      }
+      return arrayOfPerson;
+    }
+    return null;
+  }
+  
+  Intent addToIntent(Intent paramIntent)
+  {
+    paramIntent.putExtra("android.intent.extra.shortcut.INTENT", mIntents[(mIntents.length - 1)]).putExtra("android.intent.extra.shortcut.NAME", mLabel.toString());
+    Object localObject3;
+    Object localObject4;
+    PackageManager localPackageManager;
+    Object localObject1;
+    if (mIcon != null)
+    {
+      localObject3 = null;
+      localObject4 = null;
+      if (mIsAlwaysBadged)
+      {
+        localPackageManager = mContext.getPackageManager();
+        localObject1 = localObject4;
+        if (mActivity == null) {}
+      }
+    }
+    try
+    {
+      localObject1 = localPackageManager.getActivityIcon(mActivity);
+      localObject3 = localObject1;
+      if (localObject1 == null) {
+        localObject3 = mContext.getApplicationInfo().loadIcon(localPackageManager);
+      }
+      mIcon.addToShortcutIntent(paramIntent, (Drawable)localObject3, mContext);
+      return paramIntent;
+    }
+    catch (PackageManager.NameNotFoundException localNameNotFoundException)
+    {
+      for (;;)
+      {
+        Object localObject2 = localObject4;
+      }
+    }
+  }
+  
+  @Nullable
+  public ComponentName getActivity()
+  {
+    return mActivity;
+  }
+  
+  @Nullable
+  public Set<String> getCategories()
+  {
+    return mCategories;
+  }
+  
+  @Nullable
+  public CharSequence getDisabledMessage()
+  {
+    return mDisabledMessage;
+  }
+  
+  @RestrictTo({androidx.annotation.RestrictTo.Scope.LIBRARY_GROUP_PREFIX})
+  public IconCompat getIcon()
+  {
+    return mIcon;
+  }
+  
+  @NonNull
+  public String getId()
+  {
+    return mId;
+  }
+  
+  @NonNull
+  public Intent getIntent()
+  {
+    return mIntents[(mIntents.length - 1)];
+  }
+  
+  @NonNull
+  public Intent[] getIntents()
+  {
+    return (Intent[])Arrays.copyOf(mIntents, mIntents.length);
+  }
+  
+  @Nullable
+  public CharSequence getLongLabel()
+  {
+    return mLongLabel;
+  }
+  
+  @NonNull
+  public CharSequence getShortLabel()
+  {
+    return mLabel;
+  }
+  
+  @RequiresApi(25)
+  public ShortcutInfo toShortcutInfo()
+  {
+    ShortcutInfo.Builder localBuilder = new ShortcutInfo.Builder(mContext, mId).setShortLabel(mLabel).setIntents(mIntents);
+    if (mIcon != null) {
+      localBuilder.setIcon(mIcon.toIcon());
+    }
+    if (!TextUtils.isEmpty(mLongLabel)) {
+      localBuilder.setLongLabel(mLongLabel);
+    }
+    if (!TextUtils.isEmpty(mDisabledMessage)) {
+      localBuilder.setDisabledMessage(mDisabledMessage);
+    }
+    if (mActivity != null) {
+      localBuilder.setActivity(mActivity);
+    }
+    if (mCategories != null) {
+      localBuilder.setCategories(mCategories);
+    }
+    localBuilder.setExtras(buildExtrasBundle());
+    return localBuilder.build();
+  }
+  
+  public static class Builder
+  {
+    private final ShortcutInfoCompat mInfo = new ShortcutInfoCompat();
+    
+    @RequiresApi(25)
+    @RestrictTo({androidx.annotation.RestrictTo.Scope.LIBRARY_GROUP_PREFIX})
+    public Builder(@NonNull Context paramContext, @NonNull ShortcutInfo paramShortcutInfo)
+    {
+      mInfo.mContext = paramContext;
+      mInfo.mId = paramShortcutInfo.getId();
+      paramContext = paramShortcutInfo.getIntents();
+      mInfo.mIntents = ((Intent[])Arrays.copyOf(paramContext, paramContext.length));
+      mInfo.mActivity = paramShortcutInfo.getActivity();
+      mInfo.mLabel = paramShortcutInfo.getShortLabel();
+      mInfo.mLongLabel = paramShortcutInfo.getLongLabel();
+      mInfo.mDisabledMessage = paramShortcutInfo.getDisabledMessage();
+      mInfo.mCategories = paramShortcutInfo.getCategories();
+      mInfo.mPersons = ShortcutInfoCompat.getPersonsFromExtra(paramShortcutInfo.getExtras());
+    }
+    
+    public Builder(@NonNull Context paramContext, @NonNull String paramString)
+    {
+      mInfo.mContext = paramContext;
+      mInfo.mId = paramString;
+    }
+    
+    @RestrictTo({androidx.annotation.RestrictTo.Scope.LIBRARY_GROUP_PREFIX})
+    public Builder(@NonNull ShortcutInfoCompat paramShortcutInfoCompat)
+    {
+      mInfo.mContext = mContext;
+      mInfo.mId = mId;
+      mInfo.mIntents = ((Intent[])Arrays.copyOf(mIntents, mIntents.length));
+      mInfo.mActivity = mActivity;
+      mInfo.mLabel = mLabel;
+      mInfo.mLongLabel = mLongLabel;
+      mInfo.mDisabledMessage = mDisabledMessage;
+      mInfo.mIcon = mIcon;
+      mInfo.mIsAlwaysBadged = mIsAlwaysBadged;
+      mInfo.mIsLongLived = mIsLongLived;
+      if (mPersons != null) {
+        mInfo.mPersons = ((Person[])Arrays.copyOf(mPersons, mPersons.length));
+      }
+      if (mCategories != null) {
+        mInfo.mCategories = new HashSet(mCategories);
+      }
+    }
+    
+    @NonNull
+    public ShortcutInfoCompat build()
+    {
+      if (!TextUtils.isEmpty(mInfo.mLabel))
+      {
+        if ((mInfo.mIntents != null) && (mInfo.mIntents.length != 0)) {
+          return mInfo;
+        }
+        throw new IllegalArgumentException("Shortcut must have an intent");
+      }
+      throw new IllegalArgumentException("Shortcut must have a non-empty label");
+    }
+    
+    @NonNull
+    public Builder setActivity(@NonNull ComponentName paramComponentName)
+    {
+      mInfo.mActivity = paramComponentName;
+      return this;
+    }
+    
+    @NonNull
+    public Builder setAlwaysBadged()
+    {
+      mInfo.mIsAlwaysBadged = true;
+      return this;
+    }
+    
+    @NonNull
+    public Builder setCategories(@NonNull Set<String> paramSet)
+    {
+      mInfo.mCategories = paramSet;
+      return this;
+    }
+    
+    @NonNull
+    public Builder setDisabledMessage(@NonNull CharSequence paramCharSequence)
+    {
+      mInfo.mDisabledMessage = paramCharSequence;
+      return this;
+    }
+    
+    @NonNull
+    public Builder setIcon(IconCompat paramIconCompat)
+    {
+      mInfo.mIcon = paramIconCompat;
+      return this;
+    }
+    
+    @NonNull
+    public Builder setIntent(@NonNull Intent paramIntent)
+    {
+      return setIntents(new Intent[] { paramIntent });
+    }
+    
+    @NonNull
+    public Builder setIntents(@NonNull Intent[] paramArrayOfIntent)
+    {
+      mInfo.mIntents = paramArrayOfIntent;
+      return this;
+    }
+    
+    @NonNull
+    public Builder setLongLabel(@NonNull CharSequence paramCharSequence)
+    {
+      mInfo.mLongLabel = paramCharSequence;
+      return this;
+    }
+    
+    @NonNull
+    public Builder setLongLived()
+    {
+      mInfo.mIsLongLived = true;
+      return this;
+    }
+    
+    @NonNull
+    public Builder setPerson(@NonNull Person paramPerson)
+    {
+      return setPersons(new Person[] { paramPerson });
+    }
+    
+    @NonNull
+    public Builder setPersons(@NonNull Person[] paramArrayOfPerson)
+    {
+      mInfo.mPersons = paramArrayOfPerson;
+      return this;
+    }
+    
+    @NonNull
+    public Builder setShortLabel(@NonNull CharSequence paramCharSequence)
+    {
+      mInfo.mLabel = paramCharSequence;
+      return this;
+    }
+  }
+}

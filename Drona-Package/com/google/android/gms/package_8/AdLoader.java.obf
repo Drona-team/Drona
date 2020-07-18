@@ -1,0 +1,291 @@
+package com.google.android.gms.ads;
+
+import android.content.Context;
+import android.os.RemoteException;
+import androidx.annotation.NonNull;
+import androidx.annotation.RequiresPermission;
+import com.google.android.gms.ads.doubleclick.PublisherAdRequest;
+import com.google.android.gms.ads.formats.NativeAdOptions;
+import com.google.android.gms.ads.formats.NativeAppInstallAd.OnAppInstallAdLoadedListener;
+import com.google.android.gms.ads.formats.NativeContentAd.OnContentAdLoadedListener;
+import com.google.android.gms.ads.formats.NativeCustomTemplateAd.OnCustomClickListener;
+import com.google.android.gms.ads.formats.NativeCustomTemplateAd.OnCustomTemplateAdLoadedListener;
+import com.google.android.gms.ads.formats.OnPublisherAdViewLoadedListener;
+import com.google.android.gms.ads.formats.PublisherAdViewOptions;
+import com.google.android.gms.ads.formats.UnifiedNativeAd.OnUnifiedNativeAdLoadedListener;
+import com.google.android.gms.common.internal.Preconditions;
+import com.google.android.gms.internal.ads.zzaaz;
+import com.google.android.gms.internal.ads.zzady;
+import com.google.android.gms.internal.ads.zzagm;
+import com.google.android.gms.internal.ads.zzagn;
+import com.google.android.gms.internal.ads.zzago;
+import com.google.android.gms.internal.ads.zzagp;
+import com.google.android.gms.internal.ads.zzagq;
+import com.google.android.gms.internal.ads.zzags;
+import com.google.android.gms.internal.ads.zzamo;
+import com.google.android.gms.internal.ads.zzbad;
+import com.google.android.gms.internal.ads.zzxv;
+import com.google.android.gms.internal.ads.zzyc;
+import com.google.android.gms.internal.ads.zzyd;
+import com.google.android.gms.internal.ads.zzyh;
+import com.google.android.gms.internal.ads.zzyt;
+import com.google.android.gms.internal.ads.zzzc;
+import com.google.android.gms.internal.ads.zzzf;
+
+public class AdLoader
+{
+  private final zzyc zzaaj;
+  private final zzzc zzaak;
+  private final Context zzlj;
+  
+  AdLoader(Context paramContext, zzzc paramZzzc)
+  {
+    this(paramContext, paramZzzc, zzyc.zzche);
+  }
+  
+  private AdLoader(Context paramContext, zzzc paramZzzc, zzyc paramZzyc)
+  {
+    zzlj = paramContext;
+    zzaak = paramZzzc;
+    zzaaj = paramZzyc;
+  }
+  
+  private final void zza(zzaaz paramZzaaz)
+  {
+    try
+    {
+      zzaak.zza(zzyc.zza(zzlj, paramZzaaz));
+      return;
+    }
+    catch (RemoteException paramZzaaz)
+    {
+      zzbad.zzc("Failed to load ad.", paramZzaaz);
+    }
+  }
+  
+  @Deprecated
+  public String getMediationAdapterClassName()
+  {
+    try
+    {
+      String str = zzaak.zzpj();
+      return str;
+    }
+    catch (RemoteException localRemoteException)
+    {
+      zzbad.zzd("Failed to get the mediation adapter class name.", localRemoteException);
+    }
+    return null;
+  }
+  
+  public boolean isLoading()
+  {
+    try
+    {
+      boolean bool = zzaak.isLoading();
+      return bool;
+    }
+    catch (RemoteException localRemoteException)
+    {
+      zzbad.zzd("Failed to check if ad is loading.", localRemoteException);
+    }
+    return false;
+  }
+  
+  @RequiresPermission("android.permission.INTERNET")
+  public void loadAd(AdRequest paramAdRequest)
+  {
+    zza(paramAdRequest.zzde());
+  }
+  
+  public void loadAd(PublisherAdRequest paramPublisherAdRequest)
+  {
+    zza(paramPublisherAdRequest.zzde());
+  }
+  
+  @RequiresPermission("android.permission.INTERNET")
+  public void loadAds(AdRequest paramAdRequest, int paramInt)
+  {
+    paramAdRequest = paramAdRequest.zzde();
+    try
+    {
+      zzaak.zza(zzyc.zza(zzlj, paramAdRequest), paramInt);
+      return;
+    }
+    catch (RemoteException paramAdRequest)
+    {
+      zzbad.zzc("Failed to load ads.", paramAdRequest);
+    }
+  }
+  
+  public static class Builder
+  {
+    private final zzzf zzaal;
+    private final Context zzlj;
+    
+    private Builder(Context paramContext, zzzf paramZzzf)
+    {
+      zzlj = paramContext;
+      zzaal = paramZzzf;
+    }
+    
+    public Builder(Context paramContext, String paramString)
+    {
+      this((Context)Preconditions.checkNotNull(paramContext, "context cannot be null"), zzyt.zzpb().zzb(paramContext, paramString, new zzamo()));
+    }
+    
+    public AdLoader build()
+    {
+      try
+      {
+        AdLoader localAdLoader = new AdLoader(zzlj, zzaal.zzpk());
+        return localAdLoader;
+      }
+      catch (RemoteException localRemoteException)
+      {
+        zzbad.zzc("Failed to build AdLoader.", localRemoteException);
+      }
+      return null;
+    }
+    
+    @Deprecated
+    public Builder forAppInstallAd(NativeAppInstallAd.OnAppInstallAdLoadedListener paramOnAppInstallAdLoadedListener)
+    {
+      try
+      {
+        zzaal.zza(new zzagm(paramOnAppInstallAdLoadedListener));
+        return this;
+      }
+      catch (RemoteException paramOnAppInstallAdLoadedListener)
+      {
+        zzbad.zzd("Failed to add app install ad listener", paramOnAppInstallAdLoadedListener);
+      }
+      return this;
+    }
+    
+    @Deprecated
+    public Builder forContentAd(NativeContentAd.OnContentAdLoadedListener paramOnContentAdLoadedListener)
+    {
+      try
+      {
+        zzaal.zza(new zzagn(paramOnContentAdLoadedListener));
+        return this;
+      }
+      catch (RemoteException paramOnContentAdLoadedListener)
+      {
+        zzbad.zzd("Failed to add content ad listener", paramOnContentAdLoadedListener);
+      }
+      return this;
+    }
+    
+    public Builder forCustomTemplateAd(String paramString, NativeCustomTemplateAd.OnCustomTemplateAdLoadedListener paramOnCustomTemplateAdLoadedListener, NativeCustomTemplateAd.OnCustomClickListener paramOnCustomClickListener)
+    {
+      try
+      {
+        zzzf localZzzf = zzaal;
+        zzagp localZzagp = new zzagp(paramOnCustomTemplateAdLoadedListener);
+        if (paramOnCustomClickListener == null) {
+          paramOnCustomTemplateAdLoadedListener = null;
+        } else {
+          paramOnCustomTemplateAdLoadedListener = new zzago(paramOnCustomClickListener);
+        }
+        localZzzf.zza(paramString, localZzagp, paramOnCustomTemplateAdLoadedListener);
+        return this;
+      }
+      catch (RemoteException paramString)
+      {
+        zzbad.zzd("Failed to add custom template ad listener", paramString);
+      }
+      return this;
+    }
+    
+    public Builder forPublisherAdView(OnPublisherAdViewLoadedListener paramOnPublisherAdViewLoadedListener, AdSize... paramVarArgs)
+    {
+      if ((paramVarArgs != null) && (paramVarArgs.length > 0)) {
+        try
+        {
+          paramVarArgs = new zzyd(zzlj, paramVarArgs);
+          zzaal.zza(new zzagq(paramOnPublisherAdViewLoadedListener), paramVarArgs);
+          return this;
+        }
+        catch (RemoteException paramOnPublisherAdViewLoadedListener)
+        {
+          zzbad.zzd("Failed to add publisher banner ad listener", paramOnPublisherAdViewLoadedListener);
+          return this;
+        }
+      }
+      throw new IllegalArgumentException("The supported ad sizes must contain at least one valid ad size.");
+    }
+    
+    public Builder forUnifiedNativeAd(UnifiedNativeAd.OnUnifiedNativeAdLoadedListener paramOnUnifiedNativeAdLoadedListener)
+    {
+      try
+      {
+        zzaal.zza(new zzags(paramOnUnifiedNativeAdLoadedListener));
+        return this;
+      }
+      catch (RemoteException paramOnUnifiedNativeAdLoadedListener)
+      {
+        zzbad.zzd("Failed to add google native ad listener", paramOnUnifiedNativeAdLoadedListener);
+      }
+      return this;
+    }
+    
+    public Builder withAdListener(AdListener paramAdListener)
+    {
+      try
+      {
+        zzaal.zza(new zzxv(paramAdListener));
+        return this;
+      }
+      catch (RemoteException paramAdListener)
+      {
+        zzbad.zzd("Failed to set AdListener.", paramAdListener);
+      }
+      return this;
+    }
+    
+    public Builder withCorrelator(@NonNull Correlator paramCorrelator)
+    {
+      Preconditions.checkNotNull(paramCorrelator);
+      try
+      {
+        zzaal.zza(zzaar);
+        return this;
+      }
+      catch (RemoteException paramCorrelator)
+      {
+        zzbad.zzd("Failed to set correlator.", paramCorrelator);
+      }
+      return this;
+    }
+    
+    public Builder withNativeAdOptions(NativeAdOptions paramNativeAdOptions)
+    {
+      try
+      {
+        zzaal.zza(new zzady(paramNativeAdOptions));
+        return this;
+      }
+      catch (RemoteException paramNativeAdOptions)
+      {
+        zzbad.zzd("Failed to specify native ad options", paramNativeAdOptions);
+      }
+      return this;
+    }
+    
+    public Builder withPublisherAdViewOptions(PublisherAdViewOptions paramPublisherAdViewOptions)
+    {
+      try
+      {
+        zzaal.zza(paramPublisherAdViewOptions);
+        return this;
+      }
+      catch (RemoteException paramPublisherAdViewOptions)
+      {
+        zzbad.zzd("Failed to specify DFP banner ad options", paramPublisherAdViewOptions);
+      }
+      return this;
+    }
+  }
+}

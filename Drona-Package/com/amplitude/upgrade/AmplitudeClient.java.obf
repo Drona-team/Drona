@@ -1,0 +1,2091 @@
+package com.amplitude.api;
+
+import android.app.Application;
+import android.content.Context;
+import android.content.SharedPreferences;
+import android.content.SharedPreferences.Editor;
+import android.database.sqlite.SQLiteDatabase;
+import android.location.Location;
+import android.os.Build.VERSION;
+import android.util.Pair;
+import com.amplitude.security.MD5;
+import java.io.IOException;
+import java.io.UnsupportedEncodingException;
+import java.net.ConnectException;
+import java.net.UnknownHostException;
+import java.security.MessageDigest;
+import java.util.HashSet;
+import java.util.Iterator;
+import java.util.List;
+import java.util.Set;
+import java.util.UUID;
+import java.util.concurrent.atomic.AtomicBoolean;
+import okhttp3.Call;
+import okhttp3.FormBody.Builder;
+import okhttp3.OkHttpClient;
+import okhttp3.Request.Builder;
+import okhttp3.Response;
+import okhttp3.ResponseBody;
+import org.json.JSONArray;
+import org.json.JSONException;
+import org.json.JSONObject;
+
+public class AmplitudeClient
+{
+  public static final String DEVICE_ID_KEY = "device_id";
+  public static final String END_SESSION_EVENT = "session_end";
+  public static final String LAST_EVENT_ID_KEY = "last_event_id";
+  public static final String LAST_EVENT_TIME_KEY = "last_event_time";
+  public static final String LAST_IDENTIFY_ID_KEY = "last_identify_id";
+  public static final String OPT_OUT_KEY = "opt_out";
+  public static final String PREVIOUS_SESSION_ID_KEY = "previous_session_id";
+  public static final String SEQUENCE_NUMBER_KEY = "sequence_number";
+  public static final String START_SESSION_EVENT = "session_start";
+  public static final String TAG = "com.amplitude.api.AmplitudeClient";
+  public static final String USER_ID_KEY = "user_id";
+  private static final AmplitudeLog logger = ;
+  protected String apiKey;
+  JSONObject apiPropertiesTrackingOptions;
+  private boolean backoffUpload = false;
+  private int backoffUploadBatchSize = eventUploadMaxBatchSize;
+  protected Context context;
+  protected DatabaseHelper dbHelper;
+  protected String deviceId;
+  private DeviceInfo deviceInfo;
+  private int eventMaxCount = 1000;
+  private int eventUploadMaxBatchSize = 50;
+  private long eventUploadPeriodMillis = 30000L;
+  private int eventUploadThreshold = 30;
+  private boolean flushEventsOnClose = true;
+  protected OkHttpClient httpClient;
+  WorkerThread httpThread = new WorkerThread("httpThread");
+  private boolean inForeground = false;
+  protected boolean initialized = false;
+  protected String instanceName;
+  Throwable lastError;
+  long lastEventId = -1L;
+  long lastEventTime = -1L;
+  long lastIdentifyId = -1L;
+  WorkerThread logThread = new WorkerThread("logThread");
+  private long minTimeBetweenSessionsMillis = 300000L;
+  private boolean newDeviceIdPerInstall = false;
+  private boolean offline = false;
+  private boolean optOut = false;
+  protected String platform;
+  long previousSessionId = -1L;
+  long sequenceNumber = 0L;
+  long sessionId = -1L;
+  private long sessionTimeoutMillis = 1800000L;
+  TrackingOptions trackingOptions = new TrackingOptions();
+  private boolean trackingSessionEvents = false;
+  private AtomicBoolean updateScheduled = new AtomicBoolean(false);
+  AtomicBoolean uploadingCurrently = new AtomicBoolean(false);
+  String url = "https://api.amplitude.com/";
+  private boolean useAdvertisingIdForDeviceId = false;
+  protected String userId;
+  private boolean usingForegroundTracking = false;
+  
+  public AmplitudeClient()
+  {
+    this(null);
+  }
+  
+  public AmplitudeClient(String paramString)
+  {
+    instanceName = Utils.normalizeInstanceName(paramString);
+    logThread.start();
+    httpThread.start();
+  }
+  
+  private Set<String> getInvalidDeviceIds()
+  {
+    HashSet localHashSet = new HashSet();
+    localHashSet.add("");
+    localHashSet.add("9774d56d682e549c");
+    localHashSet.add("unknown");
+    localHashSet.add("000000000000000");
+    localHashSet.add("Android");
+    localHashSet.add("DEFACE");
+    localHashSet.add("00000000-0000-0000-0000-000000000000");
+    return localHashSet;
+  }
+  
+  private long getLongvalue(String paramString, long paramLong)
+  {
+    paramString = dbHelper.getLongValue(paramString);
+    if (paramString == null) {
+      return paramLong;
+    }
+    return paramString.longValue();
+  }
+  
+  private boolean inSession()
+  {
+    return sessionId >= 0L;
+  }
+  
+  private String initializeDeviceId()
+  {
+    Object localObject1 = getInvalidDeviceIds();
+    Object localObject2 = dbHelper.getValue("device_id");
+    String str = Utils.getStringFromSharedPreferences(context, instanceName, "device_id");
+    if ((!Utils.isEmptyString((String)localObject2)) && (!((Set)localObject1).contains(localObject2)))
+    {
+      if (!((String)localObject2).equals(str)) {
+        saveDeviceId((String)localObject2);
+      }
+      return localObject2;
+    }
+    if ((!Utils.isEmptyString(str)) && (!((Set)localObject1).contains(str)))
+    {
+      saveDeviceId(str);
+      return str;
+    }
+    if ((!newDeviceIdPerInstall) && (useAdvertisingIdForDeviceId) && (!deviceInfo.isLimitAdTrackingEnabled()))
+    {
+      localObject2 = deviceInfo.getAdvertisingId();
+      if ((!Utils.isEmptyString((String)localObject2)) && (!((Set)localObject1).contains(localObject2)))
+      {
+        saveDeviceId((String)localObject2);
+        return localObject2;
+      }
+    }
+    localObject1 = new StringBuilder();
+    localObject2 = deviceInfo;
+    ((StringBuilder)localObject1).append(DeviceInfo.generateUUID());
+    ((StringBuilder)localObject1).append("R");
+    localObject1 = ((StringBuilder)localObject1).toString();
+    saveDeviceId((String)localObject1);
+    return localObject1;
+  }
+  
+  private boolean isWithinMinTimeBetweenSessions(long paramLong)
+  {
+    long l;
+    if (usingForegroundTracking) {
+      l = minTimeBetweenSessionsMillis;
+    } else {
+      l = sessionTimeoutMillis;
+    }
+    return paramLong - lastEventTime < l;
+  }
+  
+  private static void migrateBooleanValue(SharedPreferences paramSharedPreferences, String paramString1, boolean paramBoolean, DatabaseHelper paramDatabaseHelper, String paramString2)
+  {
+    if (paramDatabaseHelper.getLongValue(paramString2) != null) {
+      return;
+    }
+    long l;
+    if (paramSharedPreferences.getBoolean(paramString1, paramBoolean)) {
+      l = 1L;
+    } else {
+      l = 0L;
+    }
+    paramDatabaseHelper.insertOrReplaceKeyLongValue(paramString2, Long.valueOf(l));
+    paramSharedPreferences.edit().remove(paramString1).apply();
+  }
+  
+  private static void migrateLongValue(SharedPreferences paramSharedPreferences, String paramString1, long paramLong, DatabaseHelper paramDatabaseHelper, String paramString2)
+  {
+    if (paramDatabaseHelper.getLongValue(paramString2) != null) {
+      return;
+    }
+    paramDatabaseHelper.insertOrReplaceKeyLongValue(paramString2, Long.valueOf(paramSharedPreferences.getLong(paramString1, paramLong)));
+    paramSharedPreferences.edit().remove(paramString1).apply();
+  }
+  
+  private static void migrateStringValue(SharedPreferences paramSharedPreferences, String paramString1, String paramString2, DatabaseHelper paramDatabaseHelper, String paramString3)
+  {
+    if (!Utils.isEmptyString(paramDatabaseHelper.getValue(paramString3))) {
+      return;
+    }
+    paramString2 = paramSharedPreferences.getString(paramString1, paramString2);
+    if (!Utils.isEmptyString(paramString2))
+    {
+      paramDatabaseHelper.insertOrReplaceKeyValue(paramString3, paramString2);
+      paramSharedPreferences.edit().remove(paramString1).apply();
+    }
+  }
+  
+  private void saveDeviceId(String paramString)
+  {
+    dbHelper.insertOrReplaceKeyValue("device_id", paramString);
+    Utils.writeStringToSharedPreferences(context, instanceName, "device_id", paramString);
+  }
+  
+  private void sendSessionEvent(String paramString)
+  {
+    if (!contextAndApiKeySet(String.format("sendSessionEvent('%s')", new Object[] { paramString }))) {
+      return;
+    }
+    if (!inSession()) {
+      return;
+    }
+    JSONObject localJSONObject = new JSONObject();
+    try
+    {
+      localJSONObject.put("special", paramString);
+      logEvent(paramString, null, localJSONObject, null, null, null, lastEventTime, false);
+      return;
+    }
+    catch (JSONException localJSONException)
+    {
+      Diagnostics.getLogger().logError(String.format("Failed to generate API Properties JSON for session event %s", new Object[] { paramString }), localJSONException);
+    }
+  }
+  
+  private void setSessionId(long paramLong)
+  {
+    sessionId = paramLong;
+    setPreviousSessionId(paramLong);
+  }
+  
+  private void startNewSession(long paramLong)
+  {
+    if (trackingSessionEvents) {
+      sendSessionEvent("session_end");
+    }
+    setSessionId(paramLong);
+    refreshSessionTime(paramLong);
+    if (trackingSessionEvents) {
+      sendSessionEvent("session_start");
+    }
+  }
+  
+  public static String truncate(String paramString)
+  {
+    if (paramString.length() <= 1024) {
+      return paramString;
+    }
+    return paramString.substring(0, 1024);
+  }
+  
+  private void updateServerLater(long paramLong)
+  {
+    if (updateScheduled.getAndSet(true)) {
+      return;
+    }
+    logThread.postDelayed(new Runnable()
+    {
+      public void run()
+      {
+        updateScheduled.set(false);
+        updateServer();
+      }
+    }, paramLong);
+  }
+  
+  static boolean upgradePrefs(Context paramContext)
+  {
+    return upgradePrefs(paramContext, null, null);
+  }
+  
+  /* Error */
+  static boolean upgradePrefs(Context paramContext, String paramString1, String paramString2)
+  {
+    // Byte code:
+    //   0: aload_1
+    //   1: astore_3
+    //   2: aload_1
+    //   3: ifnonnull +29 -> 32
+    //   6: ldc_w 498
+    //   9: astore_3
+    //   10: ldc_w 500
+    //   13: invokevirtual 506	java/lang/Class:getPackage	()Ljava/lang/Package;
+    //   16: invokevirtual 511	java/lang/Package:getName	()Ljava/lang/String;
+    //   19: astore_1
+    //   20: aload_1
+    //   21: astore_3
+    //   22: goto +10 -> 32
+    //   25: goto +7 -> 32
+    //   28: astore_0
+    //   29: goto +567 -> 596
+    //   32: aload_2
+    //   33: astore_1
+    //   34: aload_2
+    //   35: ifnonnull +7 -> 42
+    //   38: ldc_w 498
+    //   41: astore_1
+    //   42: aload_1
+    //   43: aload_3
+    //   44: invokevirtual 351	java/lang/String:equals	(Ljava/lang/Object;)Z
+    //   47: ifeq +5 -> 52
+    //   50: iconst_0
+    //   51: ireturn
+    //   52: new 361	java/lang/StringBuilder
+    //   55: dup
+    //   56: invokespecial 362	java/lang/StringBuilder:<init>	()V
+    //   59: astore_2
+    //   60: aload_2
+    //   61: aload_3
+    //   62: invokevirtual 369	java/lang/StringBuilder:append	(Ljava/lang/String;)Ljava/lang/StringBuilder;
+    //   65: pop
+    //   66: aload_2
+    //   67: ldc_w 513
+    //   70: invokevirtual 369	java/lang/StringBuilder:append	(Ljava/lang/String;)Ljava/lang/StringBuilder;
+    //   73: pop
+    //   74: aload_2
+    //   75: aload_0
+    //   76: invokevirtual 518	android/content/Context:getPackageName	()Ljava/lang/String;
+    //   79: invokevirtual 369	java/lang/StringBuilder:append	(Ljava/lang/String;)Ljava/lang/StringBuilder;
+    //   82: pop
+    //   83: aload_2
+    //   84: invokevirtual 374	java/lang/StringBuilder:toString	()Ljava/lang/String;
+    //   87: astore_2
+    //   88: aload_0
+    //   89: aload_2
+    //   90: iconst_0
+    //   91: invokevirtual 522	android/content/Context:getSharedPreferences	(Ljava/lang/String;I)Landroid/content/SharedPreferences;
+    //   94: astore 4
+    //   96: aload 4
+    //   98: invokeinterface 526 1 0
+    //   103: invokeinterface 531 1 0
+    //   108: ifne +5 -> 113
+    //   111: iconst_0
+    //   112: ireturn
+    //   113: new 361	java/lang/StringBuilder
+    //   116: dup
+    //   117: invokespecial 362	java/lang/StringBuilder:<init>	()V
+    //   120: astore 5
+    //   122: aload 5
+    //   124: aload_1
+    //   125: invokevirtual 369	java/lang/StringBuilder:append	(Ljava/lang/String;)Ljava/lang/StringBuilder;
+    //   128: pop
+    //   129: aload 5
+    //   131: ldc_w 513
+    //   134: invokevirtual 369	java/lang/StringBuilder:append	(Ljava/lang/String;)Ljava/lang/StringBuilder;
+    //   137: pop
+    //   138: aload 5
+    //   140: aload_0
+    //   141: invokevirtual 518	android/content/Context:getPackageName	()Ljava/lang/String;
+    //   144: invokevirtual 369	java/lang/StringBuilder:append	(Ljava/lang/String;)Ljava/lang/StringBuilder;
+    //   147: pop
+    //   148: aload 5
+    //   150: invokevirtual 374	java/lang/StringBuilder:toString	()Ljava/lang/String;
+    //   153: astore_1
+    //   154: aload_0
+    //   155: aload_1
+    //   156: iconst_0
+    //   157: invokevirtual 522	android/content/Context:getSharedPreferences	(Ljava/lang/String;I)Landroid/content/SharedPreferences;
+    //   160: invokeinterface 396 1 0
+    //   165: astore_0
+    //   166: new 361	java/lang/StringBuilder
+    //   169: dup
+    //   170: invokespecial 362	java/lang/StringBuilder:<init>	()V
+    //   173: astore 5
+    //   175: aload 5
+    //   177: aload_3
+    //   178: invokevirtual 369	java/lang/StringBuilder:append	(Ljava/lang/String;)Ljava/lang/StringBuilder;
+    //   181: pop
+    //   182: aload 5
+    //   184: ldc_w 533
+    //   187: invokevirtual 369	java/lang/StringBuilder:append	(Ljava/lang/String;)Ljava/lang/StringBuilder;
+    //   190: pop
+    //   191: aload 4
+    //   193: aload 5
+    //   195: invokevirtual 374	java/lang/StringBuilder:toString	()Ljava/lang/String;
+    //   198: invokeinterface 535 2 0
+    //   203: ifeq +53 -> 256
+    //   206: new 361	java/lang/StringBuilder
+    //   209: dup
+    //   210: invokespecial 362	java/lang/StringBuilder:<init>	()V
+    //   213: astore 5
+    //   215: aload 5
+    //   217: aload_3
+    //   218: invokevirtual 369	java/lang/StringBuilder:append	(Ljava/lang/String;)Ljava/lang/StringBuilder;
+    //   221: pop
+    //   222: aload 5
+    //   224: ldc_w 533
+    //   227: invokevirtual 369	java/lang/StringBuilder:append	(Ljava/lang/String;)Ljava/lang/StringBuilder;
+    //   230: pop
+    //   231: aload_0
+    //   232: ldc_w 537
+    //   235: aload 4
+    //   237: aload 5
+    //   239: invokevirtual 374	java/lang/StringBuilder:toString	()Ljava/lang/String;
+    //   242: ldc2_w 159
+    //   245: invokeinterface 410 4 0
+    //   250: invokeinterface 541 4 0
+    //   255: pop
+    //   256: new 361	java/lang/StringBuilder
+    //   259: dup
+    //   260: invokespecial 362	java/lang/StringBuilder:<init>	()V
+    //   263: astore 5
+    //   265: aload 5
+    //   267: aload_3
+    //   268: invokevirtual 369	java/lang/StringBuilder:append	(Ljava/lang/String;)Ljava/lang/StringBuilder;
+    //   271: pop
+    //   272: aload 5
+    //   274: ldc_w 543
+    //   277: invokevirtual 369	java/lang/StringBuilder:append	(Ljava/lang/String;)Ljava/lang/StringBuilder;
+    //   280: pop
+    //   281: aload 4
+    //   283: aload 5
+    //   285: invokevirtual 374	java/lang/StringBuilder:toString	()Ljava/lang/String;
+    //   288: invokeinterface 535 2 0
+    //   293: ifeq +51 -> 344
+    //   296: new 361	java/lang/StringBuilder
+    //   299: dup
+    //   300: invokespecial 362	java/lang/StringBuilder:<init>	()V
+    //   303: astore 5
+    //   305: aload 5
+    //   307: aload_3
+    //   308: invokevirtual 369	java/lang/StringBuilder:append	(Ljava/lang/String;)Ljava/lang/StringBuilder;
+    //   311: pop
+    //   312: aload 5
+    //   314: ldc_w 543
+    //   317: invokevirtual 369	java/lang/StringBuilder:append	(Ljava/lang/String;)Ljava/lang/StringBuilder;
+    //   320: pop
+    //   321: aload_0
+    //   322: ldc_w 545
+    //   325: aload 4
+    //   327: aload 5
+    //   329: invokevirtual 374	java/lang/StringBuilder:toString	()Ljava/lang/String;
+    //   332: aconst_null
+    //   333: invokeinterface 416 3 0
+    //   338: invokeinterface 549 3 0
+    //   343: pop
+    //   344: new 361	java/lang/StringBuilder
+    //   347: dup
+    //   348: invokespecial 362	java/lang/StringBuilder:<init>	()V
+    //   351: astore 5
+    //   353: aload 5
+    //   355: aload_3
+    //   356: invokevirtual 369	java/lang/StringBuilder:append	(Ljava/lang/String;)Ljava/lang/StringBuilder;
+    //   359: pop
+    //   360: aload 5
+    //   362: ldc_w 551
+    //   365: invokevirtual 369	java/lang/StringBuilder:append	(Ljava/lang/String;)Ljava/lang/StringBuilder;
+    //   368: pop
+    //   369: aload 4
+    //   371: aload 5
+    //   373: invokevirtual 374	java/lang/StringBuilder:toString	()Ljava/lang/String;
+    //   376: invokeinterface 535 2 0
+    //   381: ifeq +51 -> 432
+    //   384: new 361	java/lang/StringBuilder
+    //   387: dup
+    //   388: invokespecial 362	java/lang/StringBuilder:<init>	()V
+    //   391: astore 5
+    //   393: aload 5
+    //   395: aload_3
+    //   396: invokevirtual 369	java/lang/StringBuilder:append	(Ljava/lang/String;)Ljava/lang/StringBuilder;
+    //   399: pop
+    //   400: aload 5
+    //   402: ldc_w 551
+    //   405: invokevirtual 369	java/lang/StringBuilder:append	(Ljava/lang/String;)Ljava/lang/StringBuilder;
+    //   408: pop
+    //   409: aload_0
+    //   410: ldc_w 553
+    //   413: aload 4
+    //   415: aload 5
+    //   417: invokevirtual 374	java/lang/StringBuilder:toString	()Ljava/lang/String;
+    //   420: aconst_null
+    //   421: invokeinterface 416 3 0
+    //   426: invokeinterface 549 3 0
+    //   431: pop
+    //   432: new 361	java/lang/StringBuilder
+    //   435: dup
+    //   436: invokespecial 362	java/lang/StringBuilder:<init>	()V
+    //   439: astore 5
+    //   441: aload 5
+    //   443: aload_3
+    //   444: invokevirtual 369	java/lang/StringBuilder:append	(Ljava/lang/String;)Ljava/lang/StringBuilder;
+    //   447: pop
+    //   448: aload 5
+    //   450: ldc_w 555
+    //   453: invokevirtual 369	java/lang/StringBuilder:append	(Ljava/lang/String;)Ljava/lang/StringBuilder;
+    //   456: pop
+    //   457: aload 4
+    //   459: aload 5
+    //   461: invokevirtual 374	java/lang/StringBuilder:toString	()Ljava/lang/String;
+    //   464: invokeinterface 535 2 0
+    //   469: ifeq +51 -> 520
+    //   472: new 361	java/lang/StringBuilder
+    //   475: dup
+    //   476: invokespecial 362	java/lang/StringBuilder:<init>	()V
+    //   479: astore 5
+    //   481: aload 5
+    //   483: aload_3
+    //   484: invokevirtual 369	java/lang/StringBuilder:append	(Ljava/lang/String;)Ljava/lang/StringBuilder;
+    //   487: pop
+    //   488: aload 5
+    //   490: ldc_w 555
+    //   493: invokevirtual 369	java/lang/StringBuilder:append	(Ljava/lang/String;)Ljava/lang/StringBuilder;
+    //   496: pop
+    //   497: aload_0
+    //   498: ldc_w 557
+    //   501: aload 4
+    //   503: aload 5
+    //   505: invokevirtual 374	java/lang/StringBuilder:toString	()Ljava/lang/String;
+    //   508: iconst_0
+    //   509: invokeinterface 384 3 0
+    //   514: invokeinterface 561 3 0
+    //   519: pop
+    //   520: aload_0
+    //   521: invokeinterface 405 1 0
+    //   526: aload 4
+    //   528: invokeinterface 396 1 0
+    //   533: invokeinterface 564 1 0
+    //   538: invokeinterface 405 1 0
+    //   543: getstatic 136	com/amplitude/api/AmplitudeClient:logger	Lcom/amplitude/api/AmplitudeLog;
+    //   546: astore_0
+    //   547: new 361	java/lang/StringBuilder
+    //   550: dup
+    //   551: invokespecial 362	java/lang/StringBuilder:<init>	()V
+    //   554: astore_3
+    //   555: aload_3
+    //   556: ldc_w 566
+    //   559: invokevirtual 369	java/lang/StringBuilder:append	(Ljava/lang/String;)Ljava/lang/StringBuilder;
+    //   562: pop
+    //   563: aload_3
+    //   564: aload_2
+    //   565: invokevirtual 369	java/lang/StringBuilder:append	(Ljava/lang/String;)Ljava/lang/StringBuilder;
+    //   568: pop
+    //   569: aload_3
+    //   570: ldc_w 568
+    //   573: invokevirtual 369	java/lang/StringBuilder:append	(Ljava/lang/String;)Ljava/lang/StringBuilder;
+    //   576: pop
+    //   577: aload_3
+    //   578: aload_1
+    //   579: invokevirtual 369	java/lang/StringBuilder:append	(Ljava/lang/String;)Ljava/lang/StringBuilder;
+    //   582: pop
+    //   583: aload_0
+    //   584: ldc 69
+    //   586: aload_3
+    //   587: invokevirtual 374	java/lang/StringBuilder:toString	()Ljava/lang/String;
+    //   590: invokevirtual 572	com/amplitude/api/AmplitudeLog:i	(Ljava/lang/String;Ljava/lang/String;)I
+    //   593: pop
+    //   594: iconst_1
+    //   595: ireturn
+    //   596: getstatic 136	com/amplitude/api/AmplitudeClient:logger	Lcom/amplitude/api/AmplitudeLog;
+    //   599: ldc 69
+    //   601: ldc_w 574
+    //   604: aload_0
+    //   605: invokevirtual 578	com/amplitude/api/AmplitudeLog:e	(Ljava/lang/String;Ljava/lang/String;Ljava/lang/Throwable;)I
+    //   608: pop
+    //   609: invokestatic 455	com/amplitude/api/Diagnostics:getLogger	()Lcom/amplitude/api/Diagnostics;
+    //   612: ldc_w 580
+    //   615: aload_0
+    //   616: invokevirtual 461	com/amplitude/api/Diagnostics:logError	(Ljava/lang/String;Ljava/lang/Throwable;)Lcom/amplitude/api/Diagnostics;
+    //   619: pop
+    //   620: iconst_0
+    //   621: ireturn
+    //   622: astore_1
+    //   623: goto -598 -> 25
+    // Local variable table:
+    //   start	length	slot	name	signature
+    //   0	626	0	paramContext	Context
+    //   0	626	1	paramString1	String
+    //   0	626	2	paramString2	String
+    //   1	586	3	localObject	Object
+    //   94	433	4	localSharedPreferences	SharedPreferences
+    //   120	384	5	localStringBuilder	StringBuilder
+    // Exception table:
+    //   from	to	target	type
+    //   42	50	28	java/lang/Exception
+    //   52	111	28	java/lang/Exception
+    //   113	256	28	java/lang/Exception
+    //   256	344	28	java/lang/Exception
+    //   344	432	28	java/lang/Exception
+    //   432	520	28	java/lang/Exception
+    //   520	594	28	java/lang/Exception
+    //   10	20	622	java/lang/Exception
+  }
+  
+  static boolean upgradeSharedPrefsToDB(Context paramContext)
+  {
+    return upgradeSharedPrefsToDB(paramContext, null);
+  }
+  
+  static boolean upgradeSharedPrefsToDB(Context paramContext, String paramString)
+  {
+    String str = paramString;
+    if (paramString == null) {
+      str = "com.amplitude.api";
+    }
+    paramString = DatabaseHelper.getDatabaseHelper(paramContext);
+    Object localObject = paramString.getValue("device_id");
+    Long localLong1 = paramString.getLongValue("previous_session_id");
+    Long localLong2 = paramString.getLongValue("last_event_time");
+    if ((!Utils.isEmptyString((String)localObject)) && (localLong1 != null) && (localLong2 != null)) {
+      return true;
+    }
+    localObject = new StringBuilder();
+    ((StringBuilder)localObject).append(str);
+    ((StringBuilder)localObject).append(".");
+    ((StringBuilder)localObject).append(paramContext.getPackageName());
+    paramContext = paramContext.getSharedPreferences(((StringBuilder)localObject).toString(), 0);
+    migrateStringValue(paramContext, "com.amplitude.api.deviceId", null, paramString, "device_id");
+    migrateLongValue(paramContext, "com.amplitude.api.lastEventTime", -1L, paramString, "last_event_time");
+    migrateLongValue(paramContext, "com.amplitude.api.lastEventId", -1L, paramString, "last_event_id");
+    migrateLongValue(paramContext, "com.amplitude.api.lastIdentifyId", -1L, paramString, "last_identify_id");
+    migrateLongValue(paramContext, "com.amplitude.api.previousSessionId", -1L, paramString, "previous_session_id");
+    migrateStringValue(paramContext, "com.amplitude.api.userId", null, paramString, "user_id");
+    migrateBooleanValue(paramContext, "com.amplitude.api.optOut", false, paramString, "opt_out");
+    return true;
+  }
+  
+  protected String bytesToHexString(byte[] paramArrayOfByte)
+  {
+    char[] arrayOfChar1 = new char[16];
+    char[] tmp8_6 = arrayOfChar1;
+    tmp8_6[0] = 48;
+    char[] tmp14_8 = tmp8_6;
+    tmp14_8[1] = 49;
+    char[] tmp20_14 = tmp14_8;
+    tmp20_14[2] = 50;
+    char[] tmp26_20 = tmp20_14;
+    tmp26_20[3] = 51;
+    char[] tmp32_26 = tmp26_20;
+    tmp32_26[4] = 52;
+    char[] tmp38_32 = tmp32_26;
+    tmp38_32[5] = 53;
+    char[] tmp44_38 = tmp38_32;
+    tmp44_38[6] = 54;
+    char[] tmp51_44 = tmp44_38;
+    tmp51_44[7] = 55;
+    char[] tmp58_51 = tmp51_44;
+    tmp58_51[8] = 56;
+    char[] tmp65_58 = tmp58_51;
+    tmp65_58[9] = 57;
+    char[] tmp72_65 = tmp65_58;
+    tmp72_65[10] = 97;
+    char[] tmp79_72 = tmp72_65;
+    tmp79_72[11] = 98;
+    char[] tmp86_79 = tmp79_72;
+    tmp86_79[12] = 99;
+    char[] tmp93_86 = tmp86_79;
+    tmp93_86[13] = 100;
+    char[] tmp100_93 = tmp93_86;
+    tmp100_93[14] = 101;
+    char[] tmp107_100 = tmp100_93;
+    tmp107_100[15] = 102;
+    tmp107_100;
+    char[] arrayOfChar2 = new char[paramArrayOfByte.length * 2];
+    int i = 0;
+    while (i < paramArrayOfByte.length)
+    {
+      int j = paramArrayOfByte[i] & 0xFF;
+      int k = i * 2;
+      arrayOfChar2[k] = arrayOfChar1[(j >>> 4)];
+      arrayOfChar2[(k + 1)] = arrayOfChar1[(j & 0xF)];
+      i += 1;
+    }
+    return new String(arrayOfChar2);
+  }
+  
+  public void clearUserProperties()
+  {
+    identify(new Identify().clearAll());
+  }
+  
+  protected boolean contextAndApiKeySet(String paramString)
+  {
+    try
+    {
+      AmplitudeLog localAmplitudeLog;
+      StringBuilder localStringBuilder;
+      if (context == null)
+      {
+        localAmplitudeLog = logger;
+        localStringBuilder = new StringBuilder();
+        localStringBuilder.append("context cannot be null, set context with initialize() before calling ");
+        localStringBuilder.append(paramString);
+        localAmplitudeLog.e("com.amplitude.api.AmplitudeClient", localStringBuilder.toString());
+        return false;
+      }
+      if (Utils.isEmptyString(apiKey))
+      {
+        localAmplitudeLog = logger;
+        localStringBuilder = new StringBuilder();
+        localStringBuilder.append("apiKey cannot be null or empty, set apiKey with initialize() before calling ");
+        localStringBuilder.append(paramString);
+        localAmplitudeLog.e("com.amplitude.api.AmplitudeClient", localStringBuilder.toString());
+        return false;
+      }
+      return true;
+    }
+    finally {}
+  }
+  
+  public AmplitudeClient disableDiagnosticLogging()
+  {
+    Diagnostics.getLogger().disableLogging();
+    return this;
+  }
+  
+  public AmplitudeClient disableLocationListening()
+  {
+    runOnLogThread(new Runnable()
+    {
+      public void run()
+      {
+        if (deviceInfo != null)
+        {
+          deviceInfo.setLocationListening(false);
+          return;
+        }
+        throw new IllegalStateException("Must initialize before acting on location listening.");
+      }
+    });
+    return this;
+  }
+  
+  public AmplitudeClient enableDiagnosticLogging()
+  {
+    if (!contextAndApiKeySet("enableDiagnosticLogging")) {
+      return this;
+    }
+    Diagnostics.getLogger().enableLogging(httpClient, apiKey, deviceId);
+    return this;
+  }
+  
+  public AmplitudeClient enableForegroundTracking(Application paramApplication)
+  {
+    if (!usingForegroundTracking)
+    {
+      if (!contextAndApiKeySet("enableForegroundTracking()")) {
+        return this;
+      }
+      if (Build.VERSION.SDK_INT >= 14) {
+        paramApplication.registerActivityLifecycleCallbacks(new AmplitudeCallbacks(this));
+      }
+      return this;
+    }
+    return this;
+  }
+  
+  public AmplitudeClient enableLocationListening()
+  {
+    runOnLogThread(new Runnable()
+    {
+      public void run()
+      {
+        if (deviceInfo != null)
+        {
+          deviceInfo.setLocationListening(true);
+          return;
+        }
+        throw new IllegalStateException("Must initialize before acting on location listening.");
+      }
+    });
+    return this;
+  }
+  
+  public AmplitudeClient enableLogging(boolean paramBoolean)
+  {
+    logger.setEnableLogging(paramBoolean);
+    return this;
+  }
+  
+  public AmplitudeClient enableNewDeviceIdPerInstall(boolean paramBoolean)
+  {
+    newDeviceIdPerInstall = paramBoolean;
+    return this;
+  }
+  
+  protected long getCurrentTimeMillis()
+  {
+    return System.currentTimeMillis();
+  }
+  
+  public String getDeviceId()
+  {
+    return deviceId;
+  }
+  
+  long getNextSequenceNumber()
+  {
+    sequenceNumber += 1L;
+    dbHelper.insertOrReplaceKeyLongValue("sequence_number", Long.valueOf(sequenceNumber));
+    return sequenceNumber;
+  }
+  
+  public long getSessionId()
+  {
+    return sessionId;
+  }
+  
+  public String getUserId()
+  {
+    return userId;
+  }
+  
+  public void groupIdentify(String paramString, Object paramObject, Identify paramIdentify)
+  {
+    groupIdentify(paramString, paramObject, paramIdentify, false);
+  }
+  
+  public void groupIdentify(String paramString, Object paramObject, Identify paramIdentify, boolean paramBoolean)
+  {
+    if ((paramIdentify != null) && (userPropertiesOperations.length() != 0) && (contextAndApiKeySet("groupIdentify()")))
+    {
+      if (Utils.isEmptyString(paramString)) {
+        return;
+      }
+      try
+      {
+        paramObject = new JSONObject().put(paramString, paramObject);
+        paramString = paramObject;
+      }
+      catch (JSONException paramObject)
+      {
+        logger.e("com.amplitude.api.AmplitudeClient", paramObject.toString());
+        Diagnostics.getLogger().logError(String.format("Failed to generate Group Identify JSON Object for groupType %s", new Object[] { paramString }), paramObject);
+        paramString = null;
+      }
+      logEventAsync("$groupidentify", null, null, null, paramString, userPropertiesOperations, getCurrentTimeMillis(), paramBoolean);
+      return;
+    }
+  }
+  
+  public void identify(Identify paramIdentify)
+  {
+    identify(paramIdentify, false);
+  }
+  
+  public void identify(Identify paramIdentify, boolean paramBoolean)
+  {
+    if ((paramIdentify != null) && (userPropertiesOperations.length() != 0))
+    {
+      if (!contextAndApiKeySet("identify()")) {
+        return;
+      }
+      logEventAsync("$identify", null, null, userPropertiesOperations, null, null, getCurrentTimeMillis(), paramBoolean);
+      return;
+    }
+  }
+  
+  public AmplitudeClient initialize(Context paramContext, String paramString)
+  {
+    return initialize(paramContext, paramString, null);
+  }
+  
+  public AmplitudeClient initialize(Context paramContext, String paramString1, String paramString2)
+  {
+    return initialize(paramContext, paramString1, paramString2, null, false);
+  }
+  
+  public AmplitudeClient initialize(final Context paramContext, final String paramString1, final String paramString2, String paramString3, final boolean paramBoolean)
+  {
+    if (paramContext == null) {
+      try
+      {
+        logger.e("com.amplitude.api.AmplitudeClient", "Argument context cannot be null in initialize()");
+        return this;
+      }
+      finally
+      {
+        break label122;
+      }
+    }
+    if (Utils.isEmptyString(paramString1))
+    {
+      logger.e("com.amplitude.api.AmplitudeClient", "Argument apiKey cannot be null or blank in initialize()");
+      return this;
+    }
+    context = paramContext.getApplicationContext();
+    apiKey = paramString1;
+    dbHelper = DatabaseHelper.getDatabaseHelper(context, instanceName);
+    String str = paramString3;
+    if (Utils.isEmptyString(paramString3)) {
+      str = "Android";
+    }
+    platform = str;
+    runOnLogThread(new Runnable()
+    {
+      public void run()
+      {
+        if (!initialized) {}
+        for (;;)
+        {
+          try
+          {
+            if (instanceName.equals("$default_instance"))
+            {
+              AmplitudeClient.upgradePrefs(paramContext);
+              AmplitudeClient.upgradeSharedPrefsToDB(paramContext);
+            }
+            httpClient = new OkHttpClient();
+            AmplitudeClient.access$002(AmplitudeClient.this, new DeviceInfo(paramContext));
+            deviceId = AmplitudeClient.this.initializeDeviceId();
+            if (paramBoolean) {
+              Diagnostics.getLogger().enableLogging(httpClient, paramString1, deviceId);
+            }
+            deviceInfo.prefetch();
+            if (paramString2 != null)
+            {
+              jdField_thisuserId = paramString2;
+              dbHelper.insertOrReplaceKeyValue("user_id", paramString2);
+            }
+            else
+            {
+              jdField_thisuserId = dbHelper.getValue("user_id");
+            }
+            Long localLong = dbHelper.getLongValue("opt_out");
+            AmplitudeClient localAmplitudeClient = AmplitudeClient.this;
+            if ((localLong == null) || (localLong.longValue() != 1L)) {
+              break label420;
+            }
+            bool = true;
+            AmplitudeClient.access$202(localAmplitudeClient, bool);
+            previousSessionId = AmplitudeClient.this.getLongvalue("previous_session_id", -1L);
+            if (previousSessionId >= 0L) {
+              sessionId = previousSessionId;
+            }
+            sequenceNumber = AmplitudeClient.this.getLongvalue("sequence_number", 0L);
+            lastEventId = AmplitudeClient.this.getLongvalue("last_event_id", -1L);
+            lastIdentifyId = AmplitudeClient.this.getLongvalue("last_identify_id", -1L);
+            lastEventTime = AmplitudeClient.this.getLongvalue("last_event_time", -1L);
+            dbHelper.setDatabaseResetListener(new DatabaseResetListener()
+            {
+              public void onDatabaseReset(SQLiteDatabase paramAnonymous2SQLiteDatabase)
+              {
+                dbHelper.insertOrReplaceKeyValueToTable(paramAnonymous2SQLiteDatabase, "store", "device_id", val$client.deviceId);
+                dbHelper.insertOrReplaceKeyValueToTable(paramAnonymous2SQLiteDatabase, "store", "user_id", val$client.userId);
+                DatabaseHelper localDatabaseHelper = dbHelper;
+                long l;
+                if (val$client.optOut) {
+                  l = 1L;
+                } else {
+                  l = 0L;
+                }
+                localDatabaseHelper.insertOrReplaceKeyValueToTable(paramAnonymous2SQLiteDatabase, "long_store", "opt_out", Long.valueOf(l));
+                dbHelper.insertOrReplaceKeyValueToTable(paramAnonymous2SQLiteDatabase, "long_store", "previous_session_id", Long.valueOf(val$client.sessionId));
+                dbHelper.insertOrReplaceKeyValueToTable(paramAnonymous2SQLiteDatabase, "long_store", "last_event_time", Long.valueOf(val$client.lastEventTime));
+              }
+            });
+            initialized = true;
+            return;
+          }
+          catch (CursorWindowAllocationException localCursorWindowAllocationException)
+          {
+            AmplitudeClient.logger.e("com.amplitude.api.AmplitudeClient", String.format("Failed to initialize Amplitude SDK due to: %s", new Object[] { localCursorWindowAllocationException.getMessage() }));
+            Diagnostics.getLogger().logError("Failed to initialize Amplitude SDK", localCursorWindowAllocationException);
+            jdField_thisapiKey = null;
+          }
+          return;
+          label420:
+          boolean bool = false;
+        }
+      }
+    });
+    return this;
+    label122:
+    throw paramContext;
+  }
+  
+  boolean isInForeground()
+  {
+    return inForeground;
+  }
+  
+  public boolean isOptedOut()
+  {
+    return optOut;
+  }
+  
+  boolean isUsingForegroundTracking()
+  {
+    return usingForegroundTracking;
+  }
+  
+  protected long logEvent(String paramString, JSONObject paramJSONObject1, JSONObject paramJSONObject2, JSONObject paramJSONObject3, JSONObject paramJSONObject4, JSONObject paramJSONObject5, long paramLong, boolean paramBoolean)
+  {
+    Object localObject1 = logger;
+    Object localObject2 = new StringBuilder();
+    ((StringBuilder)localObject2).append("Logged event to Amplitude: ");
+    ((StringBuilder)localObject2).append(paramString);
+    ((AmplitudeLog)localObject1).d("com.amplitude.api.AmplitudeClient", ((StringBuilder)localObject2).toString());
+    if (optOut) {
+      return -1L;
+    }
+    int i;
+    if ((trackingSessionEvents) && ((paramString.equals("session_start")) || (paramString.equals("session_end")))) {
+      i = 1;
+    } else {
+      i = 0;
+    }
+    if ((i == 0) && (!paramBoolean)) {
+      if (!inForeground) {
+        startNewSessionIfNeeded(paramLong);
+      } else {
+        refreshSessionTime(paramLong);
+      }
+    }
+    localObject1 = new JSONObject();
+    for (;;)
+    {
+      try
+      {
+        ((JSONObject)localObject1).put("event_type", replaceWithJSONNull(paramString));
+        ((JSONObject)localObject1).put("timestamp", paramLong);
+        ((JSONObject)localObject1).put("user_id", replaceWithJSONNull(userId));
+        ((JSONObject)localObject1).put("device_id", replaceWithJSONNull(deviceId));
+        if (paramBoolean) {
+          paramLong = -1L;
+        } else {
+          paramLong = sessionId;
+        }
+        ((JSONObject)localObject1).put("session_id", paramLong);
+        ((JSONObject)localObject1).put("uuid", UUID.randomUUID().toString());
+        ((JSONObject)localObject1).put("sequence_number", getNextSequenceNumber());
+        if (trackingOptions.shouldTrackVersionName()) {
+          ((JSONObject)localObject1).put("version_name", replaceWithJSONNull(deviceInfo.getVersionName()));
+        }
+        if (trackingOptions.shouldTrackOsName()) {
+          ((JSONObject)localObject1).put("os_name", replaceWithJSONNull(deviceInfo.getOsName()));
+        }
+        if (trackingOptions.shouldTrackOsVersion()) {
+          ((JSONObject)localObject1).put("os_version", replaceWithJSONNull(deviceInfo.getOsVersion()));
+        }
+        if (trackingOptions.shouldTrackDeviceBrand()) {
+          ((JSONObject)localObject1).put("device_brand", replaceWithJSONNull(deviceInfo.getBrand()));
+        }
+        if (trackingOptions.shouldTrackDeviceManufacturer()) {
+          ((JSONObject)localObject1).put("device_manufacturer", replaceWithJSONNull(deviceInfo.getManufacturer()));
+        }
+        if (trackingOptions.shouldTrackDeviceModel()) {
+          ((JSONObject)localObject1).put("device_model", replaceWithJSONNull(deviceInfo.getModel()));
+        }
+        if (trackingOptions.shouldTrackCarrier()) {
+          ((JSONObject)localObject1).put("carrier", replaceWithJSONNull(deviceInfo.getCarrier()));
+        }
+        if (trackingOptions.shouldTrackCountry()) {
+          ((JSONObject)localObject1).put("country", replaceWithJSONNull(deviceInfo.getCountry()));
+        }
+        if (trackingOptions.shouldTrackLanguage()) {
+          ((JSONObject)localObject1).put("language", replaceWithJSONNull(deviceInfo.getLanguage()));
+        }
+        if (trackingOptions.shouldTrackPlatform()) {
+          ((JSONObject)localObject1).put("platform", platform);
+        }
+        localObject2 = new JSONObject();
+        ((JSONObject)localObject2).put("name", "amplitude-android");
+        ((JSONObject)localObject2).put("version", "2.23.2");
+        ((JSONObject)localObject1).put("library", localObject2);
+        if (paramJSONObject2 == null)
+        {
+          paramJSONObject2 = new JSONObject();
+          if ((apiPropertiesTrackingOptions != null) && (apiPropertiesTrackingOptions.length() > 0)) {
+            paramJSONObject2.put("tracking_options", apiPropertiesTrackingOptions);
+          }
+          if (trackingOptions.shouldTrackLatLng())
+          {
+            localObject2 = deviceInfo.getMostRecentLocation();
+            if (localObject2 != null)
+            {
+              JSONObject localJSONObject = new JSONObject();
+              localJSONObject.put("lat", ((Location)localObject2).getLatitude());
+              localJSONObject.put("lng", ((Location)localObject2).getLongitude());
+              paramJSONObject2.put("location", localJSONObject);
+            }
+          }
+          if ((trackingOptions.shouldTrackAdid()) && (deviceInfo.getAdvertisingId() != null)) {
+            paramJSONObject2.put("androidADID", deviceInfo.getAdvertisingId());
+          }
+          paramJSONObject2.put("limit_ad_tracking", deviceInfo.isLimitAdTrackingEnabled());
+          paramJSONObject2.put("gps_enabled", deviceInfo.isGooglePlayServicesEnabled());
+          ((JSONObject)localObject1).put("api_properties", paramJSONObject2);
+          if (paramJSONObject1 == null) {
+            paramJSONObject1 = new JSONObject();
+          } else {
+            paramJSONObject1 = truncate(paramJSONObject1);
+          }
+          ((JSONObject)localObject1).put("event_properties", paramJSONObject1);
+          if (paramJSONObject3 == null) {
+            paramJSONObject1 = new JSONObject();
+          } else {
+            paramJSONObject1 = truncate(paramJSONObject3);
+          }
+          ((JSONObject)localObject1).put("user_properties", paramJSONObject1);
+          if (paramJSONObject4 == null) {
+            paramJSONObject1 = new JSONObject();
+          } else {
+            paramJSONObject1 = truncate(paramJSONObject4);
+          }
+          ((JSONObject)localObject1).put("groups", paramJSONObject1);
+          if (paramJSONObject5 == null) {
+            paramJSONObject1 = new JSONObject();
+          } else {
+            paramJSONObject1 = truncate(paramJSONObject5);
+          }
+          ((JSONObject)localObject1).put("group_properties", paramJSONObject1);
+          paramLong = saveEvent(paramString, (JSONObject)localObject1);
+          return paramLong;
+        }
+      }
+      catch (JSONException paramJSONObject1)
+      {
+        logger.e("com.amplitude.api.AmplitudeClient", String.format("JSON Serialization of event type %s failed, skipping: %s", new Object[] { paramString, paramJSONObject1.toString() }));
+        Diagnostics.getLogger().logError(String.format("Failed to JSON serialize event type %s", new Object[] { paramString }), paramJSONObject1);
+        return -1L;
+      }
+    }
+  }
+  
+  public void logEvent(String paramString)
+  {
+    logEvent(paramString, null);
+  }
+  
+  public void logEvent(String paramString, JSONObject paramJSONObject)
+  {
+    logEvent(paramString, paramJSONObject, false);
+  }
+  
+  public void logEvent(String paramString, JSONObject paramJSONObject1, JSONObject paramJSONObject2)
+  {
+    logEvent(paramString, paramJSONObject1, paramJSONObject2, false);
+  }
+  
+  public void logEvent(String paramString, JSONObject paramJSONObject1, JSONObject paramJSONObject2, long paramLong, boolean paramBoolean)
+  {
+    if (validateLogEvent(paramString)) {
+      logEventAsync(paramString, paramJSONObject1, null, null, paramJSONObject2, null, paramLong, paramBoolean);
+    }
+  }
+  
+  public void logEvent(String paramString, JSONObject paramJSONObject1, JSONObject paramJSONObject2, boolean paramBoolean)
+  {
+    logEvent(paramString, paramJSONObject1, paramJSONObject2, getCurrentTimeMillis(), paramBoolean);
+  }
+  
+  public void logEvent(String paramString, JSONObject paramJSONObject, boolean paramBoolean)
+  {
+    logEvent(paramString, paramJSONObject, null, paramBoolean);
+  }
+  
+  protected void logEventAsync(final String paramString, final JSONObject paramJSONObject1, final JSONObject paramJSONObject2, final JSONObject paramJSONObject3, final JSONObject paramJSONObject4, final JSONObject paramJSONObject5, final long paramLong, boolean paramBoolean)
+  {
+    if (paramJSONObject1 != null) {
+      paramJSONObject1 = Utils.cloneJSONObject(paramJSONObject1);
+    }
+    if (paramJSONObject2 != null) {
+      paramJSONObject2 = Utils.cloneJSONObject(paramJSONObject2);
+    }
+    if (paramJSONObject3 != null) {
+      paramJSONObject3 = Utils.cloneJSONObject(paramJSONObject3);
+    }
+    if (paramJSONObject4 != null) {
+      paramJSONObject4 = Utils.cloneJSONObject(paramJSONObject4);
+    }
+    if (paramJSONObject5 != null) {
+      paramJSONObject5 = Utils.cloneJSONObject(paramJSONObject5);
+    }
+    runOnLogThread(new Runnable()
+    {
+      public void run()
+      {
+        if (Utils.isEmptyString(apiKey)) {
+          return;
+        }
+        logEvent(paramString, paramJSONObject1, paramJSONObject2, paramJSONObject3, paramJSONObject4, paramJSONObject5, paramLong, val$outOfSession);
+      }
+    });
+  }
+  
+  public void logEventSync(String paramString)
+  {
+    logEventSync(paramString, null);
+  }
+  
+  public void logEventSync(String paramString, JSONObject paramJSONObject)
+  {
+    logEventSync(paramString, paramJSONObject, false);
+  }
+  
+  public void logEventSync(String paramString, JSONObject paramJSONObject1, JSONObject paramJSONObject2)
+  {
+    logEventSync(paramString, paramJSONObject1, paramJSONObject2, false);
+  }
+  
+  public void logEventSync(String paramString, JSONObject paramJSONObject1, JSONObject paramJSONObject2, long paramLong, boolean paramBoolean)
+  {
+    if (validateLogEvent(paramString)) {
+      logEvent(paramString, paramJSONObject1, null, null, paramJSONObject2, null, paramLong, paramBoolean);
+    }
+  }
+  
+  public void logEventSync(String paramString, JSONObject paramJSONObject1, JSONObject paramJSONObject2, boolean paramBoolean)
+  {
+    logEventSync(paramString, paramJSONObject1, paramJSONObject2, getCurrentTimeMillis(), paramBoolean);
+  }
+  
+  public void logEventSync(String paramString, JSONObject paramJSONObject, boolean paramBoolean)
+  {
+    logEventSync(paramString, paramJSONObject, null, paramBoolean);
+  }
+  
+  public void logRevenue(double paramDouble)
+  {
+    logRevenue(null, 1, paramDouble);
+  }
+  
+  public void logRevenue(String paramString, int paramInt, double paramDouble)
+  {
+    logRevenue(paramString, paramInt, paramDouble, null, null);
+  }
+  
+  public void logRevenue(String paramString1, int paramInt, double paramDouble, String paramString2, String paramString3)
+  {
+    if (!contextAndApiKeySet("logRevenue()")) {
+      return;
+    }
+    JSONObject localJSONObject = new JSONObject();
+    try
+    {
+      localJSONObject.put("special", "revenue_amount");
+      localJSONObject.put("productId", paramString1);
+      localJSONObject.put("quantity", paramInt);
+      localJSONObject.put("price", paramDouble);
+      localJSONObject.put("receipt", paramString2);
+      localJSONObject.put("receiptSig", paramString3);
+    }
+    catch (JSONException paramString1)
+    {
+      Diagnostics.getLogger().logError("Failed to generate API Properties JSON for revenue event", paramString1);
+    }
+    logEventAsync("revenue_amount", null, localJSONObject, null, null, null, getCurrentTimeMillis(), false);
+  }
+  
+  public void logRevenueV2(Revenue paramRevenue)
+  {
+    if ((contextAndApiKeySet("logRevenueV2()")) && (paramRevenue != null))
+    {
+      if (!paramRevenue.isValidRevenue()) {
+        return;
+      }
+      logEvent("revenue_amount", paramRevenue.toJSONObject());
+      return;
+    }
+  }
+  
+  protected void makeEventUploadPostRequest(OkHttpClient paramOkHttpClient, String paramString, final long paramLong1, long paramLong2)
+  {
+    Object localObject1 = new StringBuilder();
+    ((StringBuilder)localObject1).append("");
+    ((StringBuilder)localObject1).append(getCurrentTimeMillis());
+    String str = ((StringBuilder)localObject1).toString();
+    localObject1 = "";
+    try
+    {
+      Object localObject2 = new StringBuilder();
+      ((StringBuilder)localObject2).append("2");
+      ((StringBuilder)localObject2).append(apiKey);
+      ((StringBuilder)localObject2).append(paramString);
+      ((StringBuilder)localObject2).append(str);
+      localObject2 = ((StringBuilder)localObject2).toString();
+      localObject2 = bytesToHexString(new MD5().digest(((String)localObject2).getBytes("UTF-8")));
+      localObject1 = localObject2;
+    }
+    catch (UnsupportedEncodingException localUnsupportedEncodingException)
+    {
+      logger.e("com.amplitude.api.AmplitudeClient", localUnsupportedEncodingException.toString());
+      Diagnostics.getLogger().logError("Failed to compute checksum for upload request", localUnsupportedEncodingException);
+    }
+    paramString = new FormBody.Builder().add("v", "2").add("client", apiKey).add("e", paramString).add("upload_time", str).add("checksum", (String)localObject1).build();
+    try
+    {
+      paramString = new Request.Builder().url(url).post(paramString).build();
+      int j = 1;
+      int k = 1;
+      int m = 1;
+      int n = 1;
+      int i1 = 1;
+      int i = 1;
+      try
+      {
+        paramString = paramOkHttpClient.newCall(paramString).execute();
+        paramOkHttpClient = paramString.body().string();
+        boolean bool = paramOkHttpClient.equals("success");
+        if (bool)
+        {
+          try
+          {
+            logThread.post(new Runnable()
+            {
+              public void run()
+              {
+                if (paramLong1 >= 0L) {
+                  dbHelper.removeEvents(paramLong1);
+                }
+                if (val$maxIdentifyId >= 0L) {
+                  dbHelper.removeIdentifys(val$maxIdentifyId);
+                }
+                uploadingCurrently.set(false);
+                if (dbHelper.getTotalEventCount() > eventUploadThreshold)
+                {
+                  logThread.post(new Runnable()
+                  {
+                    public void run()
+                    {
+                      updateServer(backoffUpload);
+                    }
+                  });
+                  return;
+                }
+                AmplitudeClient.access$1302(AmplitudeClient.this, false);
+                AmplitudeClient.access$1402(AmplitudeClient.this, eventUploadMaxBatchSize);
+              }
+            });
+            i = i1;
+          }
+          catch (Exception paramOkHttpClient)
+          {
+            break label589;
+          }
+          catch (AssertionError paramOkHttpClient)
+          {
+            i = j;
+            break label625;
+          }
+          catch (IOException paramOkHttpClient)
+          {
+            i = k;
+            break label661;
+          }
+          catch (UnknownHostException paramOkHttpClient)
+          {
+            i = m;
+            break label697;
+          }
+          catch (ConnectException paramOkHttpClient)
+          {
+            i = n;
+            break label720;
+          }
+        }
+        else
+        {
+          if (paramOkHttpClient.equals("invalid_api_key"))
+          {
+            logger.e("com.amplitude.api.AmplitudeClient", "Invalid API key, make sure your API key is correct in initialize()");
+          }
+          else if (paramOkHttpClient.equals("bad_checksum"))
+          {
+            logger.w("com.amplitude.api.AmplitudeClient", "Bad checksum, post request was mangled in transit, will attempt to reupload later");
+          }
+          else if (paramOkHttpClient.equals("request_db_write_failed"))
+          {
+            logger.w("com.amplitude.api.AmplitudeClient", "Couldn't write to request database on server, will attempt to reupload later");
+          }
+          else if (paramString.code() == 413)
+          {
+            if ((backoffUpload) && (backoffUploadBatchSize == 1))
+            {
+              if (paramLong1 >= 0L) {
+                dbHelper.removeEvent(paramLong1);
+              }
+              if (paramLong2 >= 0L) {
+                dbHelper.removeIdentify(paramLong2);
+              }
+            }
+            backoffUpload = true;
+            backoffUploadBatchSize = ((int)Math.ceil(Math.min((int)dbHelper.getEventCount(), backoffUploadBatchSize) / 2.0D));
+            logger.w("com.amplitude.api.AmplitudeClient", "Request too large, will decrease size and attempt to reupload");
+            logThread.post(new Runnable()
+            {
+              public void run()
+              {
+                uploadingCurrently.set(false);
+                updateServer(true);
+              }
+            });
+          }
+          else
+          {
+            paramString = logger;
+            localObject1 = new StringBuilder();
+            ((StringBuilder)localObject1).append("Upload failed, ");
+            ((StringBuilder)localObject1).append(paramOkHttpClient);
+            ((StringBuilder)localObject1).append(", will attempt to reupload later");
+            paramString.w("com.amplitude.api.AmplitudeClient", ((StringBuilder)localObject1).toString());
+          }
+          i = 0;
+        }
+      }
+      catch (Exception paramOkHttpClient)
+      {
+        i = 0;
+        logger.e("com.amplitude.api.AmplitudeClient", "Exception:", paramOkHttpClient);
+        lastError = paramOkHttpClient;
+        Diagnostics.getLogger().logError("Failed to post upload request", paramOkHttpClient);
+      }
+      catch (AssertionError paramOkHttpClient)
+      {
+        i = 0;
+        logger.e("com.amplitude.api.AmplitudeClient", "Exception:", paramOkHttpClient);
+        lastError = paramOkHttpClient;
+        Diagnostics.getLogger().logError("Failed to post upload request", paramOkHttpClient);
+      }
+      catch (IOException paramOkHttpClient)
+      {
+        i = 0;
+        logger.e("com.amplitude.api.AmplitudeClient", paramOkHttpClient.toString());
+        lastError = paramOkHttpClient;
+        Diagnostics.getLogger().logError("Failed to post upload request", paramOkHttpClient);
+      }
+      catch (UnknownHostException paramOkHttpClient)
+      {
+        i = 0;
+        lastError = paramOkHttpClient;
+        Diagnostics.getLogger().logError("Failed to post upload request", paramOkHttpClient);
+      }
+      catch (ConnectException paramOkHttpClient)
+      {
+        label589:
+        label625:
+        label661:
+        label697:
+        i = 0;
+        label720:
+        lastError = paramOkHttpClient;
+        Diagnostics.getLogger().logError("Failed to post upload request", paramOkHttpClient);
+      }
+      if (i == 0) {
+        uploadingCurrently.set(false);
+      }
+      return;
+    }
+    catch (IllegalArgumentException paramOkHttpClient)
+    {
+      logger.e("com.amplitude.api.AmplitudeClient", paramOkHttpClient.toString());
+      uploadingCurrently.set(false);
+      Diagnostics.getLogger().logError("Failed to build upload request", paramOkHttpClient);
+    }
+  }
+  
+  protected Pair<Pair<Long, Long>, JSONArray> mergeEventsAndIdentifys(List<JSONObject> paramList1, List<JSONObject> paramList2, long paramLong)
+    throws JSONException
+  {
+    JSONArray localJSONArray = new JSONArray();
+    long l3 = -1L;
+    long l2 = -1L;
+    if (localJSONArray.length() < paramLong)
+    {
+      boolean bool1 = paramList1.isEmpty();
+      boolean bool2 = paramList2.isEmpty();
+      if ((bool1) && (bool2))
+      {
+        logger.w("com.amplitude.api.AmplitudeClient", String.format("mergeEventsAndIdentifys: number of events and identifys less than expected by %d", new Object[] { Long.valueOf(paramLong - localJSONArray.length()) }));
+      }
+      else
+      {
+        JSONObject localJSONObject;
+        long l1;
+        if (bool2)
+        {
+          localJSONObject = (JSONObject)paramList1.remove(0);
+          l1 = localJSONObject.getLong("event_id");
+          localJSONArray.put(localJSONObject);
+        }
+        for (;;)
+        {
+          l3 = l1;
+          break;
+          if (bool1)
+          {
+            localJSONObject = (JSONObject)paramList2.remove(0);
+            l1 = localJSONObject.getLong("event_id");
+            localJSONArray.put(localJSONObject);
+          }
+          for (;;)
+          {
+            l2 = l1;
+            break;
+            if ((!((JSONObject)paramList1.get(0)).has("sequence_number")) || (((JSONObject)paramList1.get(0)).getLong("sequence_number") < ((JSONObject)paramList2.get(0)).getLong("sequence_number"))) {
+              break label264;
+            }
+            localJSONObject = (JSONObject)paramList2.remove(0);
+            l1 = localJSONObject.getLong("event_id");
+            localJSONArray.put(localJSONObject);
+          }
+          label264:
+          localJSONObject = (JSONObject)paramList1.remove(0);
+          l1 = localJSONObject.getLong("event_id");
+          localJSONArray.put(localJSONObject);
+        }
+      }
+    }
+    return new Pair(new Pair(Long.valueOf(l3), Long.valueOf(l2)), localJSONArray);
+  }
+  
+  void onEnterForeground(final long paramLong)
+  {
+    runOnLogThread(new Runnable()
+    {
+      public void run()
+      {
+        if (Utils.isEmptyString(apiKey)) {
+          return;
+        }
+        startNewSessionIfNeeded(paramLong);
+        AmplitudeClient.access$502(AmplitudeClient.this, true);
+      }
+    });
+  }
+  
+  void onExitForeground(final long paramLong)
+  {
+    runOnLogThread(new Runnable()
+    {
+      public void run()
+      {
+        if (Utils.isEmptyString(apiKey)) {
+          return;
+        }
+        refreshSessionTime(paramLong);
+        AmplitudeClient.access$502(AmplitudeClient.this, false);
+        if (flushEventsOnClose) {
+          updateServer();
+        }
+        dbHelper.insertOrReplaceKeyValue("device_id", deviceId);
+        dbHelper.insertOrReplaceKeyValue("user_id", userId);
+        DatabaseHelper localDatabaseHelper = dbHelper;
+        long l;
+        if (optOut) {
+          l = 1L;
+        } else {
+          l = 0L;
+        }
+        localDatabaseHelper.insertOrReplaceKeyLongValue("opt_out", Long.valueOf(l));
+        dbHelper.insertOrReplaceKeyLongValue("previous_session_id", Long.valueOf(sessionId));
+        dbHelper.insertOrReplaceKeyLongValue("last_event_time", Long.valueOf(lastEventTime));
+      }
+    });
+  }
+  
+  void refreshSessionTime(long paramLong)
+  {
+    if (!inSession()) {
+      return;
+    }
+    setLastEventTime(paramLong);
+  }
+  
+  public AmplitudeClient regenerateDeviceId()
+  {
+    if (!contextAndApiKeySet("regenerateDeviceId()")) {
+      return this;
+    }
+    runOnLogThread(new Runnable()
+    {
+      public void run()
+      {
+        if (Utils.isEmptyString(jdField_thisapiKey)) {
+          return;
+        }
+        Object localObject = new StringBuilder();
+        ((StringBuilder)localObject).append(DeviceInfo.generateUUID());
+        ((StringBuilder)localObject).append("R");
+        localObject = ((StringBuilder)localObject).toString();
+        setDeviceId((String)localObject);
+      }
+    });
+    return this;
+  }
+  
+  protected Object replaceWithJSONNull(Object paramObject)
+  {
+    Object localObject = paramObject;
+    if (paramObject == null) {
+      localObject = JSONObject.NULL;
+    }
+    return localObject;
+  }
+  
+  protected void runOnLogThread(Runnable paramRunnable)
+  {
+    if (Thread.currentThread() != logThread)
+    {
+      logThread.post(paramRunnable);
+      return;
+    }
+    paramRunnable.run();
+  }
+  
+  protected long saveEvent(String paramString, JSONObject paramJSONObject)
+  {
+    paramJSONObject = paramJSONObject.toString();
+    if (Utils.isEmptyString(paramJSONObject))
+    {
+      logger.e("com.amplitude.api.AmplitudeClient", String.format("Detected empty event string for event type %s, skipping", new Object[] { paramString }));
+      return -1L;
+    }
+    if ((!paramString.equals("$identify")) && (!paramString.equals("$groupidentify")))
+    {
+      lastEventId = dbHelper.addEvent(paramJSONObject);
+      setLastEventId(lastEventId);
+    }
+    else
+    {
+      lastIdentifyId = dbHelper.addIdentify(paramJSONObject);
+      setLastIdentifyId(lastIdentifyId);
+    }
+    int i = Math.min(Math.max(1, eventMaxCount / 10), 20);
+    if (dbHelper.getEventCount() > eventMaxCount) {
+      dbHelper.removeEvents(dbHelper.getNthEventId(i));
+    }
+    if (dbHelper.getIdentifyCount() > eventMaxCount) {
+      dbHelper.removeIdentifys(dbHelper.getNthIdentifyId(i));
+    }
+    long l = dbHelper.getTotalEventCount();
+    if ((l % eventUploadThreshold == 0L) && (l >= eventUploadThreshold)) {
+      updateServer();
+    } else {
+      updateServerLater(eventUploadPeriodMillis);
+    }
+    if ((!paramString.equals("$identify")) && (!paramString.equals("$groupidentify"))) {
+      return lastEventId;
+    }
+    return lastIdentifyId;
+  }
+  
+  public AmplitudeClient setDeviceId(final String paramString)
+  {
+    Set localSet = getInvalidDeviceIds();
+    if ((contextAndApiKeySet("setDeviceId()")) && (!Utils.isEmptyString(paramString)))
+    {
+      if (localSet.contains(paramString)) {
+        return this;
+      }
+      runOnLogThread(new Runnable()
+      {
+        public void run()
+        {
+          if (Utils.isEmptyString(jdField_thisapiKey)) {
+            return;
+          }
+          jdField_thisdeviceId = paramString;
+          AmplitudeClient.this.saveDeviceId(paramString);
+        }
+      });
+      return this;
+    }
+    return this;
+  }
+  
+  public AmplitudeClient setDiagnosticEventMaxCount(int paramInt)
+  {
+    Diagnostics.getLogger().setDiagnosticEventMaxCount(paramInt);
+    return this;
+  }
+  
+  public AmplitudeClient setEventMaxCount(int paramInt)
+  {
+    eventMaxCount = paramInt;
+    return this;
+  }
+  
+  public AmplitudeClient setEventUploadMaxBatchSize(int paramInt)
+  {
+    eventUploadMaxBatchSize = paramInt;
+    backoffUploadBatchSize = paramInt;
+    return this;
+  }
+  
+  public AmplitudeClient setEventUploadPeriodMillis(int paramInt)
+  {
+    eventUploadPeriodMillis = paramInt;
+    return this;
+  }
+  
+  public AmplitudeClient setEventUploadThreshold(int paramInt)
+  {
+    eventUploadThreshold = paramInt;
+    return this;
+  }
+  
+  public AmplitudeClient setFlushEventsOnClose(boolean paramBoolean)
+  {
+    flushEventsOnClose = paramBoolean;
+    return this;
+  }
+  
+  public void setGroup(String paramString, Object paramObject)
+  {
+    if (contextAndApiKeySet("setGroup()"))
+    {
+      if (Utils.isEmptyString(paramString)) {
+        return;
+      }
+      JSONObject localJSONObject2;
+      try
+      {
+        JSONObject localJSONObject1 = new JSONObject().put(paramString, paramObject);
+      }
+      catch (JSONException localJSONException)
+      {
+        logger.e("com.amplitude.api.AmplitudeClient", localJSONException.toString());
+        Diagnostics.getLogger().logError(String.format("Failed to generate Group JSON for groupType: %s", new Object[] { paramString }), localJSONException);
+        localJSONObject2 = null;
+      }
+      logEventAsync("$identify", null, null, IdentifysetUserPropertyuserPropertiesOperations, localJSONObject2, null, getCurrentTimeMillis(), false);
+      return;
+    }
+  }
+  
+  void setLastEventId(long paramLong)
+  {
+    lastEventId = paramLong;
+    dbHelper.insertOrReplaceKeyLongValue("last_event_id", Long.valueOf(paramLong));
+  }
+  
+  void setLastEventTime(long paramLong)
+  {
+    lastEventTime = paramLong;
+    dbHelper.insertOrReplaceKeyLongValue("last_event_time", Long.valueOf(paramLong));
+  }
+  
+  void setLastIdentifyId(long paramLong)
+  {
+    lastIdentifyId = paramLong;
+    dbHelper.insertOrReplaceKeyLongValue("last_identify_id", Long.valueOf(paramLong));
+  }
+  
+  public AmplitudeClient setLogLevel(int paramInt)
+  {
+    logger.setLogLevel(paramInt);
+    return this;
+  }
+  
+  public AmplitudeClient setMinTimeBetweenSessionsMillis(long paramLong)
+  {
+    minTimeBetweenSessionsMillis = paramLong;
+    return this;
+  }
+  
+  public AmplitudeClient setOffline(boolean paramBoolean)
+  {
+    offline = paramBoolean;
+    if (!paramBoolean) {
+      uploadEvents();
+    }
+    return this;
+  }
+  
+  public AmplitudeClient setOptOut(final boolean paramBoolean)
+  {
+    if (!contextAndApiKeySet("setOptOut()")) {
+      return this;
+    }
+    runOnLogThread(new Runnable()
+    {
+      public void run()
+      {
+        if (Utils.isEmptyString(apiKey)) {
+          return;
+        }
+        AmplitudeClient.access$202(jdField_this, paramBoolean);
+        DatabaseHelper localDatabaseHelper = dbHelper;
+        long l;
+        if (paramBoolean) {
+          l = 1L;
+        } else {
+          l = 0L;
+        }
+        localDatabaseHelper.insertOrReplaceKeyLongValue("opt_out", Long.valueOf(l));
+      }
+    });
+    return this;
+  }
+  
+  void setPreviousSessionId(long paramLong)
+  {
+    previousSessionId = paramLong;
+    dbHelper.insertOrReplaceKeyLongValue("previous_session_id", Long.valueOf(paramLong));
+  }
+  
+  public AmplitudeClient setServerUrl(String paramString)
+  {
+    if (!Utils.isEmptyString(paramString)) {
+      url = paramString;
+    }
+    return this;
+  }
+  
+  public AmplitudeClient setSessionTimeoutMillis(long paramLong)
+  {
+    sessionTimeoutMillis = paramLong;
+    return this;
+  }
+  
+  public AmplitudeClient setTrackingOptions(TrackingOptions paramTrackingOptions)
+  {
+    trackingOptions = paramTrackingOptions;
+    apiPropertiesTrackingOptions = paramTrackingOptions.getApiPropertiesTrackingOptions();
+    return this;
+  }
+  
+  public AmplitudeClient setUserId(String paramString)
+  {
+    return setUserId(paramString, false);
+  }
+  
+  public AmplitudeClient setUserId(final String paramString, final boolean paramBoolean)
+  {
+    if (!contextAndApiKeySet("setUserId()")) {
+      return this;
+    }
+    runOnLogThread(new Runnable()
+    {
+      public void run()
+      {
+        if (Utils.isEmptyString(jdField_thisapiKey)) {
+          return;
+        }
+        if ((paramBoolean) && (trackingSessionEvents)) {
+          AmplitudeClient.this.sendSessionEvent("session_end");
+        }
+        jdField_thisuserId = paramString;
+        dbHelper.insertOrReplaceKeyValue("user_id", paramString);
+        if (paramBoolean)
+        {
+          long l = getCurrentTimeMillis();
+          AmplitudeClient.this.setSessionId(l);
+          refreshSessionTime(l);
+          if (trackingSessionEvents) {
+            AmplitudeClient.this.sendSessionEvent("session_start");
+          }
+        }
+      }
+    });
+    return this;
+  }
+  
+  public void setUserProperties(JSONObject paramJSONObject)
+  {
+    if ((paramJSONObject != null) && (paramJSONObject.length() != 0))
+    {
+      if (!contextAndApiKeySet("setUserProperties")) {
+        return;
+      }
+      paramJSONObject = truncate(paramJSONObject);
+      if (paramJSONObject.length() == 0) {
+        return;
+      }
+      Identify localIdentify = new Identify();
+      Iterator localIterator = paramJSONObject.keys();
+      while (localIterator.hasNext())
+      {
+        String str = (String)localIterator.next();
+        try
+        {
+          localIdentify.setUserProperty(str, paramJSONObject.get(str));
+        }
+        catch (JSONException localJSONException)
+        {
+          logger.e("com.amplitude.api.AmplitudeClient", localJSONException.toString());
+          Diagnostics.getLogger().logError(String.format("Failed to set user property %s", new Object[] { str }), localJSONException);
+        }
+      }
+      identify(localIdentify);
+      return;
+    }
+  }
+  
+  public void setUserProperties(JSONObject paramJSONObject, boolean paramBoolean)
+  {
+    setUserProperties(paramJSONObject);
+  }
+  
+  public boolean startNewSessionIfNeeded(long paramLong)
+  {
+    if (inSession())
+    {
+      if (isWithinMinTimeBetweenSessions(paramLong))
+      {
+        refreshSessionTime(paramLong);
+        return false;
+      }
+      startNewSession(paramLong);
+      return true;
+    }
+    if (isWithinMinTimeBetweenSessions(paramLong))
+    {
+      if (previousSessionId == -1L)
+      {
+        startNewSession(paramLong);
+        return true;
+      }
+      setSessionId(previousSessionId);
+      refreshSessionTime(paramLong);
+      return false;
+    }
+    startNewSession(paramLong);
+    return true;
+  }
+  
+  public AmplitudeClient trackSessionEvents(boolean paramBoolean)
+  {
+    trackingSessionEvents = paramBoolean;
+    return this;
+  }
+  
+  public JSONArray truncate(JSONArray paramJSONArray)
+    throws JSONException
+  {
+    if (paramJSONArray == null) {
+      return new JSONArray();
+    }
+    int i = 0;
+    while (i < paramJSONArray.length())
+    {
+      Object localObject = paramJSONArray.get(i);
+      if (localObject.getClass().equals(String.class)) {
+        paramJSONArray.put(i, truncate((String)localObject));
+      } else if (localObject.getClass().equals(JSONObject.class)) {
+        paramJSONArray.put(i, truncate((JSONObject)localObject));
+      } else if (localObject.getClass().equals(JSONArray.class)) {
+        paramJSONArray.put(i, truncate((JSONArray)localObject));
+      }
+      i += 1;
+    }
+    return paramJSONArray;
+  }
+  
+  public JSONObject truncate(JSONObject paramJSONObject)
+  {
+    if (paramJSONObject == null) {
+      return new JSONObject();
+    }
+    if (paramJSONObject.length() > 1000)
+    {
+      logger.w("com.amplitude.api.AmplitudeClient", "Warning: too many properties (more than 1000), ignoring");
+      return new JSONObject();
+    }
+    Iterator localIterator = paramJSONObject.keys();
+    while (localIterator.hasNext())
+    {
+      String str = (String)localIterator.next();
+      try
+      {
+        Object localObject = paramJSONObject.get(str);
+        if ((!str.equals("$receipt")) && (!str.equals("$receiptSig")))
+        {
+          if (localObject.getClass().equals(String.class)) {
+            paramJSONObject.put(str, truncate((String)localObject));
+          } else if (localObject.getClass().equals(JSONObject.class)) {
+            paramJSONObject.put(str, truncate((JSONObject)localObject));
+          } else if (localObject.getClass().equals(JSONArray.class)) {
+            paramJSONObject.put(str, truncate((JSONArray)localObject));
+          }
+        }
+        else {
+          paramJSONObject.put(str, localObject);
+        }
+      }
+      catch (JSONException localJSONException)
+      {
+        logger.e("com.amplitude.api.AmplitudeClient", localJSONException.toString());
+      }
+    }
+    return paramJSONObject;
+  }
+  
+  protected void updateServer()
+  {
+    updateServer(false);
+    Diagnostics.getLogger().flushEvents();
+  }
+  
+  protected void updateServer(boolean paramBoolean)
+  {
+    if (!optOut)
+    {
+      if (offline) {
+        return;
+      }
+      if (!uploadingCurrently.getAndSet(true))
+      {
+        final long l1 = dbHelper.getTotalEventCount();
+        if (paramBoolean) {}
+        long l2;
+        for (int i = backoffUploadBatchSize;; i = eventUploadMaxBatchSize)
+        {
+          l2 = i;
+          break;
+        }
+        l1 = Math.min(l2, l1);
+        if (l1 <= 0L)
+        {
+          uploadingCurrently.set(false);
+          return;
+        }
+        try
+        {
+          Object localObject = mergeEventsAndIdentifys(dbHelper.getEvents(lastEventId, l1), dbHelper.getIdentifys(lastIdentifyId, l1), l1);
+          if (((JSONArray)second).length() == 0)
+          {
+            uploadingCurrently.set(false);
+            return;
+          }
+          l1 = ((Long)first).first).longValue();
+          l2 = ((Long)first).second).longValue();
+          localObject = ((JSONArray)second).toString();
+          httpThread.post(new Runnable()
+          {
+            public void run()
+            {
+              makeEventUploadPostRequest(httpClient, val$mergedEventsString, l1, val$maxIdentifyId);
+            }
+          });
+          return;
+        }
+        catch (CursorWindowAllocationException localCursorWindowAllocationException)
+        {
+          uploadingCurrently.set(false);
+          logger.e("com.amplitude.api.AmplitudeClient", String.format("Caught Cursor window exception during event upload, deferring upload: %s", new Object[] { localCursorWindowAllocationException.getMessage() }));
+          Diagnostics.getLogger().logError("Failed to update server", localCursorWindowAllocationException);
+          return;
+        }
+        catch (JSONException localJSONException)
+        {
+          uploadingCurrently.set(false);
+          logger.e("com.amplitude.api.AmplitudeClient", localJSONException.toString());
+          Diagnostics.getLogger().logError("Failed to update server", localJSONException);
+        }
+      }
+      return;
+    }
+  }
+  
+  public void uploadEvents()
+  {
+    if (!contextAndApiKeySet("uploadEvents()")) {
+      return;
+    }
+    logThread.post(new Runnable()
+    {
+      public void run()
+      {
+        if (Utils.isEmptyString(apiKey)) {
+          return;
+        }
+        updateServer();
+      }
+    });
+  }
+  
+  public AmplitudeClient useAdvertisingIdForDeviceId()
+  {
+    useAdvertisingIdForDeviceId = true;
+    return this;
+  }
+  
+  void useForegroundTracking()
+  {
+    usingForegroundTracking = true;
+  }
+  
+  protected boolean validateLogEvent(String paramString)
+  {
+    if (Utils.isEmptyString(paramString))
+    {
+      logger.e("com.amplitude.api.AmplitudeClient", "Argument eventType cannot be null or blank in logEvent()");
+      return false;
+    }
+    return contextAndApiKeySet("logEvent()");
+  }
+}

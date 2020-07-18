@@ -1,0 +1,955 @@
+package androidx.room;
+
+import android.annotation.SuppressLint;
+import android.content.Context;
+import android.database.Cursor;
+import android.database.sqlite.SQLiteException;
+import android.util.Log;
+import androidx.annotation.NonNull;
+import androidx.annotation.Nullable;
+import androidx.annotation.RestrictTo;
+import androidx.annotation.VisibleForTesting;
+import androidx.annotation.WorkerThread;
+import androidx.arch.core.internal.SafeIterableMap;
+import androidx.collection.ArrayMap;
+import androidx.collection.ArraySet;
+import androidx.lifecycle.LiveData;
+import androidx.sqlite.db.SimpleSQLiteQuery;
+import androidx.sqlite.db.SupportSQLiteDatabase;
+import androidx.sqlite.db.SupportSQLiteOpenHelper;
+import androidx.sqlite.db.SupportSQLiteStatement;
+import java.lang.ref.WeakReference;
+import java.util.Arrays;
+import java.util.Collection;
+import java.util.Collections;
+import java.util.HashMap;
+import java.util.Iterator;
+import java.util.Locale;
+import java.util.Map;
+import java.util.Map.Entry;
+import java.util.Set;
+import java.util.concurrent.Callable;
+import java.util.concurrent.Executor;
+import java.util.concurrent.atomic.AtomicBoolean;
+import java.util.concurrent.locks.Lock;
+
+public class InvalidationTracker
+{
+  private static final String CREATE_TRACKING_TABLE_SQL = "CREATE TEMP TABLE room_table_modification_log(table_id INTEGER PRIMARY KEY, invalidated INTEGER NOT NULL DEFAULT 0)";
+  private static final String INVALIDATED_COLUMN_NAME = "invalidated";
+  @VisibleForTesting
+  static final String RESET_UPDATED_TABLES_SQL = "UPDATE room_table_modification_log SET invalidated = 0 WHERE invalidated = 1 ";
+  @VisibleForTesting
+  static final String SELECT_UPDATED_TABLES_SQL = "SELECT * FROM room_table_modification_log WHERE invalidated = 1;";
+  private static final String TABLE_ID_COLUMN_NAME = "table_id";
+  private static final String[] TRIGGERS = { "UPDATE", "DELETE", "INSERT" };
+  private static final String UPDATE_TABLE_NAME = "room_table_modification_log";
+  volatile SupportSQLiteStatement mCleanupStatement;
+  final RoomDatabase mDatabase;
+  private volatile boolean mInitialized;
+  private final InvalidationLiveDataContainer mInvalidationLiveDataContainer;
+  private MultiInstanceInvalidationClient mMultiInstanceInvalidationClient;
+  private ObservedTableTracker mObservedTableTracker;
+  @SuppressLint({"RestrictedApi"})
+  @VisibleForTesting
+  final SafeIterableMap<Observer, ObserverWrapper> mObserverMap;
+  AtomicBoolean mPendingRefresh;
+  @VisibleForTesting
+  Runnable mRefreshRunnable;
+  @NonNull
+  @VisibleForTesting
+  final ArrayMap<String, Integer> mTableIdLookup;
+  final String[] mTableNames;
+  @NonNull
+  private Map<String, Set<String>> mViewTables;
+  
+  @RestrictTo({androidx.annotation.RestrictTo.Scope.LIBRARY_GROUP_PREFIX})
+  public InvalidationTracker(RoomDatabase paramRoomDatabase, Map<String, String> paramMap, Map<String, Set<String>> paramMap1, String... paramVarArgs)
+  {
+    int i = 0;
+    mPendingRefresh = new AtomicBoolean(false);
+    mInitialized = false;
+    mObserverMap = new SafeIterableMap();
+    mRefreshRunnable = new Runnable()
+    {
+      private Set<Integer> checkUpdatedTable()
+      {
+        ArraySet localArraySet = new ArraySet();
+        Cursor localCursor = mDatabase.query(new SimpleSQLiteQuery("SELECT * FROM room_table_modification_log WHERE invalidated = 1;"));
+        try
+        {
+          while (localCursor.moveToNext()) {
+            localArraySet.add(Integer.valueOf(localCursor.getInt(0)));
+          }
+          localCursor.close();
+          if (!localArraySet.isEmpty()) {
+            mCleanupStatement.executeUpdateDelete();
+          }
+          return localArraySet;
+        }
+        finally
+        {
+          localCursor.close();
+        }
+      }
+      
+      /* Error */
+      public void run()
+      {
+        // Byte code:
+        //   0: aload_0
+        //   1: getfield 14	androidx/room/InvalidationTracker$1:this$0	Landroidx/room/InvalidationTracker;
+        //   4: getfield 27	androidx/room/InvalidationTracker:mDatabase	Landroidx/room/RoomDatabase;
+        //   7: invokevirtual 87	androidx/room/RoomDatabase:getCloseLock	()Ljava/util/concurrent/locks/Lock;
+        //   10: astore 5
+        //   12: aload 5
+        //   14: invokeinterface 92 1 0
+        //   19: aload_0
+        //   20: getfield 14	androidx/room/InvalidationTracker$1:this$0	Landroidx/room/InvalidationTracker;
+        //   23: invokevirtual 95	androidx/room/InvalidationTracker:ensureInitialization	()Z
+        //   26: istore_1
+        //   27: iload_1
+        //   28: ifne +11 -> 39
+        //   31: aload 5
+        //   33: invokeinterface 98 1 0
+        //   38: return
+        //   39: aload_0
+        //   40: getfield 14	androidx/room/InvalidationTracker$1:this$0	Landroidx/room/InvalidationTracker;
+        //   43: getfield 102	androidx/room/InvalidationTracker:mPendingRefresh	Ljava/util/concurrent/atomic/AtomicBoolean;
+        //   46: iconst_1
+        //   47: iconst_0
+        //   48: invokevirtual 108	java/util/concurrent/atomic/AtomicBoolean:compareAndSet	(ZZ)Z
+        //   51: istore_1
+        //   52: iload_1
+        //   53: ifne +11 -> 64
+        //   56: aload 5
+        //   58: invokeinterface 98 1 0
+        //   63: return
+        //   64: aload_0
+        //   65: getfield 14	androidx/room/InvalidationTracker$1:this$0	Landroidx/room/InvalidationTracker;
+        //   68: getfield 27	androidx/room/InvalidationTracker:mDatabase	Landroidx/room/RoomDatabase;
+        //   71: invokevirtual 111	androidx/room/RoomDatabase:inTransaction	()Z
+        //   74: istore_1
+        //   75: iload_1
+        //   76: ifeq +11 -> 87
+        //   79: aload 5
+        //   81: invokeinterface 98 1 0
+        //   86: return
+        //   87: aload_0
+        //   88: getfield 14	androidx/room/InvalidationTracker$1:this$0	Landroidx/room/InvalidationTracker;
+        //   91: getfield 27	androidx/room/InvalidationTracker:mDatabase	Landroidx/room/RoomDatabase;
+        //   94: getfield 115	androidx/room/RoomDatabase:mWriteAheadLoggingEnabled	Z
+        //   97: ifeq +71 -> 168
+        //   100: aload_0
+        //   101: getfield 14	androidx/room/InvalidationTracker$1:this$0	Landroidx/room/InvalidationTracker;
+        //   104: getfield 27	androidx/room/InvalidationTracker:mDatabase	Landroidx/room/RoomDatabase;
+        //   107: invokevirtual 119	androidx/room/RoomDatabase:getOpenHelper	()Landroidx/sqlite/db/SupportSQLiteOpenHelper;
+        //   110: invokeinterface 125 1 0
+        //   115: astore 6
+        //   117: aload 6
+        //   119: invokeinterface 130 1 0
+        //   124: aload_0
+        //   125: invokespecial 132	androidx/room/InvalidationTracker$1:checkUpdatedTable	()Ljava/util/Set;
+        //   128: astore_3
+        //   129: aload 6
+        //   131: invokeinterface 135 1 0
+        //   136: aload_3
+        //   137: astore_2
+        //   138: aload 6
+        //   140: invokeinterface 138 1 0
+        //   145: aload_3
+        //   146: astore_2
+        //   147: goto +45 -> 192
+        //   150: aload_3
+        //   151: astore_2
+        //   152: aload 6
+        //   154: invokeinterface 138 1 0
+        //   159: aload_3
+        //   160: astore_2
+        //   161: aload 4
+        //   163: athrow
+        //   164: astore_3
+        //   165: goto +18 -> 183
+        //   168: aload_0
+        //   169: invokespecial 132	androidx/room/InvalidationTracker$1:checkUpdatedTable	()Ljava/util/Set;
+        //   172: astore_2
+        //   173: goto +19 -> 192
+        //   176: astore_2
+        //   177: goto +101 -> 278
+        //   180: astore_3
+        //   181: aconst_null
+        //   182: astore_2
+        //   183: ldc -116
+        //   185: ldc -114
+        //   187: aload_3
+        //   188: invokestatic 148	android/util/Log:e	(Ljava/lang/String;Ljava/lang/String;Ljava/lang/Throwable;)I
+        //   191: pop
+        //   192: aload 5
+        //   194: invokeinterface 98 1 0
+        //   199: aload_2
+        //   200: ifnull +77 -> 277
+        //   203: aload_2
+        //   204: invokeinterface 151 1 0
+        //   209: ifne +68 -> 277
+        //   212: aload_0
+        //   213: getfield 14	androidx/room/InvalidationTracker$1:this$0	Landroidx/room/InvalidationTracker;
+        //   216: getfield 155	androidx/room/InvalidationTracker:mObserverMap	Landroidx/arch/core/internal/SafeIterableMap;
+        //   219: astore_3
+        //   220: aload_3
+        //   221: monitorenter
+        //   222: aload_0
+        //   223: getfield 14	androidx/room/InvalidationTracker$1:this$0	Landroidx/room/InvalidationTracker;
+        //   226: getfield 155	androidx/room/InvalidationTracker:mObserverMap	Landroidx/arch/core/internal/SafeIterableMap;
+        //   229: invokevirtual 161	androidx/arch/core/internal/SafeIterableMap:iterator	()Ljava/util/Iterator;
+        //   232: astore 4
+        //   234: aload 4
+        //   236: invokeinterface 166 1 0
+        //   241: ifeq +28 -> 269
+        //   244: aload 4
+        //   246: invokeinterface 170 1 0
+        //   251: checkcast 172	java/util/Map$Entry
+        //   254: invokeinterface 175 1 0
+        //   259: checkcast 177	androidx/room/InvalidationTracker$ObserverWrapper
+        //   262: aload_2
+        //   263: invokevirtual 181	androidx/room/InvalidationTracker$ObserverWrapper:notifyByTableInvalidStatus	(Ljava/util/Set;)V
+        //   266: goto -32 -> 234
+        //   269: aload_3
+        //   270: monitorexit
+        //   271: return
+        //   272: astore_2
+        //   273: aload_3
+        //   274: monitorexit
+        //   275: aload_2
+        //   276: athrow
+        //   277: return
+        //   278: aload 5
+        //   280: invokeinterface 98 1 0
+        //   285: aload_2
+        //   286: athrow
+        //   287: astore 4
+        //   289: goto -139 -> 150
+        //   292: astore 4
+        //   294: aconst_null
+        //   295: astore_3
+        //   296: goto -146 -> 150
+        // Local variable table:
+        //   start	length	slot	name	signature
+        //   0	299	0	this	1
+        //   26	50	1	bool	boolean
+        //   137	36	2	localSet1	Set
+        //   176	1	2	localObject1	Object
+        //   182	81	2	localSet2	Set
+        //   272	14	2	localObject2	Object
+        //   128	32	3	localSet3	Set
+        //   164	1	3	localIllegalStateException1	IllegalStateException
+        //   180	8	3	localIllegalStateException2	IllegalStateException
+        //   219	77	3	localSafeIterableMap	SafeIterableMap
+        //   161	84	4	localIterator	Iterator
+        //   287	1	4	localObject3	Object
+        //   292	1	4	localObject4	Object
+        //   10	269	5	localLock	Lock
+        //   115	38	6	localSupportSQLiteDatabase	SupportSQLiteDatabase
+        // Exception table:
+        //   from	to	target	type
+        //   138	145	164	java/lang/IllegalStateException
+        //   138	145	164	android/database/sqlite/SQLiteException
+        //   152	159	164	java/lang/IllegalStateException
+        //   152	159	164	android/database/sqlite/SQLiteException
+        //   161	164	164	java/lang/IllegalStateException
+        //   161	164	164	android/database/sqlite/SQLiteException
+        //   12	27	176	finally
+        //   39	52	176	finally
+        //   64	75	176	finally
+        //   87	124	176	finally
+        //   138	145	176	finally
+        //   152	159	176	finally
+        //   161	164	176	finally
+        //   168	173	176	finally
+        //   183	192	176	finally
+        //   12	27	180	java/lang/IllegalStateException
+        //   12	27	180	android/database/sqlite/SQLiteException
+        //   39	52	180	java/lang/IllegalStateException
+        //   39	52	180	android/database/sqlite/SQLiteException
+        //   64	75	180	java/lang/IllegalStateException
+        //   64	75	180	android/database/sqlite/SQLiteException
+        //   87	124	180	java/lang/IllegalStateException
+        //   87	124	180	android/database/sqlite/SQLiteException
+        //   168	173	180	java/lang/IllegalStateException
+        //   168	173	180	android/database/sqlite/SQLiteException
+        //   222	234	272	finally
+        //   234	266	272	finally
+        //   269	271	272	finally
+        //   273	275	272	finally
+        //   129	136	287	finally
+        //   124	129	292	finally
+      }
+    };
+    mDatabase = paramRoomDatabase;
+    mObservedTableTracker = new ObservedTableTracker(paramVarArgs.length);
+    mTableIdLookup = new ArrayMap();
+    mViewTables = paramMap1;
+    mInvalidationLiveDataContainer = new InvalidationLiveDataContainer(mDatabase);
+    int j = paramVarArgs.length;
+    mTableNames = new String[j];
+    while (i < j)
+    {
+      paramRoomDatabase = paramVarArgs[i].toLowerCase(Locale.US);
+      mTableIdLookup.put(paramRoomDatabase, Integer.valueOf(i));
+      paramMap1 = (String)paramMap.get(paramVarArgs[i]);
+      if (paramMap1 != null) {
+        mTableNames[i] = paramMap1.toLowerCase(Locale.US);
+      } else {
+        mTableNames[i] = paramRoomDatabase;
+      }
+      i += 1;
+    }
+    paramRoomDatabase = paramMap.entrySet().iterator();
+    while (paramRoomDatabase.hasNext())
+    {
+      paramMap1 = (Map.Entry)paramRoomDatabase.next();
+      paramMap = ((String)paramMap1.getValue()).toLowerCase(Locale.US);
+      if (mTableIdLookup.containsKey(paramMap))
+      {
+        paramMap1 = ((String)paramMap1.getKey()).toLowerCase(Locale.US);
+        mTableIdLookup.put(paramMap1, mTableIdLookup.get(paramMap));
+      }
+    }
+  }
+  
+  @RestrictTo({androidx.annotation.RestrictTo.Scope.LIBRARY_GROUP_PREFIX})
+  public InvalidationTracker(RoomDatabase paramRoomDatabase, String... paramVarArgs)
+  {
+    this(paramRoomDatabase, new HashMap(), Collections.emptyMap(), paramVarArgs);
+  }
+  
+  private static void appendTriggerName(StringBuilder paramStringBuilder, String paramString1, String paramString2)
+  {
+    paramStringBuilder.append("`");
+    paramStringBuilder.append("room_table_modification_trigger_");
+    paramStringBuilder.append(paramString1);
+    paramStringBuilder.append("_");
+    paramStringBuilder.append(paramString2);
+    paramStringBuilder.append("`");
+  }
+  
+  private String[] resolveViews(String[] paramArrayOfString)
+  {
+    ArraySet localArraySet = new ArraySet();
+    int j = paramArrayOfString.length;
+    int i = 0;
+    while (i < j)
+    {
+      String str1 = paramArrayOfString[i];
+      String str2 = str1.toLowerCase(Locale.US);
+      if (mViewTables.containsKey(str2)) {
+        localArraySet.addAll((Collection)mViewTables.get(str2));
+      } else {
+        localArraySet.add(str1);
+      }
+      i += 1;
+    }
+    return (String[])localArraySet.toArray(new String[localArraySet.size()]);
+  }
+  
+  private void startTrackingTable(SupportSQLiteDatabase paramSupportSQLiteDatabase, int paramInt)
+  {
+    Object localObject = new StringBuilder();
+    ((StringBuilder)localObject).append("INSERT OR IGNORE INTO room_table_modification_log VALUES(");
+    ((StringBuilder)localObject).append(paramInt);
+    ((StringBuilder)localObject).append(", 0)");
+    paramSupportSQLiteDatabase.execSQL(((StringBuilder)localObject).toString());
+    localObject = mTableNames[paramInt];
+    StringBuilder localStringBuilder = new StringBuilder();
+    String[] arrayOfString = TRIGGERS;
+    int j = arrayOfString.length;
+    int i = 0;
+    while (i < j)
+    {
+      String str = arrayOfString[i];
+      localStringBuilder.setLength(0);
+      localStringBuilder.append("CREATE TEMP TRIGGER IF NOT EXISTS ");
+      appendTriggerName(localStringBuilder, (String)localObject, str);
+      localStringBuilder.append(" AFTER ");
+      localStringBuilder.append(str);
+      localStringBuilder.append(" ON `");
+      localStringBuilder.append((String)localObject);
+      localStringBuilder.append("` BEGIN UPDATE ");
+      localStringBuilder.append("room_table_modification_log");
+      localStringBuilder.append(" SET ");
+      localStringBuilder.append("invalidated");
+      localStringBuilder.append(" = 1");
+      localStringBuilder.append(" WHERE ");
+      localStringBuilder.append("table_id");
+      localStringBuilder.append(" = ");
+      localStringBuilder.append(paramInt);
+      localStringBuilder.append(" AND ");
+      localStringBuilder.append("invalidated");
+      localStringBuilder.append(" = 0");
+      localStringBuilder.append("; END");
+      paramSupportSQLiteDatabase.execSQL(localStringBuilder.toString());
+      i += 1;
+    }
+  }
+  
+  private void stopTrackingTable(SupportSQLiteDatabase paramSupportSQLiteDatabase, int paramInt)
+  {
+    String str1 = mTableNames[paramInt];
+    StringBuilder localStringBuilder = new StringBuilder();
+    String[] arrayOfString = TRIGGERS;
+    int i = arrayOfString.length;
+    paramInt = 0;
+    while (paramInt < i)
+    {
+      String str2 = arrayOfString[paramInt];
+      localStringBuilder.setLength(0);
+      localStringBuilder.append("DROP TRIGGER IF EXISTS ");
+      appendTriggerName(localStringBuilder, str1, str2);
+      paramSupportSQLiteDatabase.execSQL(localStringBuilder.toString());
+      paramInt += 1;
+    }
+  }
+  
+  private String[] validateAndResolveTableNames(String[] paramArrayOfString)
+  {
+    Object localObject = resolveViews(paramArrayOfString);
+    int j = localObject.length;
+    int i = 0;
+    while (i < j)
+    {
+      paramArrayOfString = localObject[i];
+      if (mTableIdLookup.containsKey(paramArrayOfString.toLowerCase(Locale.US)))
+      {
+        i += 1;
+      }
+      else
+      {
+        localObject = new StringBuilder();
+        ((StringBuilder)localObject).append("There is no table with name ");
+        ((StringBuilder)localObject).append(paramArrayOfString);
+        throw new IllegalArgumentException(((StringBuilder)localObject).toString());
+      }
+    }
+    return localObject;
+  }
+  
+  @SuppressLint({"RestrictedApi"})
+  @WorkerThread
+  public void addObserver(@NonNull Observer paramObserver)
+  {
+    ??? = resolveViews(mTables);
+    int[] arrayOfInt = new int[???.length];
+    int j = ???.length;
+    int i = 0;
+    while (i < j)
+    {
+      localObject2 = (Integer)mTableIdLookup.get(???[i].toLowerCase(Locale.US));
+      if (localObject2 != null)
+      {
+        arrayOfInt[i] = ((Integer)localObject2).intValue();
+        i += 1;
+      }
+      else
+      {
+        paramObserver = new StringBuilder();
+        paramObserver.append("There is no table with name ");
+        paramObserver.append(???[i]);
+        throw new IllegalArgumentException(paramObserver.toString());
+      }
+    }
+    Object localObject2 = new ObserverWrapper(paramObserver, arrayOfInt, (String[])???);
+    synchronized (mObserverMap)
+    {
+      paramObserver = (ObserverWrapper)mObserverMap.putIfAbsent(paramObserver, localObject2);
+      if ((paramObserver == null) && (mObservedTableTracker.onAdded(arrayOfInt))) {
+        syncTriggers();
+      }
+      return;
+    }
+  }
+  
+  @RestrictTo({androidx.annotation.RestrictTo.Scope.LIBRARY_GROUP_PREFIX})
+  public void addWeakObserver(Observer paramObserver)
+  {
+    addObserver(new WeakObserver(this, paramObserver));
+  }
+  
+  @Deprecated
+  @RestrictTo({androidx.annotation.RestrictTo.Scope.LIBRARY_GROUP_PREFIX})
+  public <T> LiveData<T> createLiveData(String[] paramArrayOfString, Callable<T> paramCallable)
+  {
+    return createLiveData(paramArrayOfString, false, paramCallable);
+  }
+  
+  @RestrictTo({androidx.annotation.RestrictTo.Scope.LIBRARY_GROUP_PREFIX})
+  public <T> LiveData<T> createLiveData(String[] paramArrayOfString, boolean paramBoolean, Callable<T> paramCallable)
+  {
+    return mInvalidationLiveDataContainer.create(validateAndResolveTableNames(paramArrayOfString), paramBoolean, paramCallable);
+  }
+  
+  boolean ensureInitialization()
+  {
+    if (!mDatabase.isOpen()) {
+      return false;
+    }
+    if (!mInitialized) {
+      mDatabase.getOpenHelper().getWritableDatabase();
+    }
+    if (!mInitialized)
+    {
+      Log.e("ROOM", "database is not initialized even though it is open");
+      return false;
+    }
+    return true;
+  }
+  
+  void internalInit(SupportSQLiteDatabase paramSupportSQLiteDatabase)
+  {
+    try
+    {
+      if (mInitialized)
+      {
+        Log.e("ROOM", "Invalidation tracker is initialized twice :/.");
+        return;
+      }
+      paramSupportSQLiteDatabase.execSQL("PRAGMA temp_store = MEMORY;");
+      paramSupportSQLiteDatabase.execSQL("PRAGMA recursive_triggers='ON';");
+      paramSupportSQLiteDatabase.execSQL("CREATE TEMP TABLE room_table_modification_log(table_id INTEGER PRIMARY KEY, invalidated INTEGER NOT NULL DEFAULT 0)");
+      syncTriggers(paramSupportSQLiteDatabase);
+      mCleanupStatement = paramSupportSQLiteDatabase.compileStatement("UPDATE room_table_modification_log SET invalidated = 0 WHERE invalidated = 1 ");
+      mInitialized = true;
+      return;
+    }
+    finally {}
+  }
+  
+  @RestrictTo({androidx.annotation.RestrictTo.Scope.LIBRARY})
+  @VisibleForTesting(otherwise=3)
+  public void notifyObserversByTableNames(String... paramVarArgs)
+  {
+    synchronized (mObserverMap)
+    {
+      Iterator localIterator = mObserverMap.iterator();
+      while (localIterator.hasNext())
+      {
+        Map.Entry localEntry = (Map.Entry)localIterator.next();
+        if (!((Observer)localEntry.getKey()).isRemote()) {
+          ((ObserverWrapper)localEntry.getValue()).notifyByTableNames(paramVarArgs);
+        }
+      }
+      return;
+    }
+  }
+  
+  public void refreshVersionsAsync()
+  {
+    if (mPendingRefresh.compareAndSet(false, true)) {
+      mDatabase.getQueryExecutor().execute(mRefreshRunnable);
+    }
+  }
+  
+  @RestrictTo({androidx.annotation.RestrictTo.Scope.LIBRARY_GROUP_PREFIX})
+  @WorkerThread
+  public void refreshVersionsSync()
+  {
+    syncTriggers();
+    mRefreshRunnable.run();
+  }
+  
+  @SuppressLint({"RestrictedApi"})
+  @WorkerThread
+  public void removeObserver(@NonNull Observer paramObserver)
+  {
+    synchronized (mObserverMap)
+    {
+      paramObserver = (ObserverWrapper)mObserverMap.remove(paramObserver);
+      if ((paramObserver != null) && (mObservedTableTracker.onRemoved(mTableIds))) {
+        syncTriggers();
+      }
+      return;
+    }
+  }
+  
+  void startMultiInstanceInvalidation(Context paramContext, String paramString)
+  {
+    mMultiInstanceInvalidationClient = new MultiInstanceInvalidationClient(paramContext, paramString, this, mDatabase.getQueryExecutor());
+  }
+  
+  void stopMultiInstanceInvalidation()
+  {
+    if (mMultiInstanceInvalidationClient != null)
+    {
+      mMultiInstanceInvalidationClient.stop();
+      mMultiInstanceInvalidationClient = null;
+    }
+  }
+  
+  void syncTriggers()
+  {
+    if (!mDatabase.isOpen()) {
+      return;
+    }
+    syncTriggers(mDatabase.getOpenHelper().getWritableDatabase());
+  }
+  
+  void syncTriggers(SupportSQLiteDatabase paramSupportSQLiteDatabase)
+  {
+    if (paramSupportSQLiteDatabase.inTransaction()) {
+      return;
+    }
+    for (;;)
+    {
+      int i;
+      try
+      {
+        Lock localLock = mDatabase.getCloseLock();
+        localLock.lock();
+        try
+        {
+          arrayOfInt = mObservedTableTracker.getTablesToSync();
+          if (arrayOfInt == null) {
+            return;
+          }
+          int j = arrayOfInt.length;
+          paramSupportSQLiteDatabase.beginTransaction();
+          i = 0;
+          if (i < j) {
+            switch (arrayOfInt[i])
+            {
+            }
+          }
+        }
+        finally
+        {
+          int[] arrayOfInt;
+          localLock.unlock();
+        }
+      }
+      catch (IllegalStateException|SQLiteException paramSupportSQLiteDatabase)
+      {
+        Log.e("ROOM", "Cannot run invalidation tracker. Is the db closed?", paramSupportSQLiteDatabase);
+        return;
+      }
+      try
+      {
+        stopTrackingTable(paramSupportSQLiteDatabase, i);
+      }
+      finally
+      {
+        continue;
+      }
+      startTrackingTable(paramSupportSQLiteDatabase, i);
+      break label171;
+      paramSupportSQLiteDatabase.setTransactionSuccessful();
+      paramSupportSQLiteDatabase.endTransaction();
+      mObservedTableTracker.onSyncCompleted();
+      localLock.unlock();
+      continue;
+      paramSupportSQLiteDatabase.endTransaction();
+      throw arrayOfInt;
+      label171:
+      i += 1;
+    }
+  }
+  
+  static class ObservedTableTracker
+  {
+    static final int ADD = 1;
+    static final int NO_OP = 0;
+    static final int REMOVE = 2;
+    boolean mNeedsSync;
+    boolean mPendingSync;
+    final long[] mTableObservers;
+    final int[] mTriggerStateChanges;
+    final boolean[] mTriggerStates;
+    
+    ObservedTableTracker(int paramInt)
+    {
+      mTableObservers = new long[paramInt];
+      mTriggerStates = new boolean[paramInt];
+      mTriggerStateChanges = new int[paramInt];
+      Arrays.fill(mTableObservers, 0L);
+      Arrays.fill(mTriggerStates, false);
+    }
+    
+    @Nullable
+    int[] getTablesToSync()
+    {
+      for (;;)
+      {
+        int i;
+        try
+        {
+          if ((mNeedsSync) && (!mPendingSync))
+          {
+            int k = mTableObservers.length;
+            i = 0;
+            j = 1;
+            int[] arrayOfInt;
+            if (i < k)
+            {
+              if (mTableObservers[i] > 0L)
+              {
+                m = 1;
+                if (m != mTriggerStates[i])
+                {
+                  arrayOfInt = mTriggerStateChanges;
+                  if (m == 0) {
+                    break label136;
+                  }
+                  break label138;
+                }
+                mTriggerStateChanges[i] = 0;
+                mTriggerStates[i] = m;
+                i += 1;
+              }
+            }
+            else
+            {
+              mPendingSync = true;
+              mNeedsSync = false;
+              arrayOfInt = mTriggerStateChanges;
+              return arrayOfInt;
+            }
+          }
+          else
+          {
+            return null;
+          }
+        }
+        finally {}
+        int m = 0;
+        continue;
+        label136:
+        int j = 2;
+        label138:
+        localObject[i] = j;
+      }
+    }
+    
+    boolean onAdded(int... paramVarArgs)
+    {
+      for (;;)
+      {
+        int i;
+        try
+        {
+          int j = paramVarArgs.length;
+          i = 0;
+          boolean bool = false;
+          if (i < j)
+          {
+            int k = paramVarArgs[i];
+            long l = mTableObservers[k];
+            mTableObservers[k] = (1L + l);
+            if (l == 0L)
+            {
+              mNeedsSync = true;
+              bool = true;
+            }
+          }
+          else
+          {
+            return bool;
+          }
+        }
+        finally {}
+        i += 1;
+      }
+    }
+    
+    boolean onRemoved(int... paramVarArgs)
+    {
+      for (;;)
+      {
+        int i;
+        try
+        {
+          int j = paramVarArgs.length;
+          i = 0;
+          boolean bool = false;
+          if (i < j)
+          {
+            int k = paramVarArgs[i];
+            long l = mTableObservers[k];
+            mTableObservers[k] = (l - 1L);
+            if (l == 1L)
+            {
+              mNeedsSync = true;
+              bool = true;
+            }
+          }
+          else
+          {
+            return bool;
+          }
+        }
+        finally {}
+        i += 1;
+      }
+    }
+    
+    void onSyncCompleted()
+    {
+      try
+      {
+        mPendingSync = false;
+        return;
+      }
+      finally {}
+    }
+  }
+  
+  public static abstract class Observer
+  {
+    final String[] mTables;
+    
+    protected Observer(@NonNull String paramString, String... paramVarArgs)
+    {
+      mTables = ((String[])Arrays.copyOf(paramVarArgs, paramVarArgs.length + 1));
+      mTables[paramVarArgs.length] = paramString;
+    }
+    
+    public Observer(@NonNull String[] paramArrayOfString)
+    {
+      mTables = ((String[])Arrays.copyOf(paramArrayOfString, paramArrayOfString.length));
+    }
+    
+    boolean isRemote()
+    {
+      return false;
+    }
+    
+    public abstract void onInvalidated(@NonNull Set<String> paramSet);
+  }
+  
+  static class ObserverWrapper
+  {
+    final InvalidationTracker.Observer mObserver;
+    private final Set<String> mSingleTableSet;
+    final int[] mTableIds;
+    private final String[] mTableNames;
+    
+    ObserverWrapper(InvalidationTracker.Observer paramObserver, int[] paramArrayOfInt, String[] paramArrayOfString)
+    {
+      mObserver = paramObserver;
+      mTableIds = paramArrayOfInt;
+      mTableNames = paramArrayOfString;
+      if (paramArrayOfInt.length == 1)
+      {
+        paramObserver = new ArraySet();
+        paramObserver.add(mTableNames[0]);
+        mSingleTableSet = Collections.unmodifiableSet(paramObserver);
+        return;
+      }
+      mSingleTableSet = null;
+    }
+    
+    void notifyByTableInvalidStatus(Set<Integer> paramSet)
+    {
+      int j = mTableIds.length;
+      Object localObject1 = null;
+      int i = 0;
+      while (i < j)
+      {
+        Object localObject2 = localObject1;
+        if (paramSet.contains(Integer.valueOf(mTableIds[i]))) {
+          if (j == 1)
+          {
+            localObject2 = mSingleTableSet;
+          }
+          else
+          {
+            localObject2 = localObject1;
+            if (localObject1 == null) {
+              localObject2 = new ArraySet(j);
+            }
+            ((Set)localObject2).add(mTableNames[i]);
+          }
+        }
+        i += 1;
+        localObject1 = localObject2;
+      }
+      if (localObject1 != null) {
+        mObserver.onInvalidated(localObject1);
+      }
+    }
+    
+    void notifyByTableNames(String[] paramArrayOfString)
+    {
+      int i = mTableNames.length;
+      Object localObject2 = null;
+      int j;
+      if (i == 1)
+      {
+        j = paramArrayOfString.length;
+        i = 0;
+        for (;;)
+        {
+          localObject1 = localObject2;
+          if (i >= j) {
+            break;
+          }
+          if (paramArrayOfString[i].equalsIgnoreCase(mTableNames[0]))
+          {
+            localObject1 = mSingleTableSet;
+            break;
+          }
+          i += 1;
+        }
+      }
+      ArraySet localArraySet = new ArraySet();
+      int k = paramArrayOfString.length;
+      i = 0;
+      while (i < k)
+      {
+        localObject1 = paramArrayOfString[i];
+        String[] arrayOfString = mTableNames;
+        int m = arrayOfString.length;
+        j = 0;
+        while (j < m)
+        {
+          String str = arrayOfString[j];
+          if (str.equalsIgnoreCase((String)localObject1))
+          {
+            localArraySet.add(str);
+            break;
+          }
+          j += 1;
+        }
+        i += 1;
+      }
+      Object localObject1 = localObject2;
+      if (localArraySet.size() > 0) {
+        localObject1 = localArraySet;
+      }
+      if (localObject1 != null) {
+        mObserver.onInvalidated((Set)localObject1);
+      }
+    }
+  }
+  
+  static class WeakObserver
+    extends InvalidationTracker.Observer
+  {
+    final WeakReference<InvalidationTracker.Observer> mDelegateRef;
+    final InvalidationTracker mTracker;
+    
+    WeakObserver(InvalidationTracker paramInvalidationTracker, InvalidationTracker.Observer paramObserver)
+    {
+      super();
+      mTracker = paramInvalidationTracker;
+      mDelegateRef = new WeakReference(paramObserver);
+    }
+    
+    public void onInvalidated(@NonNull Set<String> paramSet)
+    {
+      InvalidationTracker.Observer localObserver = (InvalidationTracker.Observer)mDelegateRef.get();
+      if (localObserver == null)
+      {
+        mTracker.removeObserver(this);
+        return;
+      }
+      localObserver.onInvalidated(paramSet);
+    }
+  }
+}

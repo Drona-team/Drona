@@ -1,0 +1,71 @@
+package com.facebook.react.modules.network;
+
+import com.facebook.common.logging.FLog;
+import java.nio.ByteBuffer;
+import java.nio.CharBuffer;
+import java.nio.charset.CharacterCodingException;
+import java.nio.charset.Charset;
+import java.nio.charset.CharsetDecoder;
+
+public class ProgressiveStringDecoder
+{
+  private static final String EMPTY_STRING = "";
+  private final CharsetDecoder mDecoder;
+  private byte[] remainder = null;
+  
+  public ProgressiveStringDecoder(Charset paramCharset)
+  {
+    mDecoder = paramCharset.newDecoder();
+  }
+  
+  public String decodeNext(byte[] paramArrayOfByte, int paramInt)
+  {
+    byte[] arrayOfByte = paramArrayOfByte;
+    int i = paramInt;
+    if (remainder != null)
+    {
+      arrayOfByte = new byte[remainder.length + paramInt];
+      System.arraycopy(remainder, 0, arrayOfByte, 0, remainder.length);
+      System.arraycopy(paramArrayOfByte, 0, arrayOfByte, remainder.length, paramInt);
+      i = paramInt + remainder.length;
+    }
+    ByteBuffer localByteBuffer = ByteBuffer.wrap(arrayOfByte, 0, i);
+    int k = 1;
+    paramArrayOfByte = null;
+    int j = 0;
+    paramInt = 0;
+    while ((j == 0) && (paramInt < 4))
+    {
+      try
+      {
+        CharBuffer localCharBuffer = mDecoder.decode(localByteBuffer);
+        paramArrayOfByte = localCharBuffer;
+        j = 1;
+      }
+      catch (CharacterCodingException localCharacterCodingException)
+      {
+        for (;;) {}
+      }
+      paramInt += 1;
+      localByteBuffer = ByteBuffer.wrap(arrayOfByte, 0, i - paramInt);
+    }
+    if ((j == 0) || (paramInt <= 0)) {
+      k = 0;
+    }
+    if (k != 0)
+    {
+      remainder = new byte[paramInt];
+      System.arraycopy(arrayOfByte, i - paramInt, remainder, 0, paramInt);
+    }
+    else
+    {
+      remainder = null;
+    }
+    if (j == 0)
+    {
+      FLog.w("ReactNative", "failed to decode string from byte array");
+      return "";
+    }
+    return new String(paramArrayOfByte.array(), 0, paramArrayOfByte.length());
+  }
+}

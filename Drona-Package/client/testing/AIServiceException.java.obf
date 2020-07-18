@@ -1,0 +1,51 @@
+package ai.api;
+
+import ai.api.model.AIResponse;
+import ai.api.model.Status;
+import ai.api.util.StringUtils;
+
+public class AIServiceException
+  extends Exception
+{
+  private static final long serialVersionUID = 1L;
+  private final AIResponse aiResponse;
+  
+  public AIServiceException()
+  {
+    aiResponse = null;
+  }
+  
+  public AIServiceException(AIResponse paramAIResponse)
+  {
+    aiResponse = paramAIResponse;
+  }
+  
+  public AIServiceException(String paramString)
+  {
+    super(paramString);
+    aiResponse = null;
+  }
+  
+  public AIServiceException(String paramString, Throwable paramThrowable)
+  {
+    super(paramString, paramThrowable);
+    aiResponse = null;
+  }
+  
+  public String getMessage()
+  {
+    if ((aiResponse != null) && (aiResponse.getStatus() != null))
+    {
+      String str = aiResponse.getStatus().getErrorDetails();
+      if (!StringUtils.isEmpty(str)) {
+        return str;
+      }
+    }
+    return super.getMessage();
+  }
+  
+  public AIResponse getResponse()
+  {
+    return aiResponse;
+  }
+}

@@ -1,0 +1,15 @@
+package com.facebook.react.jstasks;
+
+import javax.annotation.CheckReturnValue;
+
+public abstract interface HeadlessJsTaskRetryPolicy
+{
+  public abstract boolean canRetry();
+  
+  public abstract HeadlessJsTaskRetryPolicy copy();
+  
+  public abstract int getDelay();
+  
+  @CheckReturnValue
+  public abstract HeadlessJsTaskRetryPolicy update();
+}

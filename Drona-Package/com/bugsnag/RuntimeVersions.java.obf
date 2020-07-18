@@ -1,0 +1,59 @@
+package com.bugsnag;
+
+import com.facebook.react.modules.systeminfo.ReactNativeVersion;
+import java.util.HashMap;
+import java.util.Map;
+
+public class RuntimeVersions
+{
+  public RuntimeVersions() {}
+  
+  public static void addRuntimeVersions(Map<String, Object> paramMap)
+  {
+    Map localMap = (Map)paramMap.get("runtimeVersions");
+    Object localObject = localMap;
+    if (localMap == null)
+    {
+      localObject = new HashMap();
+      paramMap.put("runtimeVersions", localObject);
+    }
+    ((Map)localObject).put("reactNative", findReactNativeVersion());
+  }
+  
+  private static String findReactNativeVersion()
+  {
+    StringBuilder localStringBuilder = new StringBuilder();
+    String str = getStringSafe("major", ReactNativeVersion.VERSION);
+    if (str != null)
+    {
+      localStringBuilder.append(str);
+      localStringBuilder.append(".");
+    }
+    str = getStringSafe("minor", ReactNativeVersion.VERSION);
+    if (str != null)
+    {
+      localStringBuilder.append(str);
+      localStringBuilder.append(".");
+    }
+    str = getStringSafe("patch", ReactNativeVersion.VERSION);
+    if (str != null) {
+      localStringBuilder.append(str);
+    }
+    str = getStringSafe("prerelease", ReactNativeVersion.VERSION);
+    if (str != null)
+    {
+      localStringBuilder.append("-");
+      localStringBuilder.append(str);
+    }
+    return localStringBuilder.toString();
+  }
+  
+  private static String getStringSafe(String paramString, Map<String, Object> paramMap)
+  {
+    paramString = paramMap.get(paramString);
+    if (paramString != null) {
+      return paramString.toString();
+    }
+    return null;
+  }
+}

@@ -1,0 +1,146 @@
+package androidx.room;
+
+import android.content.ComponentName;
+import android.content.Context;
+import android.content.Intent;
+import android.content.ServiceConnection;
+import android.os.IBinder;
+import android.os.RemoteException;
+import android.util.Log;
+import androidx.annotation.NonNull;
+import androidx.annotation.Nullable;
+import java.util.Set;
+import java.util.concurrent.Executor;
+import java.util.concurrent.atomic.AtomicBoolean;
+
+class MultiInstanceInvalidationClient
+{
+  final IMultiInstanceInvalidationCallback mCallback = new IMultiInstanceInvalidationCallback.Stub()
+  {
+    public void onInvalidation(final String[] paramAnonymousArrayOfString)
+    {
+      mExecutor.execute(new Runnable()
+      {
+        public void run()
+        {
+          mInvalidationTracker.notifyObserversByTableNames(paramAnonymousArrayOfString);
+        }
+      });
+    }
+  };
+  int mClientId;
+  @Nullable
+  Context mContext;
+  final Executor mExecutor;
+  final InvalidationTracker mInvalidationTracker;
+  final String mName;
+  final InvalidationTracker.Observer mObserver;
+  final Runnable mRemoveObserverRunnable = new Runnable()
+  {
+    public void run()
+    {
+      mInvalidationTracker.removeObserver(mObserver);
+    }
+  };
+  @Nullable
+  IMultiInstanceInvalidationService mService;
+  final ServiceConnection mServiceConnection = new ServiceConnection()
+  {
+    public void onServiceConnected(ComponentName paramAnonymousComponentName, IBinder paramAnonymousIBinder)
+    {
+      mService = IMultiInstanceInvalidationService.Stub.asInterface(paramAnonymousIBinder);
+      mExecutor.execute(mSetUpRunnable);
+    }
+    
+    public void onServiceDisconnected(ComponentName paramAnonymousComponentName)
+    {
+      mExecutor.execute(mRemoveObserverRunnable);
+      mService = null;
+      mContext = null;
+    }
+  };
+  final Runnable mSetUpRunnable = new Runnable()
+  {
+    public void run()
+    {
+      try
+      {
+        IMultiInstanceInvalidationService localIMultiInstanceInvalidationService = mService;
+        if (localIMultiInstanceInvalidationService != null)
+        {
+          mClientId = localIMultiInstanceInvalidationService.registerCallback(mCallback, mName);
+          mInvalidationTracker.addObserver(mObserver);
+          return;
+        }
+      }
+      catch (RemoteException localRemoteException)
+      {
+        Log.w("ROOM", "Cannot register multi-instance invalidation callback", localRemoteException);
+      }
+    }
+  };
+  final AtomicBoolean mStopped = new AtomicBoolean(false);
+  private final Runnable mTearDownRunnable = new Runnable()
+  {
+    public void run()
+    {
+      mInvalidationTracker.removeObserver(mObserver);
+      try
+      {
+        IMultiInstanceInvalidationService localIMultiInstanceInvalidationService = mService;
+        if (localIMultiInstanceInvalidationService != null) {
+          localIMultiInstanceInvalidationService.unregisterCallback(mCallback, mClientId);
+        }
+      }
+      catch (RemoteException localRemoteException)
+      {
+        Log.w("ROOM", "Cannot unregister multi-instance invalidation callback", localRemoteException);
+      }
+      if (mContext != null)
+      {
+        mContext.unbindService(mServiceConnection);
+        mContext = null;
+      }
+    }
+  };
+  
+  MultiInstanceInvalidationClient(Context paramContext, String paramString, InvalidationTracker paramInvalidationTracker, Executor paramExecutor)
+  {
+    mContext = paramContext.getApplicationContext();
+    mName = paramString;
+    mInvalidationTracker = paramInvalidationTracker;
+    mExecutor = paramExecutor;
+    mObserver = new InvalidationTracker.Observer(mTableNames)
+    {
+      boolean isRemote()
+      {
+        return true;
+      }
+      
+      public void onInvalidated(@NonNull Set<String> paramAnonymousSet)
+      {
+        if (mStopped.get()) {
+          return;
+        }
+        try
+        {
+          mService.broadcastInvalidation(mClientId, (String[])paramAnonymousSet.toArray(new String[0]));
+          return;
+        }
+        catch (RemoteException paramAnonymousSet)
+        {
+          Log.w("ROOM", "Cannot broadcast invalidation", paramAnonymousSet);
+        }
+      }
+    };
+    paramContext = new Intent(mContext, MultiInstanceInvalidationService.class);
+    mContext.bindService(paramContext, mServiceConnection, 1);
+  }
+  
+  void stop()
+  {
+    if (mStopped.compareAndSet(false, true)) {
+      mExecutor.execute(mTearDownRunnable);
+    }
+  }
+}

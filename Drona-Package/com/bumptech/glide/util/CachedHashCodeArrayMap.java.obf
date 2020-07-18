@@ -1,0 +1,50 @@
+package com.bumptech.glide.util;
+
+import androidx.collection.ArrayMap;
+import androidx.collection.SimpleArrayMap;
+
+public final class CachedHashCodeArrayMap<K, V>
+  extends ArrayMap<K, V>
+{
+  private int hashCode;
+  
+  public CachedHashCodeArrayMap() {}
+  
+  public void clear()
+  {
+    hashCode = 0;
+    super.clear();
+  }
+  
+  public int hashCode()
+  {
+    if (hashCode == 0) {
+      hashCode = super.hashCode();
+    }
+    return hashCode;
+  }
+  
+  public V put(K paramK, V paramV)
+  {
+    hashCode = 0;
+    return super.put(paramK, paramV);
+  }
+  
+  public void putAll(SimpleArrayMap<? extends K, ? extends V> paramSimpleArrayMap)
+  {
+    hashCode = 0;
+    super.putAll(paramSimpleArrayMap);
+  }
+  
+  public V removeAt(int paramInt)
+  {
+    hashCode = 0;
+    return super.removeAt(paramInt);
+  }
+  
+  public V setValueAt(int paramInt, V paramV)
+  {
+    hashCode = 0;
+    return super.setValueAt(paramInt, paramV);
+  }
+}

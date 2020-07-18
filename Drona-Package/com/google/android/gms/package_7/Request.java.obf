@@ -1,0 +1,41 @@
+package com.google.android.gms.iid;
+
+import android.content.BroadcastReceiver.PendingResult;
+import android.content.Intent;
+import java.util.concurrent.ScheduledExecutorService;
+import java.util.concurrent.ScheduledFuture;
+import java.util.concurrent.TimeUnit;
+
+final class zzg
+{
+  final Intent intent;
+  private final BroadcastReceiver.PendingResult zzbi;
+  private boolean zzbj = false;
+  private final ScheduledFuture<?> zzbk;
+  
+  zzg(Intent paramIntent, BroadcastReceiver.PendingResult paramPendingResult, ScheduledExecutorService paramScheduledExecutorService)
+  {
+    intent = paramIntent;
+    zzbi = paramPendingResult;
+    zzbk = paramScheduledExecutorService.schedule(new zzh(this, paramIntent), 9500L, TimeUnit.MILLISECONDS);
+  }
+  
+  final void finish()
+  {
+    try
+    {
+      if (!zzbj)
+      {
+        zzbi.finish();
+        zzbk.cancel(false);
+        zzbj = true;
+      }
+      return;
+    }
+    finally
+    {
+      localObject = finally;
+      throw localObject;
+    }
+  }
+}

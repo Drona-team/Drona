@@ -1,0 +1,17 @@
+package com.google.android.gms.iid;
+
+final class zzae<T>
+  implements zzaj<T>
+{
+  private final T zzcs;
+  
+  private zzae(T paramT)
+  {
+    zzcs = paramT;
+  }
+  
+  public final T get()
+  {
+    return zzcs;
+  }
+}

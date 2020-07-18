@@ -1,0 +1,321 @@
+package com.bugsnag.android;
+
+import android.annotation.SuppressLint;
+import android.content.Context;
+import androidx.annotation.NonNull;
+import androidx.annotation.Nullable;
+import java.util.Map;
+
+public final class Bugsnag
+{
+  @SuppressLint({"StaticFieldLeak"})
+  static Client client;
+  private static final Object lock = new Object();
+  
+  private Bugsnag() {}
+  
+  public static void addToTab(@NonNull String paramString1, @NonNull String paramString2, @Nullable Object paramObject)
+  {
+    getClient().addToTab(paramString1, paramString2, paramObject);
+  }
+  
+  public static void beforeNotify(@NonNull BeforeNotify paramBeforeNotify)
+  {
+    getClient().beforeNotify(paramBeforeNotify);
+  }
+  
+  public static void beforeRecordBreadcrumb(@NonNull BeforeRecordBreadcrumb paramBeforeRecordBreadcrumb)
+  {
+    getClient().beforeRecordBreadcrumb(paramBeforeRecordBreadcrumb);
+  }
+  
+  public static void clearBreadcrumbs()
+  {
+    getClient().clearBreadcrumbs();
+  }
+  
+  public static void clearTab(@NonNull String paramString)
+  {
+    getClient().clearTab(paramString);
+  }
+  
+  public static void clearUser()
+  {
+    getClient().clearUser();
+  }
+  
+  public static void disableExceptionHandler()
+  {
+    getClient().disableExceptionHandler();
+  }
+  
+  public static void enableExceptionHandler()
+  {
+    getClient().enableExceptionHandler();
+  }
+  
+  @NonNull
+  public static Client getClient()
+  {
+    if (client != null) {
+      return client;
+    }
+    throw new IllegalStateException("You must call Bugsnag.init before any other Bugsnag methods");
+  }
+  
+  @Nullable
+  public static String getContext()
+  {
+    return getClient().getContext();
+  }
+  
+  @NonNull
+  public static MetaData getMetaData()
+  {
+    return getClient().getMetaData();
+  }
+  
+  @NonNull
+  public static Client init(@NonNull Context paramContext)
+  {
+    return init(paramContext, null, true);
+  }
+  
+  @NonNull
+  public static Client init(@NonNull Context paramContext, @NonNull Configuration paramConfiguration)
+  {
+    synchronized (lock)
+    {
+      if (client == null) {
+        client = new Client(paramContext, paramConfiguration);
+      } else {
+        logClientInitWarning();
+      }
+      return client;
+    }
+  }
+  
+  @NonNull
+  public static Client init(@NonNull Context paramContext, @Nullable String paramString)
+  {
+    return init(paramContext, paramString, true);
+  }
+  
+  @NonNull
+  public static Client init(@NonNull Context paramContext, @Nullable String paramString, boolean paramBoolean)
+  {
+    return init(paramContext, ConfigFactory.createNewConfiguration(paramContext, paramString, paramBoolean));
+  }
+  
+  public static void internalClientNotify(@NonNull Throwable paramThrowable, @NonNull Map<String, Object> paramMap, boolean paramBoolean, @Nullable Callback paramCallback)
+  {
+    getClient().internalClientNotify(paramThrowable, paramMap, paramBoolean, paramCallback);
+  }
+  
+  public static void leaveBreadcrumb(@NonNull String paramString)
+  {
+    getClient().leaveBreadcrumb(paramString);
+  }
+  
+  public static void leaveBreadcrumb(@NonNull String paramString, @NonNull BreadcrumbType paramBreadcrumbType, @NonNull Map<String, String> paramMap)
+  {
+    getClient().leaveBreadcrumb(paramString, paramBreadcrumbType, paramMap);
+  }
+  
+  private static void logClientInitWarning()
+  {
+    Logger.warn("It appears that Bugsnag.init() was called more than once. Subsequent calls have no effect, but may indicate that Bugsnag is not integrated in an Application subclass, which can lead to undesired behaviour.");
+  }
+  
+  @Deprecated
+  public static void notify(@NonNull String paramString1, @NonNull String paramString2, @Nullable final String paramString3, @NonNull StackTraceElement[] paramArrayOfStackTraceElement, @NonNull Severity paramSeverity, @NonNull final MetaData paramMetaData)
+  {
+    getClient().notify(paramString1, paramString2, paramArrayOfStackTraceElement, new Callback()
+    {
+      public void beforeNotify(@NonNull Report paramAnonymousReport)
+      {
+        paramAnonymousReport.getError().setSeverity(val$finalSeverity);
+        paramAnonymousReport.getError().setMetaData(paramMetaData);
+        paramAnonymousReport.getError().setContext(paramString3);
+      }
+    });
+  }
+  
+  public static void notify(@NonNull String paramString1, @NonNull String paramString2, @NonNull StackTraceElement[] paramArrayOfStackTraceElement, @Nullable Callback paramCallback)
+  {
+    getClient().notify(paramString1, paramString2, paramArrayOfStackTraceElement, paramCallback);
+  }
+  
+  @Deprecated
+  public static void notify(@NonNull String paramString1, @NonNull String paramString2, @NonNull StackTraceElement[] paramArrayOfStackTraceElement, @NonNull Severity paramSeverity, @NonNull final MetaData paramMetaData)
+  {
+    getClient().notify(paramString1, paramString2, paramArrayOfStackTraceElement, new Callback()
+    {
+      public void beforeNotify(@NonNull Report paramAnonymousReport)
+      {
+        paramAnonymousReport.getError().setSeverity(val$finalSeverity);
+        paramAnonymousReport.getError().setMetaData(paramMetaData);
+      }
+    });
+  }
+  
+  public static void notify(@NonNull Throwable paramThrowable)
+  {
+    getClient().notify(paramThrowable);
+  }
+  
+  public static void notify(@NonNull Throwable paramThrowable, @Nullable Callback paramCallback)
+  {
+    getClient().notify(paramThrowable, paramCallback);
+  }
+  
+  @Deprecated
+  public static void notify(@NonNull Throwable paramThrowable, @NonNull MetaData paramMetaData)
+  {
+    getClient().notify(paramThrowable, new Callback()
+    {
+      public void beforeNotify(@NonNull Report paramAnonymousReport)
+      {
+        paramAnonymousReport.getError().setMetaData(val$metaData);
+      }
+    });
+  }
+  
+  public static void notify(@NonNull Throwable paramThrowable, @NonNull Severity paramSeverity)
+  {
+    getClient().notify(paramThrowable, paramSeverity);
+  }
+  
+  @Deprecated
+  public static void notify(@NonNull Throwable paramThrowable, @NonNull Severity paramSeverity, @NonNull final MetaData paramMetaData)
+  {
+    getClient().notify(paramThrowable, new Callback()
+    {
+      public void beforeNotify(@NonNull Report paramAnonymousReport)
+      {
+        paramAnonymousReport.getError().setSeverity(val$severity);
+        paramAnonymousReport.getError().setMetaData(paramMetaData);
+      }
+    });
+  }
+  
+  public static boolean resumeSession()
+  {
+    return getClient().resumeSession();
+  }
+  
+  public static void setAppVersion(@NonNull String paramString)
+  {
+    getClient().setAppVersion(paramString);
+  }
+  
+  public static void setAutoCaptureSessions(boolean paramBoolean)
+  {
+    getClient().setAutoCaptureSessions(paramBoolean);
+  }
+  
+  public static void setBuildUUID(@Nullable String paramString)
+  {
+    getClient().setBuildUUID(paramString);
+  }
+  
+  public static void setContext(@Nullable String paramString)
+  {
+    getClient().setContext(paramString);
+  }
+  
+  @Deprecated
+  public static void setEndpoint(@NonNull String paramString)
+  {
+    getClient().setEndpoint(paramString);
+  }
+  
+  @Deprecated
+  public static void setErrorReportApiClient(@NonNull ErrorReportApiClient paramErrorReportApiClient)
+  {
+    getClient().setErrorReportApiClient(paramErrorReportApiClient);
+  }
+  
+  public static void setFilters(@Nullable String... paramVarArgs)
+  {
+    getClient().setFilters(paramVarArgs);
+  }
+  
+  public static void setIgnoreClasses(@Nullable String... paramVarArgs)
+  {
+    getClient().setIgnoreClasses(paramVarArgs);
+  }
+  
+  public static void setLoggingEnabled(boolean paramBoolean)
+  {
+    getClient().setLoggingEnabled(paramBoolean);
+  }
+  
+  @Deprecated
+  public static void setMaxBreadcrumbs(int paramInt)
+  {
+    getClientconfig.setMaxBreadcrumbs(paramInt);
+  }
+  
+  public static void setMetaData(@NonNull MetaData paramMetaData)
+  {
+    getClient().setMetaData(paramMetaData);
+  }
+  
+  public static void setNotifyReleaseStages(@Nullable String... paramVarArgs)
+  {
+    getClient().setNotifyReleaseStages(paramVarArgs);
+  }
+  
+  @Deprecated
+  public static void setProjectPackages(@Nullable String... paramVarArgs)
+  {
+    getClient().setProjectPackages(paramVarArgs);
+  }
+  
+  public static void setReleaseStage(@Nullable String paramString)
+  {
+    getClient().setReleaseStage(paramString);
+  }
+  
+  public static void setSendThreads(boolean paramBoolean)
+  {
+    getClient().setSendThreads(paramBoolean);
+  }
+  
+  @Deprecated
+  public static void setSessionTrackingApiClient(@NonNull SessionTrackingApiClient paramSessionTrackingApiClient)
+  {
+    getClient().setSessionTrackingApiClient(paramSessionTrackingApiClient);
+  }
+  
+  public static void setUser(@Nullable String paramString1, @Nullable String paramString2, @Nullable String paramString3)
+  {
+    getClient().setUser(paramString1, paramString2, paramString3);
+  }
+  
+  public static void setUserEmail(@Nullable String paramString)
+  {
+    getClient().setUserEmail(paramString);
+  }
+  
+  public static void setUserId(@Nullable String paramString)
+  {
+    getClient().setUserId(paramString);
+  }
+  
+  public static void setUserName(@Nullable String paramString)
+  {
+    getClient().setUserName(paramString);
+  }
+  
+  public static void startSession()
+  {
+    getClient().startSession();
+  }
+  
+  public static void stopSession()
+  {
+    getClient().stopSession();
+  }
+}

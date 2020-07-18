@@ -1,0 +1,96 @@
+package com.airbnb.android.react.maps;
+
+import android.content.res.Resources;
+import android.os.Build.VERSION;
+import android.util.DisplayMetrics;
+import android.view.Display;
+import android.view.WindowManager;
+import com.facebook.react.bridge.ReactApplicationContext;
+import com.facebook.react.bridge.ReadableArray;
+import com.facebook.react.common.MapBuilder;
+import com.facebook.react.uimanager.ThemedReactContext;
+import com.facebook.react.uimanager.ViewGroupManager;
+import com.facebook.react.uimanager.annotations.ReactProp;
+import java.util.Map;
+import javax.annotation.Nullable;
+
+public class AirMapPolygonManager
+  extends ViewGroupManager<AirMapPolygon>
+{
+  private final DisplayMetrics metrics;
+  
+  public AirMapPolygonManager(ReactApplicationContext paramReactApplicationContext)
+  {
+    if (Build.VERSION.SDK_INT >= 17)
+    {
+      metrics = new DisplayMetrics();
+      ((WindowManager)paramReactApplicationContext.getSystemService("window")).getDefaultDisplay().getRealMetrics(metrics);
+      return;
+    }
+    metrics = paramReactApplicationContext.getResources().getDisplayMetrics();
+  }
+  
+  public AirMapPolygon createViewInstance(ThemedReactContext paramThemedReactContext)
+  {
+    return new AirMapPolygon(paramThemedReactContext);
+  }
+  
+  @Nullable
+  public Map getExportedCustomDirectEventTypeConstants()
+  {
+    return MapBuilder.of("onPress", MapBuilder.of("registrationName", "onPress"));
+  }
+  
+  public String getName()
+  {
+    return "AIRMapPolygon";
+  }
+  
+  @ReactProp(name="coordinates")
+  public void setCoordinate(AirMapPolygon paramAirMapPolygon, ReadableArray paramReadableArray)
+  {
+    paramAirMapPolygon.setCoordinates(paramReadableArray);
+  }
+  
+  @ReactProp(customType="Color", defaultInt=-65536, name="fillColor")
+  public void setFillColor(AirMapPolygon paramAirMapPolygon, int paramInt)
+  {
+    paramAirMapPolygon.setFillColor(paramInt);
+  }
+  
+  @ReactProp(defaultBoolean=false, name="geodesic")
+  public void setGeodesic(AirMapPolygon paramAirMapPolygon, boolean paramBoolean)
+  {
+    paramAirMapPolygon.setGeodesic(paramBoolean);
+  }
+  
+  @ReactProp(name="holes")
+  public void setHoles(AirMapPolygon paramAirMapPolygon, ReadableArray paramReadableArray)
+  {
+    paramAirMapPolygon.setHoles(paramReadableArray);
+  }
+  
+  @ReactProp(customType="Color", defaultInt=-65536, name="strokeColor")
+  public void setStrokeColor(AirMapPolygon paramAirMapPolygon, int paramInt)
+  {
+    paramAirMapPolygon.setStrokeColor(paramInt);
+  }
+  
+  @ReactProp(defaultFloat=1.0F, name="strokeWidth")
+  public void setStrokeWidth(AirMapPolygon paramAirMapPolygon, float paramFloat)
+  {
+    paramAirMapPolygon.setStrokeWidth(metrics.density * paramFloat);
+  }
+  
+  @ReactProp(defaultBoolean=false, name="tappable")
+  public void setTappable(AirMapPolygon paramAirMapPolygon, boolean paramBoolean)
+  {
+    paramAirMapPolygon.setTappable(paramBoolean);
+  }
+  
+  @ReactProp(defaultFloat=1.0F, name="zIndex")
+  public void setZIndex(AirMapPolygon paramAirMapPolygon, float paramFloat)
+  {
+    paramAirMapPolygon.setZIndex(paramFloat);
+  }
+}

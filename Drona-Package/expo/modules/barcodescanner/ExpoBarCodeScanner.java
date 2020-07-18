@@ -1,0 +1,230 @@
+package expo.modules.barcodescanner;
+
+import android.hardware.Camera;
+import android.hardware.Camera.CameraInfo;
+import android.hardware.Camera.Parameters;
+import android.hardware.Camera.Size;
+import android.util.Log;
+import java.util.HashMap;
+import java.util.HashSet;
+import java.util.Iterator;
+import java.util.List;
+import java.util.Set;
+
+public class ExpoBarCodeScanner
+{
+  static final int CAMERA_TYPE_BACK = 2;
+  static final int CAMERA_TYPE_FRONT = 1;
+  private static ExpoBarCodeScanner ourInstance;
+  private int mActualDeviceOrientation;
+  private Camera mCamera = null;
+  private final HashMap<Integer, CameraInfoWrapper> mCameraInfos;
+  private int mCameraType;
+  private final HashMap<Integer, Integer> mCameraTypeToIndex;
+  private final Set<Number> mCameras;
+  private int mRotation;
+  
+  private ExpoBarCodeScanner(int paramInt)
+  {
+    int i = 0;
+    mCameraType = 0;
+    mActualDeviceOrientation = 0;
+    mRotation = 0;
+    mCameras = new HashSet();
+    mCameraInfos = new HashMap();
+    mCameraTypeToIndex = new HashMap();
+    mActualDeviceOrientation = paramInt;
+    paramInt = i;
+    while (paramInt < Camera.getNumberOfCameras())
+    {
+      Camera.CameraInfo localCameraInfo = new Camera.CameraInfo();
+      Camera.getCameraInfo(paramInt, localCameraInfo);
+      if ((facing == 1) && (mCameraInfos.get(Integer.valueOf(1)) == null))
+      {
+        mCameraInfos.put(Integer.valueOf(1), new CameraInfoWrapper(localCameraInfo));
+        mCameraTypeToIndex.put(Integer.valueOf(1), Integer.valueOf(paramInt));
+        mCameras.add(Integer.valueOf(1));
+      }
+      else if ((facing == 0) && (mCameraInfos.get(Integer.valueOf(2)) == null))
+      {
+        mCameraInfos.put(Integer.valueOf(2), new CameraInfoWrapper(localCameraInfo));
+        mCameraTypeToIndex.put(Integer.valueOf(2), Integer.valueOf(paramInt));
+        mCameras.add(Integer.valueOf(2));
+      }
+      paramInt += 1;
+    }
+  }
+  
+  public static void createInstance(int paramInt)
+  {
+    ourInstance = new ExpoBarCodeScanner(paramInt);
+  }
+  
+  public static ExpoBarCodeScanner getInstance()
+  {
+    return ourInstance;
+  }
+  
+  public Camera acquireCameraInstance(int paramInt)
+  {
+    if ((mCamera == null) && (mCameras.contains(Integer.valueOf(paramInt))) && (mCameraTypeToIndex.get(Integer.valueOf(paramInt)) != null))
+    {
+      Object localObject = mCameraTypeToIndex;
+      try
+      {
+        localObject = ((HashMap)localObject).get(Integer.valueOf(paramInt));
+        localObject = (Integer)localObject;
+        localObject = Camera.open(((Integer)localObject).intValue());
+        mCamera = ((Camera)localObject);
+        mCameraType = paramInt;
+        adjustPreviewLayout(paramInt);
+      }
+      catch (Exception localException)
+      {
+        Log.e("ExpoBarCodeScanner", "acquireCameraInstance failed", localException);
+      }
+    }
+    return mCamera;
+  }
+  
+  public void adjustPreviewLayout(int paramInt)
+  {
+    if (mCamera == null) {
+      return;
+    }
+    CameraInfoWrapper localCameraInfoWrapper = (CameraInfoWrapper)mCameraInfos.get(Integer.valueOf(paramInt));
+    if (localCameraInfoWrapper == null) {
+      return;
+    }
+    int j = mActualDeviceOrientation;
+    int i = 0;
+    paramInt = i;
+    switch (j)
+    {
+    default: 
+      paramInt = i;
+      break;
+    case 3: 
+      paramInt = 270;
+      break;
+    case 2: 
+      paramInt = 180;
+      break;
+    case 1: 
+      paramInt = 90;
+    }
+    if (info.facing == 1)
+    {
+      mRotation = ((info.orientation + paramInt) % 360);
+      mRotation = ((360 - mRotation) % 360);
+    }
+    else
+    {
+      mRotation = ((info.orientation - paramInt + 360) % 360);
+    }
+    mCamera.setDisplayOrientation(mRotation);
+    Camera.Parameters localParameters = mCamera.getParameters();
+    localParameters.setRotation(mRotation);
+    Object localObject = getBestSize(localParameters.getSupportedPreviewSizes(), 1920, 1920);
+    paramInt = width;
+    i = height;
+    localParameters.setPreviewSize(paramInt, i);
+    localObject = mCamera;
+    try
+    {
+      ((Camera)localObject).setParameters(localParameters);
+    }
+    catch (Exception localException)
+    {
+      localException.printStackTrace();
+    }
+    previewHeight = i;
+    previewWidth = paramInt;
+    if ((mRotation == 90) || (mRotation == 270))
+    {
+      previewHeight = paramInt;
+      previewWidth = i;
+    }
+  }
+  
+  public int getActualDeviceOrientation()
+  {
+    return mActualDeviceOrientation;
+  }
+  
+  public Camera.Size getBestSize(List paramList, int paramInt1, int paramInt2)
+  {
+    Iterator localIterator = paramList.iterator();
+    paramList = null;
+    while (localIterator.hasNext())
+    {
+      Camera.Size localSize = (Camera.Size)localIterator.next();
+      if ((width <= paramInt1) && (height <= paramInt2))
+      {
+        if (paramList == null) {}
+        for (;;)
+        {
+          paramList = localSize;
+          break;
+          int i = width;
+          int j = height;
+          if (width * height <= i * j) {
+            break;
+          }
+        }
+      }
+    }
+    return paramList;
+  }
+  
+  public int getPreviewHeight(int paramInt)
+  {
+    CameraInfoWrapper localCameraInfoWrapper = (CameraInfoWrapper)mCameraInfos.get(Integer.valueOf(paramInt));
+    if (localCameraInfoWrapper == null) {
+      return 0;
+    }
+    return previewHeight;
+  }
+  
+  public int getPreviewWidth(int paramInt)
+  {
+    CameraInfoWrapper localCameraInfoWrapper = (CameraInfoWrapper)mCameraInfos.get(Integer.valueOf(paramInt));
+    if (localCameraInfoWrapper == null) {
+      return 0;
+    }
+    return previewWidth;
+  }
+  
+  public int getRotation()
+  {
+    return mRotation;
+  }
+  
+  public void releaseCameraInstance()
+  {
+    if (mCamera != null)
+    {
+      mCamera.release();
+      mCamera = null;
+    }
+  }
+  
+  public void setActualDeviceOrientation(int paramInt)
+  {
+    mActualDeviceOrientation = paramInt;
+    adjustPreviewLayout(mCameraType);
+  }
+  
+  private class CameraInfoWrapper
+  {
+    public final Camera.CameraInfo info;
+    public int previewHeight = -1;
+    public int previewWidth = -1;
+    public int rotation = 0;
+    
+    public CameraInfoWrapper(Camera.CameraInfo paramCameraInfo)
+    {
+      info = paramCameraInfo;
+    }
+  }
+}

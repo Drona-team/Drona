@@ -1,0 +1,57 @@
+package com.facebook.jni;
+
+import com.facebook.proguard.annotations.DoNotStrip;
+import com.facebook.soloader.SoLoader;
+
+@DoNotStrip
+public class HybridData
+{
+  @DoNotStrip
+  private Destructor mDestructor = new Destructor(this);
+  
+  static
+  {
+    SoLoader.loadLibrary("fb");
+  }
+  
+  public HybridData() {}
+  
+  public boolean isValid()
+  {
+    return mDestructor.mNativePointer != 0L;
+  }
+  
+  public void resetNative()
+  {
+    try
+    {
+      mDestructor.destruct();
+      return;
+    }
+    finally
+    {
+      localObject = finally;
+      throw localObject;
+    }
+  }
+  
+  public static class Destructor
+    extends DestructorThread.Destructor
+  {
+    @DoNotStrip
+    private long mNativePointer;
+    
+    Destructor(Object paramObject)
+    {
+      super();
+    }
+    
+    static native void deleteNative(long paramLong);
+    
+    protected final void destruct()
+    {
+      deleteNative(mNativePointer);
+      mNativePointer = 0L;
+    }
+  }
+}

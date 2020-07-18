@@ -1,0 +1,137 @@
+package com.airbnb.android.react.maps;
+
+import android.content.res.Resources;
+import android.os.Build.VERSION;
+import android.util.DisplayMetrics;
+import android.view.Display;
+import android.view.WindowManager;
+import com.facebook.react.bridge.ReactApplicationContext;
+import com.facebook.react.bridge.ReadableArray;
+import com.facebook.react.common.MapBuilder;
+import com.facebook.react.uimanager.ThemedReactContext;
+import com.facebook.react.uimanager.ViewGroupManager;
+import com.facebook.react.uimanager.annotations.ReactProp;
+import com.google.android.gms.maps.model.ButtCap;
+import com.google.android.gms.maps.model.RoundCap;
+import com.google.android.gms.maps.model.SquareCap;
+import java.util.Map;
+import javax.annotation.Nullable;
+
+public class AirMapPolylineManager
+  extends ViewGroupManager<AirMapPolyline>
+{
+  private final DisplayMetrics metrics;
+  
+  public AirMapPolylineManager(ReactApplicationContext paramReactApplicationContext)
+  {
+    if (Build.VERSION.SDK_INT >= 17)
+    {
+      metrics = new DisplayMetrics();
+      ((WindowManager)paramReactApplicationContext.getSystemService("window")).getDefaultDisplay().getRealMetrics(metrics);
+      return;
+    }
+    metrics = paramReactApplicationContext.getResources().getDisplayMetrics();
+  }
+  
+  public AirMapPolyline createViewInstance(ThemedReactContext paramThemedReactContext)
+  {
+    return new AirMapPolyline(paramThemedReactContext);
+  }
+  
+  @Nullable
+  public Map getExportedCustomDirectEventTypeConstants()
+  {
+    return MapBuilder.of("onPress", MapBuilder.of("registrationName", "onPress"));
+  }
+  
+  public String getName()
+  {
+    return "AIRMapPolyline";
+  }
+  
+  @ReactProp(name="coordinates")
+  public void setCoordinate(AirMapPolyline paramAirMapPolyline, ReadableArray paramReadableArray)
+  {
+    paramAirMapPolyline.setCoordinates(paramReadableArray);
+  }
+  
+  @ReactProp(defaultBoolean=false, name="geodesic")
+  public void setGeodesic(AirMapPolyline paramAirMapPolyline, boolean paramBoolean)
+  {
+    paramAirMapPolyline.setGeodesic(paramBoolean);
+  }
+  
+  @ReactProp(name="lineDashPattern")
+  public void setLineDashPattern(AirMapPolyline paramAirMapPolyline, ReadableArray paramReadableArray)
+  {
+    paramAirMapPolyline.setLineDashPattern(paramReadableArray);
+  }
+  
+  @ReactProp(customType="Color", defaultInt=-65536, name="strokeColor")
+  public void setStrokeColor(AirMapPolyline paramAirMapPolyline, int paramInt)
+  {
+    paramAirMapPolyline.setColor(paramInt);
+  }
+  
+  @ReactProp(defaultFloat=1.0F, name="strokeWidth")
+  public void setStrokeWidth(AirMapPolyline paramAirMapPolyline, float paramFloat)
+  {
+    paramAirMapPolyline.setWidth(metrics.density * paramFloat);
+  }
+  
+  @ReactProp(defaultBoolean=false, name="tappable")
+  public void setTappable(AirMapPolyline paramAirMapPolyline, boolean paramBoolean)
+  {
+    paramAirMapPolyline.setTappable(paramBoolean);
+  }
+  
+  @ReactProp(defaultFloat=1.0F, name="zIndex")
+  public void setZIndex(AirMapPolyline paramAirMapPolyline, float paramFloat)
+  {
+    paramAirMapPolyline.setZIndex(paramFloat);
+  }
+  
+  @ReactProp(name="lineCap")
+  public void setlineCap(AirMapPolyline paramAirMapPolyline, String paramString)
+  {
+    int i = paramString.hashCode();
+    if (i != -894674659)
+    {
+      if (i != 3035667)
+      {
+        if ((i == 108704142) && (paramString.equals("round")))
+        {
+          i = 1;
+          break label70;
+        }
+      }
+      else if (paramString.equals("butt"))
+      {
+        i = 0;
+        break label70;
+      }
+    }
+    else if (paramString.equals("square"))
+    {
+      i = 2;
+      break label70;
+    }
+    i = -1;
+    switch (i)
+    {
+    default: 
+      paramString = new RoundCap();
+      break;
+    case 2: 
+      paramString = new SquareCap();
+      break;
+    case 1: 
+      paramString = new RoundCap();
+      break;
+    case 0: 
+      label70:
+      paramString = new ButtCap();
+    }
+    paramAirMapPolyline.setLineCap(paramString);
+  }
+}

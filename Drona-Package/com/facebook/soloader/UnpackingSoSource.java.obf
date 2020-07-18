@@ -1,0 +1,1428 @@
+package com.facebook.soloader;
+
+import android.content.Context;
+import android.content.pm.ApplicationInfo;
+import android.os.StrictMode.ThreadPolicy;
+import android.util.Log;
+import java.io.Closeable;
+import java.io.DataInput;
+import java.io.DataOutput;
+import java.io.File;
+import java.io.IOException;
+import java.io.InputStream;
+import java.util.HashMap;
+import java.util.Map;
+import javax.annotation.Nullable;
+
+public abstract class UnpackingSoSource
+  extends DirectorySoSource
+{
+  private static final String DEPS_FILE_NAME = "dso_deps";
+  private static final String LOCK_FILE_NAME = "dso_lock";
+  private static final String MANIFEST_FILE_NAME = "dso_manifest";
+  private static final byte MANIFEST_VERSION = 1;
+  private static final byte STATE_CLEAN = 1;
+  private static final byte STATE_DIRTY = 0;
+  private static final String STATE_FILE_NAME = "dso_state";
+  private static final String TAG = "fb-UnpackingSoSource";
+  @Nullable
+  private String[] mAbis;
+  protected final Context mContext;
+  @Nullable
+  protected String mCorruptedLib;
+  private final Map<String, Object> mLibsBeingLoaded = new HashMap();
+  
+  protected UnpackingSoSource(Context paramContext, File paramFile)
+  {
+    super(paramFile, 1);
+    mContext = paramContext;
+  }
+  
+  protected UnpackingSoSource(Context paramContext, String paramString)
+  {
+    super(getSoStorePath(paramContext, paramString), 1);
+    mContext = paramContext;
+  }
+  
+  private void deleteUnmentionedFiles(Dso[] paramArrayOfDso)
+    throws IOException
+  {
+    String[] arrayOfString = soDirectory.list();
+    if (arrayOfString != null)
+    {
+      int i = 0;
+      while (i < arrayOfString.length)
+      {
+        Object localObject = arrayOfString[i];
+        if ((!((String)localObject).equals("dso_state")) && (!((String)localObject).equals("dso_lock")) && (!((String)localObject).equals("dso_deps")) && (!((String)localObject).equals("dso_manifest")))
+        {
+          int k = 0;
+          int j = 0;
+          while ((k == 0) && (j < paramArrayOfDso.length))
+          {
+            if (name.equals(localObject)) {
+              k = 1;
+            }
+            j += 1;
+          }
+          if (k == 0)
+          {
+            localObject = new File(soDirectory, (String)localObject);
+            StringBuilder localStringBuilder = new StringBuilder();
+            localStringBuilder.append("deleting unaccounted-for file ");
+            localStringBuilder.append(localObject);
+            Log.v("fb-UnpackingSoSource", localStringBuilder.toString());
+            SysUtil.dumbDeleteRecursive((File)localObject);
+          }
+        }
+        i += 1;
+      }
+      return;
+    }
+    paramArrayOfDso = new StringBuilder();
+    paramArrayOfDso.append("unable to list directory ");
+    paramArrayOfDso.append(soDirectory);
+    throw new IOException(paramArrayOfDso.toString());
+  }
+  
+  /* Error */
+  private void extractDso(InputDso paramInputDso, byte[] paramArrayOfByte)
+    throws IOException
+  {
+    // Byte code:
+    //   0: new 106	java/lang/StringBuilder
+    //   3: dup
+    //   4: invokespecial 107	java/lang/StringBuilder:<init>	()V
+    //   7: astore 5
+    //   9: aload 5
+    //   11: ldc -115
+    //   13: invokevirtual 113	java/lang/StringBuilder:append	(Ljava/lang/String;)Ljava/lang/StringBuilder;
+    //   16: pop
+    //   17: aload 5
+    //   19: aload_1
+    //   20: getfield 145	com/facebook/soloader/UnpackingSoSource$InputDso:dso	Lcom/facebook/soloader/UnpackingSoSource$Dso;
+    //   23: getfield 101	com/facebook/soloader/UnpackingSoSource$Dso:name	Ljava/lang/String;
+    //   26: invokevirtual 113	java/lang/StringBuilder:append	(Ljava/lang/String;)Ljava/lang/StringBuilder;
+    //   29: pop
+    //   30: ldc 43
+    //   32: aload 5
+    //   34: invokevirtual 120	java/lang/StringBuilder:toString	()Ljava/lang/String;
+    //   37: invokestatic 148	android/util/Log:i	(Ljava/lang/String;Ljava/lang/String;)I
+    //   40: pop
+    //   41: aload_0
+    //   42: getfield 86	com/facebook/soloader/UnpackingSoSource:soDirectory	Ljava/io/File;
+    //   45: iconst_1
+    //   46: iconst_1
+    //   47: invokevirtual 152	java/io/File:setWritable	(ZZ)Z
+    //   50: ifeq +224 -> 274
+    //   53: new 88	java/io/File
+    //   56: dup
+    //   57: aload_0
+    //   58: getfield 86	com/facebook/soloader/UnpackingSoSource:soDirectory	Ljava/io/File;
+    //   61: aload_1
+    //   62: getfield 145	com/facebook/soloader/UnpackingSoSource$InputDso:dso	Lcom/facebook/soloader/UnpackingSoSource$Dso;
+    //   65: getfield 101	com/facebook/soloader/UnpackingSoSource$Dso:name	Ljava/lang/String;
+    //   68: invokespecial 104	java/io/File:<init>	(Ljava/io/File;Ljava/lang/String;)V
+    //   71: astore 6
+    //   73: new 154	java/io/RandomAccessFile
+    //   76: dup
+    //   77: aload 6
+    //   79: ldc -100
+    //   81: invokespecial 157	java/io/RandomAccessFile:<init>	(Ljava/io/File;Ljava/lang/String;)V
+    //   84: astore 5
+    //   86: goto +69 -> 155
+    //   89: astore 5
+    //   91: new 106	java/lang/StringBuilder
+    //   94: dup
+    //   95: invokespecial 107	java/lang/StringBuilder:<init>	()V
+    //   98: astore 7
+    //   100: aload 7
+    //   102: ldc -97
+    //   104: invokevirtual 113	java/lang/StringBuilder:append	(Ljava/lang/String;)Ljava/lang/StringBuilder;
+    //   107: pop
+    //   108: aload 7
+    //   110: aload 6
+    //   112: invokevirtual 116	java/lang/StringBuilder:append	(Ljava/lang/Object;)Ljava/lang/StringBuilder;
+    //   115: pop
+    //   116: aload 7
+    //   118: ldc -95
+    //   120: invokevirtual 113	java/lang/StringBuilder:append	(Ljava/lang/String;)Ljava/lang/StringBuilder;
+    //   123: pop
+    //   124: ldc 43
+    //   126: aload 7
+    //   128: invokevirtual 120	java/lang/StringBuilder:toString	()Ljava/lang/String;
+    //   131: aload 5
+    //   133: invokestatic 165	android/util/Log:w	(Ljava/lang/String;Ljava/lang/String;Ljava/lang/Throwable;)I
+    //   136: pop
+    //   137: aload 6
+    //   139: invokestatic 132	com/facebook/soloader/SysUtil:dumbDeleteRecursive	(Ljava/io/File;)V
+    //   142: new 154	java/io/RandomAccessFile
+    //   145: dup
+    //   146: aload 6
+    //   148: ldc -100
+    //   150: invokespecial 157	java/io/RandomAccessFile:<init>	(Ljava/io/File;Ljava/lang/String;)V
+    //   153: astore 5
+    //   155: aload_1
+    //   156: getfield 169	com/facebook/soloader/UnpackingSoSource$InputDso:content	Ljava/io/InputStream;
+    //   159: invokevirtual 175	java/io/InputStream:available	()I
+    //   162: istore_3
+    //   163: iload_3
+    //   164: iconst_1
+    //   165: if_icmple +13 -> 178
+    //   168: aload 5
+    //   170: invokevirtual 179	java/io/RandomAccessFile:getFD	()Ljava/io/FileDescriptor;
+    //   173: iload_3
+    //   174: i2l
+    //   175: invokestatic 183	com/facebook/soloader/SysUtil:fallocateIfSupported	(Ljava/io/FileDescriptor;J)V
+    //   178: aload 5
+    //   180: aload_1
+    //   181: getfield 169	com/facebook/soloader/UnpackingSoSource$InputDso:content	Ljava/io/InputStream;
+    //   184: ldc -72
+    //   186: aload_2
+    //   187: invokestatic 188	com/facebook/soloader/SysUtil:copyBytes	(Ljava/io/RandomAccessFile;Ljava/io/InputStream;I[B)I
+    //   190: pop
+    //   191: aload 5
+    //   193: aload 5
+    //   195: invokevirtual 192	java/io/RandomAccessFile:getFilePointer	()J
+    //   198: invokevirtual 196	java/io/RandomAccessFile:setLength	(J)V
+    //   201: aload 6
+    //   203: iconst_1
+    //   204: iconst_0
+    //   205: invokevirtual 199	java/io/File:setExecutable	(ZZ)Z
+    //   208: istore 4
+    //   210: iload 4
+    //   212: ifeq +9 -> 221
+    //   215: aload 5
+    //   217: invokevirtual 202	java/io/RandomAccessFile:close	()V
+    //   220: return
+    //   221: new 106	java/lang/StringBuilder
+    //   224: dup
+    //   225: invokespecial 107	java/lang/StringBuilder:<init>	()V
+    //   228: astore_1
+    //   229: aload_1
+    //   230: ldc -52
+    //   232: invokevirtual 113	java/lang/StringBuilder:append	(Ljava/lang/String;)Ljava/lang/StringBuilder;
+    //   235: pop
+    //   236: aload_1
+    //   237: aload 6
+    //   239: invokevirtual 116	java/lang/StringBuilder:append	(Ljava/lang/Object;)Ljava/lang/StringBuilder;
+    //   242: pop
+    //   243: new 76	java/io/IOException
+    //   246: dup
+    //   247: aload_1
+    //   248: invokevirtual 120	java/lang/StringBuilder:toString	()Ljava/lang/String;
+    //   251: invokespecial 137	java/io/IOException:<init>	(Ljava/lang/String;)V
+    //   254: athrow
+    //   255: astore_1
+    //   256: goto +11 -> 267
+    //   259: astore_1
+    //   260: aload 6
+    //   262: invokestatic 132	com/facebook/soloader/SysUtil:dumbDeleteRecursive	(Ljava/io/File;)V
+    //   265: aload_1
+    //   266: athrow
+    //   267: aload 5
+    //   269: invokevirtual 202	java/io/RandomAccessFile:close	()V
+    //   272: aload_1
+    //   273: athrow
+    //   274: new 106	java/lang/StringBuilder
+    //   277: dup
+    //   278: invokespecial 107	java/lang/StringBuilder:<init>	()V
+    //   281: astore_1
+    //   282: aload_1
+    //   283: ldc -50
+    //   285: invokevirtual 113	java/lang/StringBuilder:append	(Ljava/lang/String;)Ljava/lang/StringBuilder;
+    //   288: pop
+    //   289: aload_1
+    //   290: aload_0
+    //   291: getfield 86	com/facebook/soloader/UnpackingSoSource:soDirectory	Ljava/io/File;
+    //   294: invokevirtual 116	java/lang/StringBuilder:append	(Ljava/lang/Object;)Ljava/lang/StringBuilder;
+    //   297: pop
+    //   298: new 76	java/io/IOException
+    //   301: dup
+    //   302: aload_1
+    //   303: invokevirtual 120	java/lang/StringBuilder:toString	()Ljava/lang/String;
+    //   306: invokespecial 137	java/io/IOException:<init>	(Ljava/lang/String;)V
+    //   309: athrow
+    // Local variable table:
+    //   start	length	slot	name	signature
+    //   0	310	0	this	UnpackingSoSource
+    //   0	310	1	paramInputDso	InputDso
+    //   0	310	2	paramArrayOfByte	byte[]
+    //   162	12	3	i	int
+    //   208	3	4	bool	boolean
+    //   7	78	5	localObject	Object
+    //   89	43	5	localIOException	IOException
+    //   153	115	5	localRandomAccessFile	java.io.RandomAccessFile
+    //   71	190	6	localFile	File
+    //   98	29	7	localStringBuilder	StringBuilder
+    // Exception table:
+    //   from	to	target	type
+    //   73	86	89	java/io/IOException
+    //   155	163	255	finally
+    //   168	178	255	finally
+    //   178	210	255	finally
+    //   221	255	255	finally
+    //   260	267	255	finally
+    //   155	163	259	java/io/IOException
+    //   168	178	259	java/io/IOException
+    //   178	210	259	java/io/IOException
+    //   221	255	259	java/io/IOException
+  }
+  
+  private Object getLibraryLock(String paramString)
+  {
+    synchronized (mLibsBeingLoaded)
+    {
+      Object localObject2 = mLibsBeingLoaded.get(paramString);
+      Object localObject1 = localObject2;
+      if (localObject2 == null)
+      {
+        localObject1 = new Object();
+        mLibsBeingLoaded.put(paramString, localObject1);
+      }
+      return localObject1;
+    }
+  }
+  
+  public static File getSoStorePath(Context paramContext, String paramString)
+  {
+    StringBuilder localStringBuilder = new StringBuilder();
+    localStringBuilder.append(getApplicationInfodataDir);
+    localStringBuilder.append("/");
+    localStringBuilder.append(paramString);
+    return new File(localStringBuilder.toString());
+  }
+  
+  /* Error */
+  private boolean refreshLocked(final FileLocker paramFileLocker, int paramInt, final byte[] paramArrayOfByte)
+    throws IOException
+  {
+    // Byte code:
+    //   0: new 88	java/io/File
+    //   3: dup
+    //   4: aload_0
+    //   5: getfield 86	com/facebook/soloader/UnpackingSoSource:soDirectory	Ljava/io/File;
+    //   8: ldc 40
+    //   10: invokespecial 104	java/io/File:<init>	(Ljava/io/File;Ljava/lang/String;)V
+    //   13: astore 11
+    //   15: new 154	java/io/RandomAccessFile
+    //   18: dup
+    //   19: aload 11
+    //   21: ldc -100
+    //   23: invokespecial 157	java/io/RandomAccessFile:<init>	(Ljava/io/File;Ljava/lang/String;)V
+    //   26: astore 9
+    //   28: aconst_null
+    //   29: astore 7
+    //   31: aconst_null
+    //   32: astore 8
+    //   34: aload 8
+    //   36: astore 6
+    //   38: aload 9
+    //   40: invokevirtual 245	java/io/RandomAccessFile:readByte	()B
+    //   43: istore 5
+    //   45: iload 5
+    //   47: istore 4
+    //   49: iload 5
+    //   51: iconst_1
+    //   52: if_icmpeq +115 -> 167
+    //   55: aload 8
+    //   57: astore 6
+    //   59: new 106	java/lang/StringBuilder
+    //   62: dup
+    //   63: invokespecial 107	java/lang/StringBuilder:<init>	()V
+    //   66: astore 10
+    //   68: aload 8
+    //   70: astore 6
+    //   72: aload 10
+    //   74: ldc -9
+    //   76: invokevirtual 113	java/lang/StringBuilder:append	(Ljava/lang/String;)Ljava/lang/StringBuilder;
+    //   79: pop
+    //   80: aload 8
+    //   82: astore 6
+    //   84: aload 10
+    //   86: aload_0
+    //   87: getfield 86	com/facebook/soloader/UnpackingSoSource:soDirectory	Ljava/io/File;
+    //   90: invokevirtual 116	java/lang/StringBuilder:append	(Ljava/lang/Object;)Ljava/lang/StringBuilder;
+    //   93: pop
+    //   94: aload 8
+    //   96: astore 6
+    //   98: aload 10
+    //   100: ldc -7
+    //   102: invokevirtual 113	java/lang/StringBuilder:append	(Ljava/lang/String;)Ljava/lang/StringBuilder;
+    //   105: pop
+    //   106: aload 8
+    //   108: astore 6
+    //   110: ldc 43
+    //   112: aload 10
+    //   114: invokevirtual 120	java/lang/StringBuilder:toString	()Ljava/lang/String;
+    //   117: invokestatic 126	android/util/Log:v	(Ljava/lang/String;Ljava/lang/String;)I
+    //   120: pop
+    //   121: iconst_0
+    //   122: istore 4
+    //   124: goto +43 -> 167
+    //   127: astore_1
+    //   128: goto +9 -> 137
+    //   131: astore_1
+    //   132: aload_1
+    //   133: astore 6
+    //   135: aload_1
+    //   136: athrow
+    //   137: aload 6
+    //   139: ifnull +21 -> 160
+    //   142: aload 9
+    //   144: invokevirtual 202	java/io/RandomAccessFile:close	()V
+    //   147: goto +18 -> 165
+    //   150: astore_3
+    //   151: aload 6
+    //   153: aload_3
+    //   154: invokevirtual 253	java/lang/Throwable:addSuppressed	(Ljava/lang/Throwable;)V
+    //   157: goto +8 -> 165
+    //   160: aload 9
+    //   162: invokevirtual 202	java/io/RandomAccessFile:close	()V
+    //   165: aload_1
+    //   166: athrow
+    //   167: aload 9
+    //   169: invokevirtual 202	java/io/RandomAccessFile:close	()V
+    //   172: new 88	java/io/File
+    //   175: dup
+    //   176: aload_0
+    //   177: getfield 86	com/facebook/soloader/UnpackingSoSource:soDirectory	Ljava/io/File;
+    //   180: ldc 25
+    //   182: invokespecial 104	java/io/File:<init>	(Ljava/io/File;Ljava/lang/String;)V
+    //   185: astore 12
+    //   187: new 154	java/io/RandomAccessFile
+    //   190: dup
+    //   191: aload 12
+    //   193: ldc -100
+    //   195: invokespecial 157	java/io/RandomAccessFile:<init>	(Ljava/io/File;Ljava/lang/String;)V
+    //   198: astore 9
+    //   200: aload 7
+    //   202: astore 6
+    //   204: aload 9
+    //   206: invokevirtual 256	java/io/RandomAccessFile:length	()J
+    //   209: l2i
+    //   210: newarray byte
+    //   212: astore 8
+    //   214: aload 7
+    //   216: astore 6
+    //   218: aload 9
+    //   220: aload 8
+    //   222: invokevirtual 260	java/io/RandomAccessFile:read	([B)I
+    //   225: aload 8
+    //   227: arraylength
+    //   228: if_icmpeq +19 -> 247
+    //   231: aload 7
+    //   233: astore 6
+    //   235: ldc 43
+    //   237: ldc_w 262
+    //   240: invokestatic 126	android/util/Log:v	(Ljava/lang/String;Ljava/lang/String;)I
+    //   243: pop
+    //   244: iconst_0
+    //   245: istore 4
+    //   247: aload 7
+    //   249: astore 6
+    //   251: aload 8
+    //   253: aload_3
+    //   254: invokestatic 267	java/util/Arrays:equals	([B[B)Z
+    //   257: ifne +350 -> 607
+    //   260: aload 7
+    //   262: astore 6
+    //   264: ldc 43
+    //   266: ldc_w 269
+    //   269: invokestatic 126	android/util/Log:v	(Ljava/lang/String;Ljava/lang/String;)I
+    //   272: pop
+    //   273: iconst_0
+    //   274: istore 4
+    //   276: goto +331 -> 607
+    //   279: aload 7
+    //   281: astore 6
+    //   283: ldc 43
+    //   285: ldc_w 271
+    //   288: invokestatic 126	android/util/Log:v	(Ljava/lang/String;Ljava/lang/String;)I
+    //   291: pop
+    //   292: aload 7
+    //   294: astore 6
+    //   296: aload 11
+    //   298: iconst_0
+    //   299: invokestatic 79	com/facebook/soloader/UnpackingSoSource:writeState	(Ljava/io/File;B)V
+    //   302: aload 7
+    //   304: astore 6
+    //   306: aload_0
+    //   307: invokevirtual 275	com/facebook/soloader/UnpackingSoSource:makeUnpacker	()Lcom/facebook/soloader/UnpackingSoSource$Unpacker;
+    //   310: astore 10
+    //   312: aload 10
+    //   314: invokevirtual 279	com/facebook/soloader/UnpackingSoSource$Unpacker:getDsoManifest	()Lcom/facebook/soloader/UnpackingSoSource$DsoManifest;
+    //   317: astore 8
+    //   319: aload 10
+    //   321: invokevirtual 283	com/facebook/soloader/UnpackingSoSource$Unpacker:openDsoIterator	()Lcom/facebook/soloader/UnpackingSoSource$InputDsoIterator;
+    //   324: astore 6
+    //   326: aload_0
+    //   327: iload 4
+    //   329: aload 8
+    //   331: aload 6
+    //   333: invokespecial 287	com/facebook/soloader/UnpackingSoSource:regenerate	(BLcom/facebook/soloader/UnpackingSoSource$DsoManifest;Lcom/facebook/soloader/UnpackingSoSource$InputDsoIterator;)V
+    //   336: aload 6
+    //   338: ifnull +8 -> 346
+    //   341: aload 6
+    //   343: invokevirtual 288	com/facebook/soloader/UnpackingSoSource$InputDsoIterator:close	()V
+    //   346: aload 8
+    //   348: astore 6
+    //   350: aload 10
+    //   352: ifnull +16 -> 368
+    //   355: aload 7
+    //   357: astore 6
+    //   359: aload 10
+    //   361: invokevirtual 289	com/facebook/soloader/UnpackingSoSource$Unpacker:close	()V
+    //   364: aload 8
+    //   366: astore 6
+    //   368: aload 9
+    //   370: invokevirtual 202	java/io/RandomAccessFile:close	()V
+    //   373: aload 6
+    //   375: ifnonnull +5 -> 380
+    //   378: iconst_0
+    //   379: ireturn
+    //   380: new 6	com/facebook/soloader/UnpackingSoSource$1
+    //   383: dup
+    //   384: aload_0
+    //   385: aload 12
+    //   387: aload_3
+    //   388: aload 6
+    //   390: aload 11
+    //   392: aload_1
+    //   393: invokespecial 292	com/facebook/soloader/UnpackingSoSource$1:<init>	(Lcom/facebook/soloader/UnpackingSoSource;Ljava/io/File;[BLcom/facebook/soloader/UnpackingSoSource$DsoManifest;Ljava/io/File;Lcom/facebook/soloader/FileLocker;)V
+    //   396: astore_1
+    //   397: iload_2
+    //   398: iconst_1
+    //   399: iand
+    //   400: ifeq +48 -> 448
+    //   403: new 106	java/lang/StringBuilder
+    //   406: dup
+    //   407: invokespecial 107	java/lang/StringBuilder:<init>	()V
+    //   410: astore_3
+    //   411: aload_3
+    //   412: ldc_w 294
+    //   415: invokevirtual 113	java/lang/StringBuilder:append	(Ljava/lang/String;)Ljava/lang/StringBuilder;
+    //   418: pop
+    //   419: aload_3
+    //   420: aload_0
+    //   421: getfield 86	com/facebook/soloader/UnpackingSoSource:soDirectory	Ljava/io/File;
+    //   424: invokevirtual 297	java/io/File:getName	()Ljava/lang/String;
+    //   427: invokevirtual 113	java/lang/StringBuilder:append	(Ljava/lang/String;)Ljava/lang/StringBuilder;
+    //   430: pop
+    //   431: new 299	java/lang/Thread
+    //   434: dup
+    //   435: aload_1
+    //   436: aload_3
+    //   437: invokevirtual 120	java/lang/StringBuilder:toString	()Ljava/lang/String;
+    //   440: invokespecial 302	java/lang/Thread:<init>	(Ljava/lang/Runnable;Ljava/lang/String;)V
+    //   443: invokevirtual 305	java/lang/Thread:start	()V
+    //   446: iconst_1
+    //   447: ireturn
+    //   448: aload_1
+    //   449: invokeinterface 310 1 0
+    //   454: iconst_1
+    //   455: ireturn
+    //   456: astore_1
+    //   457: aconst_null
+    //   458: astore_3
+    //   459: goto +7 -> 466
+    //   462: astore_3
+    //   463: aload_3
+    //   464: athrow
+    //   465: astore_1
+    //   466: aload 6
+    //   468: ifnull +31 -> 499
+    //   471: aload_3
+    //   472: ifnull +22 -> 494
+    //   475: aload 6
+    //   477: invokevirtual 288	com/facebook/soloader/UnpackingSoSource$InputDsoIterator:close	()V
+    //   480: goto +19 -> 499
+    //   483: astore 6
+    //   485: aload_3
+    //   486: aload 6
+    //   488: invokevirtual 253	java/lang/Throwable:addSuppressed	(Ljava/lang/Throwable;)V
+    //   491: goto +8 -> 499
+    //   494: aload 6
+    //   496: invokevirtual 288	com/facebook/soloader/UnpackingSoSource$InputDsoIterator:close	()V
+    //   499: aload_1
+    //   500: athrow
+    //   501: astore_1
+    //   502: aconst_null
+    //   503: astore_3
+    //   504: goto +7 -> 511
+    //   507: astore_3
+    //   508: aload_3
+    //   509: athrow
+    //   510: astore_1
+    //   511: aload 10
+    //   513: ifnull +43 -> 556
+    //   516: aload_3
+    //   517: ifnull +30 -> 547
+    //   520: aload 7
+    //   522: astore 6
+    //   524: aload 10
+    //   526: invokevirtual 289	com/facebook/soloader/UnpackingSoSource$Unpacker:close	()V
+    //   529: goto +27 -> 556
+    //   532: astore 8
+    //   534: aload 7
+    //   536: astore 6
+    //   538: aload_3
+    //   539: aload 8
+    //   541: invokevirtual 253	java/lang/Throwable:addSuppressed	(Ljava/lang/Throwable;)V
+    //   544: goto +12 -> 556
+    //   547: aload 7
+    //   549: astore 6
+    //   551: aload 10
+    //   553: invokevirtual 289	com/facebook/soloader/UnpackingSoSource$Unpacker:close	()V
+    //   556: aload 7
+    //   558: astore 6
+    //   560: aload_1
+    //   561: athrow
+    //   562: astore_1
+    //   563: goto +9 -> 572
+    //   566: astore_1
+    //   567: aload_1
+    //   568: astore 6
+    //   570: aload_1
+    //   571: athrow
+    //   572: aload 6
+    //   574: ifnull +21 -> 595
+    //   577: aload 9
+    //   579: invokevirtual 202	java/io/RandomAccessFile:close	()V
+    //   582: goto +18 -> 600
+    //   585: astore_3
+    //   586: aload 6
+    //   588: aload_3
+    //   589: invokevirtual 253	java/lang/Throwable:addSuppressed	(Ljava/lang/Throwable;)V
+    //   592: goto +8 -> 600
+    //   595: aload 9
+    //   597: invokevirtual 202	java/io/RandomAccessFile:close	()V
+    //   600: aload_1
+    //   601: athrow
+    //   602: astore 6
+    //   604: goto -483 -> 121
+    //   607: iload 4
+    //   609: ifeq -330 -> 279
+    //   612: iload_2
+    //   613: iconst_2
+    //   614: iand
+    //   615: ifeq +6 -> 621
+    //   618: goto -339 -> 279
+    //   621: aconst_null
+    //   622: astore 6
+    //   624: goto -256 -> 368
+    // Local variable table:
+    //   start	length	slot	name	signature
+    //   0	627	0	this	UnpackingSoSource
+    //   0	627	1	paramFileLocker	FileLocker
+    //   0	627	2	paramInt	int
+    //   0	627	3	paramArrayOfByte	byte[]
+    //   47	561	4	b1	byte
+    //   43	10	5	b2	byte
+    //   36	440	6	localObject1	Object
+    //   483	12	6	localThrowable1	Throwable
+    //   522	65	6	localObject2	Object
+    //   602	1	6	localEOFException	java.io.EOFException
+    //   622	1	6	localObject3	Object
+    //   29	528	7	localObject4	Object
+    //   32	333	8	localObject5	Object
+    //   532	8	8	localThrowable2	Throwable
+    //   26	570	9	localRandomAccessFile	java.io.RandomAccessFile
+    //   66	486	10	localObject6	Object
+    //   13	378	11	localFile1	File
+    //   185	201	12	localFile2	File
+    // Exception table:
+    //   from	to	target	type
+    //   38	45	127	finally
+    //   59	68	127	finally
+    //   72	80	127	finally
+    //   84	94	127	finally
+    //   98	106	127	finally
+    //   110	121	127	finally
+    //   135	137	127	finally
+    //   38	45	131	java/lang/Throwable
+    //   59	68	131	java/lang/Throwable
+    //   72	80	131	java/lang/Throwable
+    //   84	94	131	java/lang/Throwable
+    //   98	106	131	java/lang/Throwable
+    //   110	121	131	java/lang/Throwable
+    //   142	147	150	java/lang/Throwable
+    //   326	336	456	finally
+    //   326	336	462	java/lang/Throwable
+    //   463	465	465	finally
+    //   475	480	483	java/lang/Throwable
+    //   312	326	501	finally
+    //   341	346	501	finally
+    //   475	480	501	finally
+    //   485	491	501	finally
+    //   494	499	501	finally
+    //   499	501	501	finally
+    //   312	326	507	java/lang/Throwable
+    //   341	346	507	java/lang/Throwable
+    //   485	491	507	java/lang/Throwable
+    //   494	499	507	java/lang/Throwable
+    //   499	501	507	java/lang/Throwable
+    //   508	510	510	finally
+    //   524	529	532	java/lang/Throwable
+    //   204	214	562	finally
+    //   218	231	562	finally
+    //   235	244	562	finally
+    //   251	260	562	finally
+    //   264	273	562	finally
+    //   283	292	562	finally
+    //   296	302	562	finally
+    //   306	312	562	finally
+    //   359	364	562	finally
+    //   524	529	562	finally
+    //   538	544	562	finally
+    //   551	556	562	finally
+    //   560	562	562	finally
+    //   570	572	562	finally
+    //   204	214	566	java/lang/Throwable
+    //   218	231	566	java/lang/Throwable
+    //   235	244	566	java/lang/Throwable
+    //   251	260	566	java/lang/Throwable
+    //   264	273	566	java/lang/Throwable
+    //   283	292	566	java/lang/Throwable
+    //   296	302	566	java/lang/Throwable
+    //   306	312	566	java/lang/Throwable
+    //   359	364	566	java/lang/Throwable
+    //   538	544	566	java/lang/Throwable
+    //   551	556	566	java/lang/Throwable
+    //   560	562	566	java/lang/Throwable
+    //   577	582	585	java/lang/Throwable
+    //   38	45	602	java/io/EOFException
+    //   59	68	602	java/io/EOFException
+    //   72	80	602	java/io/EOFException
+    //   84	94	602	java/io/EOFException
+    //   98	106	602	java/io/EOFException
+    //   110	121	602	java/io/EOFException
+  }
+  
+  /* Error */
+  private void regenerate(byte paramByte, DsoManifest paramDsoManifest, InputDsoIterator paramInputDsoIterator)
+    throws IOException
+  {
+    // Byte code:
+    //   0: new 106	java/lang/StringBuilder
+    //   3: dup
+    //   4: invokespecial 107	java/lang/StringBuilder:<init>	()V
+    //   7: astore 6
+    //   9: aload 6
+    //   11: ldc_w 314
+    //   14: invokevirtual 113	java/lang/StringBuilder:append	(Ljava/lang/String;)Ljava/lang/StringBuilder;
+    //   17: pop
+    //   18: aload 6
+    //   20: aload_0
+    //   21: invokevirtual 318	java/lang/Object:getClass	()Ljava/lang/Class;
+    //   24: invokevirtual 321	java/lang/Class:getName	()Ljava/lang/String;
+    //   27: invokevirtual 113	java/lang/StringBuilder:append	(Ljava/lang/String;)Ljava/lang/StringBuilder;
+    //   30: pop
+    //   31: ldc 43
+    //   33: aload 6
+    //   35: invokevirtual 120	java/lang/StringBuilder:toString	()Ljava/lang/String;
+    //   38: invokestatic 126	android/util/Log:v	(Ljava/lang/String;Ljava/lang/String;)I
+    //   41: pop
+    //   42: new 154	java/io/RandomAccessFile
+    //   45: dup
+    //   46: new 88	java/io/File
+    //   49: dup
+    //   50: aload_0
+    //   51: getfield 86	com/facebook/soloader/UnpackingSoSource:soDirectory	Ljava/io/File;
+    //   54: ldc 31
+    //   56: invokespecial 104	java/io/File:<init>	(Ljava/io/File;Ljava/lang/String;)V
+    //   59: ldc -100
+    //   61: invokespecial 157	java/io/RandomAccessFile:<init>	(Ljava/io/File;Ljava/lang/String;)V
+    //   64: astore 9
+    //   66: aconst_null
+    //   67: astore 8
+    //   69: iload_1
+    //   70: iconst_1
+    //   71: if_icmpne +365 -> 436
+    //   74: aload 8
+    //   76: astore 6
+    //   78: aload 9
+    //   80: invokestatic 324	com/facebook/soloader/UnpackingSoSource$DsoManifest:read	(Ljava/io/DataInput;)Lcom/facebook/soloader/UnpackingSoSource$DsoManifest;
+    //   83: astore 7
+    //   85: aload 7
+    //   87: astore 6
+    //   89: goto +31 -> 120
+    //   92: astore_2
+    //   93: goto +313 -> 406
+    //   96: astore_2
+    //   97: goto +304 -> 401
+    //   100: astore 7
+    //   102: aload 8
+    //   104: astore 6
+    //   106: ldc 43
+    //   108: ldc_w 326
+    //   111: aload 7
+    //   113: invokestatic 328	android/util/Log:i	(Ljava/lang/String;Ljava/lang/String;Ljava/lang/Throwable;)I
+    //   116: pop
+    //   117: goto +319 -> 436
+    //   120: aload 6
+    //   122: astore 7
+    //   124: aload 6
+    //   126: ifnonnull +20 -> 146
+    //   129: aload 8
+    //   131: astore 6
+    //   133: new 11	com/facebook/soloader/UnpackingSoSource$DsoManifest
+    //   136: dup
+    //   137: iconst_0
+    //   138: anewarray 8	com/facebook/soloader/UnpackingSoSource$Dso
+    //   141: invokespecial 330	com/facebook/soloader/UnpackingSoSource$DsoManifest:<init>	([Lcom/facebook/soloader/UnpackingSoSource$Dso;)V
+    //   144: astore 7
+    //   146: aload 8
+    //   148: astore 6
+    //   150: aload_0
+    //   151: aload_2
+    //   152: getfield 334	com/facebook/soloader/UnpackingSoSource$DsoManifest:dsos	[Lcom/facebook/soloader/UnpackingSoSource$Dso;
+    //   155: invokespecial 336	com/facebook/soloader/UnpackingSoSource:deleteUnmentionedFiles	([Lcom/facebook/soloader/UnpackingSoSource$Dso;)V
+    //   158: aload 8
+    //   160: astore 6
+    //   162: ldc_w 337
+    //   165: newarray byte
+    //   167: astore_2
+    //   168: aload 8
+    //   170: astore 6
+    //   172: aload_3
+    //   173: invokevirtual 341	com/facebook/soloader/UnpackingSoSource$InputDsoIterator:hasNext	()Z
+    //   176: ifeq +181 -> 357
+    //   179: aload 8
+    //   181: astore 6
+    //   183: aload_3
+    //   184: invokevirtual 345	com/facebook/soloader/UnpackingSoSource$InputDsoIterator:next	()Lcom/facebook/soloader/UnpackingSoSource$InputDso;
+    //   187: astore 10
+    //   189: iconst_1
+    //   190: istore 4
+    //   192: iconst_0
+    //   193: istore_1
+    //   194: iload 4
+    //   196: ifeq +75 -> 271
+    //   199: iload_1
+    //   200: aload 7
+    //   202: getfield 334	com/facebook/soloader/UnpackingSoSource$DsoManifest:dsos	[Lcom/facebook/soloader/UnpackingSoSource$Dso;
+    //   205: arraylength
+    //   206: if_icmpge +65 -> 271
+    //   209: iload 4
+    //   211: istore 5
+    //   213: aload 7
+    //   215: getfield 334	com/facebook/soloader/UnpackingSoSource$DsoManifest:dsos	[Lcom/facebook/soloader/UnpackingSoSource$Dso;
+    //   218: iload_1
+    //   219: aaload
+    //   220: getfield 101	com/facebook/soloader/UnpackingSoSource$Dso:name	Ljava/lang/String;
+    //   223: aload 10
+    //   225: getfield 145	com/facebook/soloader/UnpackingSoSource$InputDso:dso	Lcom/facebook/soloader/UnpackingSoSource$Dso;
+    //   228: getfield 101	com/facebook/soloader/UnpackingSoSource$Dso:name	Ljava/lang/String;
+    //   231: invokevirtual 98	java/lang/String:equals	(Ljava/lang/Object;)Z
+    //   234: ifeq +208 -> 442
+    //   237: iload 4
+    //   239: istore 5
+    //   241: aload 7
+    //   243: getfield 334	com/facebook/soloader/UnpackingSoSource$DsoManifest:dsos	[Lcom/facebook/soloader/UnpackingSoSource$Dso;
+    //   246: iload_1
+    //   247: aaload
+    //   248: getfield 348	com/facebook/soloader/UnpackingSoSource$Dso:hash	Ljava/lang/String;
+    //   251: aload 10
+    //   253: getfield 145	com/facebook/soloader/UnpackingSoSource$InputDso:dso	Lcom/facebook/soloader/UnpackingSoSource$Dso;
+    //   256: getfield 348	com/facebook/soloader/UnpackingSoSource$Dso:hash	Ljava/lang/String;
+    //   259: invokevirtual 98	java/lang/String:equals	(Ljava/lang/Object;)Z
+    //   262: ifeq +180 -> 442
+    //   265: iconst_0
+    //   266: istore 5
+    //   268: goto +174 -> 442
+    //   271: iload 4
+    //   273: ifeq +67 -> 340
+    //   276: aload_0
+    //   277: aload 10
+    //   279: aload_2
+    //   280: invokespecial 350	com/facebook/soloader/UnpackingSoSource:extractDso	(Lcom/facebook/soloader/UnpackingSoSource$InputDso;[B)V
+    //   283: goto +57 -> 340
+    //   286: aload_3
+    //   287: athrow
+    //   288: astore_2
+    //   289: aload 10
+    //   291: ifnull +43 -> 334
+    //   294: aload_3
+    //   295: ifnull +30 -> 325
+    //   298: aload 8
+    //   300: astore 6
+    //   302: aload 10
+    //   304: invokevirtual 351	com/facebook/soloader/UnpackingSoSource$InputDso:close	()V
+    //   307: goto +27 -> 334
+    //   310: astore 7
+    //   312: aload 8
+    //   314: astore 6
+    //   316: aload_3
+    //   317: aload 7
+    //   319: invokevirtual 253	java/lang/Throwable:addSuppressed	(Ljava/lang/Throwable;)V
+    //   322: goto +12 -> 334
+    //   325: aload 8
+    //   327: astore 6
+    //   329: aload 10
+    //   331: invokevirtual 351	com/facebook/soloader/UnpackingSoSource$InputDso:close	()V
+    //   334: aload 8
+    //   336: astore 6
+    //   338: aload_2
+    //   339: athrow
+    //   340: aload 10
+    //   342: ifnull -174 -> 168
+    //   345: aload 8
+    //   347: astore 6
+    //   349: aload 10
+    //   351: invokevirtual 351	com/facebook/soloader/UnpackingSoSource$InputDso:close	()V
+    //   354: goto -186 -> 168
+    //   357: aload 9
+    //   359: invokevirtual 202	java/io/RandomAccessFile:close	()V
+    //   362: new 106	java/lang/StringBuilder
+    //   365: dup
+    //   366: invokespecial 107	java/lang/StringBuilder:<init>	()V
+    //   369: astore_2
+    //   370: aload_2
+    //   371: ldc_w 353
+    //   374: invokevirtual 113	java/lang/StringBuilder:append	(Ljava/lang/String;)Ljava/lang/StringBuilder;
+    //   377: pop
+    //   378: aload_2
+    //   379: aload_0
+    //   380: invokevirtual 318	java/lang/Object:getClass	()Ljava/lang/Class;
+    //   383: invokevirtual 321	java/lang/Class:getName	()Ljava/lang/String;
+    //   386: invokevirtual 113	java/lang/StringBuilder:append	(Ljava/lang/String;)Ljava/lang/StringBuilder;
+    //   389: pop
+    //   390: ldc 43
+    //   392: aload_2
+    //   393: invokevirtual 120	java/lang/StringBuilder:toString	()Ljava/lang/String;
+    //   396: invokestatic 126	android/util/Log:v	(Ljava/lang/String;Ljava/lang/String;)I
+    //   399: pop
+    //   400: return
+    //   401: aload_2
+    //   402: astore 6
+    //   404: aload_2
+    //   405: athrow
+    //   406: aload 6
+    //   408: ifnull +21 -> 429
+    //   411: aload 9
+    //   413: invokevirtual 202	java/io/RandomAccessFile:close	()V
+    //   416: goto +18 -> 434
+    //   419: astore_3
+    //   420: aload 6
+    //   422: aload_3
+    //   423: invokevirtual 253	java/lang/Throwable:addSuppressed	(Ljava/lang/Throwable;)V
+    //   426: goto +8 -> 434
+    //   429: aload 9
+    //   431: invokevirtual 202	java/io/RandomAccessFile:close	()V
+    //   434: aload_2
+    //   435: athrow
+    //   436: aconst_null
+    //   437: astore 6
+    //   439: goto -319 -> 120
+    //   442: iload_1
+    //   443: iconst_1
+    //   444: iadd
+    //   445: istore_1
+    //   446: iload 5
+    //   448: istore 4
+    //   450: goto -256 -> 194
+    //   453: astore_2
+    //   454: aconst_null
+    //   455: astore_3
+    //   456: goto -167 -> 289
+    //   459: astore_3
+    //   460: goto -174 -> 286
+    // Local variable table:
+    //   start	length	slot	name	signature
+    //   0	463	0	this	UnpackingSoSource
+    //   0	463	1	paramByte	byte
+    //   0	463	2	paramDsoManifest	DsoManifest
+    //   0	463	3	paramInputDsoIterator	InputDsoIterator
+    //   190	259	4	i	int
+    //   211	236	5	j	int
+    //   7	431	6	localObject1	Object
+    //   83	3	7	localDsoManifest	DsoManifest
+    //   100	12	7	localException	Exception
+    //   122	120	7	localObject2	Object
+    //   310	8	7	localThrowable	Throwable
+    //   67	279	8	localObject3	Object
+    //   64	366	9	localRandomAccessFile	java.io.RandomAccessFile
+    //   187	163	10	localInputDso	InputDso
+    // Exception table:
+    //   from	to	target	type
+    //   78	85	92	finally
+    //   106	117	92	finally
+    //   133	146	92	finally
+    //   150	158	92	finally
+    //   162	168	92	finally
+    //   172	179	92	finally
+    //   183	189	92	finally
+    //   302	307	92	finally
+    //   316	322	92	finally
+    //   329	334	92	finally
+    //   338	340	92	finally
+    //   349	354	92	finally
+    //   404	406	92	finally
+    //   78	85	96	java/lang/Throwable
+    //   106	117	96	java/lang/Throwable
+    //   133	146	96	java/lang/Throwable
+    //   150	158	96	java/lang/Throwable
+    //   162	168	96	java/lang/Throwable
+    //   172	179	96	java/lang/Throwable
+    //   183	189	96	java/lang/Throwable
+    //   316	322	96	java/lang/Throwable
+    //   329	334	96	java/lang/Throwable
+    //   338	340	96	java/lang/Throwable
+    //   349	354	96	java/lang/Throwable
+    //   78	85	100	java/lang/Exception
+    //   286	288	288	finally
+    //   302	307	310	java/lang/Throwable
+    //   411	416	419	java/lang/Throwable
+    //   199	209	453	finally
+    //   213	237	453	finally
+    //   241	265	453	finally
+    //   276	283	453	finally
+    //   199	209	459	java/lang/Throwable
+    //   213	237	459	java/lang/Throwable
+    //   241	265	459	java/lang/Throwable
+    //   276	283	459	java/lang/Throwable
+  }
+  
+  /* Error */
+  private static void writeState(File paramFile, byte paramByte)
+    throws IOException
+  {
+    // Byte code:
+    //   0: new 154	java/io/RandomAccessFile
+    //   3: dup
+    //   4: aload_0
+    //   5: ldc -100
+    //   7: invokespecial 157	java/io/RandomAccessFile:<init>	(Ljava/io/File;Ljava/lang/String;)V
+    //   10: astore_3
+    //   11: aconst_null
+    //   12: astore_2
+    //   13: aload_2
+    //   14: astore_0
+    //   15: aload_3
+    //   16: lconst_0
+    //   17: invokevirtual 356	java/io/RandomAccessFile:seek	(J)V
+    //   20: aload_2
+    //   21: astore_0
+    //   22: aload_3
+    //   23: iload_1
+    //   24: invokevirtual 360	java/io/RandomAccessFile:write	(I)V
+    //   27: aload_2
+    //   28: astore_0
+    //   29: aload_3
+    //   30: aload_3
+    //   31: invokevirtual 192	java/io/RandomAccessFile:getFilePointer	()J
+    //   34: invokevirtual 196	java/io/RandomAccessFile:setLength	(J)V
+    //   37: aload_2
+    //   38: astore_0
+    //   39: aload_3
+    //   40: invokevirtual 179	java/io/RandomAccessFile:getFD	()Ljava/io/FileDescriptor;
+    //   43: invokevirtual 365	java/io/FileDescriptor:sync	()V
+    //   46: aload_3
+    //   47: invokevirtual 202	java/io/RandomAccessFile:close	()V
+    //   50: return
+    //   51: astore_2
+    //   52: goto +8 -> 60
+    //   55: astore_2
+    //   56: aload_2
+    //   57: astore_0
+    //   58: aload_2
+    //   59: athrow
+    //   60: aload_0
+    //   61: ifnull +19 -> 80
+    //   64: aload_3
+    //   65: invokevirtual 202	java/io/RandomAccessFile:close	()V
+    //   68: goto +16 -> 84
+    //   71: astore_3
+    //   72: aload_0
+    //   73: aload_3
+    //   74: invokevirtual 253	java/lang/Throwable:addSuppressed	(Ljava/lang/Throwable;)V
+    //   77: goto +7 -> 84
+    //   80: aload_3
+    //   81: invokevirtual 202	java/io/RandomAccessFile:close	()V
+    //   84: aload_2
+    //   85: athrow
+    // Local variable table:
+    //   start	length	slot	name	signature
+    //   0	86	0	paramFile	File
+    //   0	86	1	paramByte	byte
+    //   12	26	2	localObject1	Object
+    //   51	1	2	localObject2	Object
+    //   55	30	2	localThrowable1	Throwable
+    //   10	55	3	localRandomAccessFile	java.io.RandomAccessFile
+    //   71	10	3	localThrowable2	Throwable
+    // Exception table:
+    //   from	to	target	type
+    //   15	20	51	finally
+    //   22	27	51	finally
+    //   29	37	51	finally
+    //   39	46	51	finally
+    //   58	60	51	finally
+    //   15	20	55	java/lang/Throwable
+    //   22	27	55	java/lang/Throwable
+    //   29	37	55	java/lang/Throwable
+    //   39	46	55	java/lang/Throwable
+    //   64	68	71	java/lang/Throwable
+  }
+  
+  /* Error */
+  protected byte[] getDepsBlock()
+    throws IOException
+  {
+    // Byte code:
+    //   0: invokestatic 373	android/os/Parcel:obtain	()Landroid/os/Parcel;
+    //   3: astore 5
+    //   5: aload_0
+    //   6: invokevirtual 275	com/facebook/soloader/UnpackingSoSource:makeUnpacker	()Lcom/facebook/soloader/UnpackingSoSource$Unpacker;
+    //   9: astore 4
+    //   11: aconst_null
+    //   12: astore_3
+    //   13: aload_3
+    //   14: astore_2
+    //   15: aload 4
+    //   17: invokevirtual 279	com/facebook/soloader/UnpackingSoSource$Unpacker:getDsoManifest	()Lcom/facebook/soloader/UnpackingSoSource$DsoManifest;
+    //   20: getfield 334	com/facebook/soloader/UnpackingSoSource$DsoManifest:dsos	[Lcom/facebook/soloader/UnpackingSoSource$Dso;
+    //   23: astore 6
+    //   25: aload_3
+    //   26: astore_2
+    //   27: aload 5
+    //   29: iconst_1
+    //   30: invokevirtual 377	android/os/Parcel:writeByte	(B)V
+    //   33: aload_3
+    //   34: astore_2
+    //   35: aload 5
+    //   37: aload 6
+    //   39: arraylength
+    //   40: invokevirtual 380	android/os/Parcel:writeInt	(I)V
+    //   43: iconst_0
+    //   44: istore_1
+    //   45: aload_3
+    //   46: astore_2
+    //   47: iload_1
+    //   48: aload 6
+    //   50: arraylength
+    //   51: if_icmpge +38 -> 89
+    //   54: aload_3
+    //   55: astore_2
+    //   56: aload 5
+    //   58: aload 6
+    //   60: iload_1
+    //   61: aaload
+    //   62: getfield 101	com/facebook/soloader/UnpackingSoSource$Dso:name	Ljava/lang/String;
+    //   65: invokevirtual 383	android/os/Parcel:writeString	(Ljava/lang/String;)V
+    //   68: aload_3
+    //   69: astore_2
+    //   70: aload 5
+    //   72: aload 6
+    //   74: iload_1
+    //   75: aaload
+    //   76: getfield 348	com/facebook/soloader/UnpackingSoSource$Dso:hash	Ljava/lang/String;
+    //   79: invokevirtual 383	android/os/Parcel:writeString	(Ljava/lang/String;)V
+    //   82: iload_1
+    //   83: iconst_1
+    //   84: iadd
+    //   85: istore_1
+    //   86: goto -41 -> 45
+    //   89: aload 4
+    //   91: ifnull +8 -> 99
+    //   94: aload 4
+    //   96: invokevirtual 289	com/facebook/soloader/UnpackingSoSource$Unpacker:close	()V
+    //   99: aload 5
+    //   101: invokevirtual 386	android/os/Parcel:marshall	()[B
+    //   104: astore_2
+    //   105: aload 5
+    //   107: invokevirtual 389	android/os/Parcel:recycle	()V
+    //   110: aload_2
+    //   111: areturn
+    //   112: astore_3
+    //   113: goto +8 -> 121
+    //   116: astore_3
+    //   117: aload_3
+    //   118: astore_2
+    //   119: aload_3
+    //   120: athrow
+    //   121: aload 4
+    //   123: ifnull +31 -> 154
+    //   126: aload_2
+    //   127: ifnull +22 -> 149
+    //   130: aload 4
+    //   132: invokevirtual 289	com/facebook/soloader/UnpackingSoSource$Unpacker:close	()V
+    //   135: goto +19 -> 154
+    //   138: astore 4
+    //   140: aload_2
+    //   141: aload 4
+    //   143: invokevirtual 253	java/lang/Throwable:addSuppressed	(Ljava/lang/Throwable;)V
+    //   146: goto +8 -> 154
+    //   149: aload 4
+    //   151: invokevirtual 289	com/facebook/soloader/UnpackingSoSource$Unpacker:close	()V
+    //   154: aload_3
+    //   155: athrow
+    // Local variable table:
+    //   start	length	slot	name	signature
+    //   0	156	0	this	UnpackingSoSource
+    //   44	42	1	i	int
+    //   14	127	2	localObject1	Object
+    //   12	57	3	localObject2	Object
+    //   112	1	3	localObject3	Object
+    //   116	39	3	localThrowable1	Throwable
+    //   9	122	4	localUnpacker	Unpacker
+    //   138	12	4	localThrowable2	Throwable
+    //   3	103	5	localParcel	android.os.Parcel
+    //   23	50	6	arrayOfDso	Dso[]
+    // Exception table:
+    //   from	to	target	type
+    //   15	25	112	finally
+    //   27	33	112	finally
+    //   35	43	112	finally
+    //   47	54	112	finally
+    //   56	68	112	finally
+    //   70	82	112	finally
+    //   119	121	112	finally
+    //   15	25	116	java/lang/Throwable
+    //   27	33	116	java/lang/Throwable
+    //   35	43	116	java/lang/Throwable
+    //   47	54	116	java/lang/Throwable
+    //   56	68	116	java/lang/Throwable
+    //   70	82	116	java/lang/Throwable
+    //   130	135	138	java/lang/Throwable
+  }
+  
+  public String[] getSoSourceAbis()
+  {
+    if (mAbis == null) {
+      return super.getSoSourceAbis();
+    }
+    return mAbis;
+  }
+  
+  public int loadLibrary(String paramString, int paramInt, StrictMode.ThreadPolicy paramThreadPolicy)
+    throws IOException
+  {
+    synchronized (getLibraryLock(paramString))
+    {
+      paramInt = loadLibraryFrom(paramString, paramInt, soDirectory, paramThreadPolicy);
+      return paramInt;
+    }
+  }
+  
+  protected abstract Unpacker makeUnpacker()
+    throws IOException;
+  
+  protected void prepare(int paramInt)
+    throws IOException
+  {
+    SysUtil.mkdirOrThrow(soDirectory);
+    Object localObject1 = FileLocker.lock(new File(soDirectory, "dso_lock"));
+    try
+    {
+      StringBuilder localStringBuilder1 = new StringBuilder();
+      localStringBuilder1.append("locked dso store ");
+      localStringBuilder1.append(soDirectory);
+      Log.v("fb-UnpackingSoSource", localStringBuilder1.toString());
+      if (refreshLocked((FileLocker)localObject1, paramInt, getDepsBlock()))
+      {
+        localObject1 = null;
+      }
+      else
+      {
+        localStringBuilder1 = new StringBuilder();
+        localStringBuilder1.append("dso store is up-to-date: ");
+        localStringBuilder1.append(soDirectory);
+        Log.i("fb-UnpackingSoSource", localStringBuilder1.toString());
+      }
+      if (localObject1 != null)
+      {
+        localStringBuilder1 = new StringBuilder();
+        localStringBuilder1.append("releasing dso store lock for ");
+        localStringBuilder1.append(soDirectory);
+        Log.v("fb-UnpackingSoSource", localStringBuilder1.toString());
+        ((FileLocker)localObject1).close();
+        return;
+      }
+      localObject1 = new StringBuilder();
+      ((StringBuilder)localObject1).append("not releasing dso store lock for ");
+      ((StringBuilder)localObject1).append(soDirectory);
+      ((StringBuilder)localObject1).append(" (syncer thread started)");
+      Log.v("fb-UnpackingSoSource", ((StringBuilder)localObject1).toString());
+      return;
+    }
+    finally
+    {
+      if (localObject1 != null)
+      {
+        StringBuilder localStringBuilder2 = new StringBuilder();
+        localStringBuilder2.append("releasing dso store lock for ");
+        localStringBuilder2.append(soDirectory);
+        Log.v("fb-UnpackingSoSource", localStringBuilder2.toString());
+        ((FileLocker)localObject1).close();
+      }
+      else
+      {
+        localObject1 = new StringBuilder();
+        ((StringBuilder)localObject1).append("not releasing dso store lock for ");
+        ((StringBuilder)localObject1).append(soDirectory);
+        ((StringBuilder)localObject1).append(" (syncer thread started)");
+        Log.v("fb-UnpackingSoSource", ((StringBuilder)localObject1).toString());
+      }
+    }
+  }
+  
+  /* Error */
+  protected void prepare(String paramString)
+    throws IOException
+  {
+    // Byte code:
+    //   0: aload_0
+    //   1: monitorenter
+    //   2: aload_0
+    //   3: aload_1
+    //   4: invokespecial 398	com/facebook/soloader/UnpackingSoSource:getLibraryLock	(Ljava/lang/String;)Ljava/lang/Object;
+    //   7: astore_2
+    //   8: aload_2
+    //   9: monitorenter
+    //   10: aload_0
+    //   11: aload_1
+    //   12: putfield 429	com/facebook/soloader/UnpackingSoSource:mCorruptedLib	Ljava/lang/String;
+    //   15: aload_0
+    //   16: iconst_2
+    //   17: invokevirtual 431	com/facebook/soloader/UnpackingSoSource:prepare	(I)V
+    //   20: aload_2
+    //   21: monitorexit
+    //   22: aload_0
+    //   23: monitorexit
+    //   24: return
+    //   25: astore_1
+    //   26: aload_2
+    //   27: monitorexit
+    //   28: aload_1
+    //   29: athrow
+    //   30: astore_1
+    //   31: aload_0
+    //   32: monitorexit
+    //   33: aload_1
+    //   34: athrow
+    // Local variable table:
+    //   start	length	slot	name	signature
+    //   0	35	0	this	UnpackingSoSource
+    //   0	35	1	paramString	String
+    // Exception table:
+    //   from	to	target	type
+    //   10	22	25	finally
+    //   26	28	25	finally
+    //   2	10	30	finally
+    //   28	30	30	finally
+  }
+  
+  public void setSoSourceAbis(String[] paramArrayOfString)
+  {
+    mAbis = paramArrayOfString;
+  }
+  
+  public static class Dso
+  {
+    public final String hash;
+    public final String name;
+    
+    public Dso(String paramString1, String paramString2)
+    {
+      name = paramString1;
+      hash = paramString2;
+    }
+  }
+  
+  public static final class DsoManifest
+  {
+    public final UnpackingSoSource.Dso[] dsos;
+    
+    public DsoManifest(UnpackingSoSource.Dso[] paramArrayOfDso)
+    {
+      dsos = paramArrayOfDso;
+    }
+    
+    static final DsoManifest read(DataInput paramDataInput)
+      throws IOException
+    {
+      if (paramDataInput.readByte() == 1)
+      {
+        int j = paramDataInput.readInt();
+        if (j >= 0)
+        {
+          UnpackingSoSource.Dso[] arrayOfDso = new UnpackingSoSource.Dso[j];
+          int i = 0;
+          while (i < j)
+          {
+            arrayOfDso[i] = new UnpackingSoSource.Dso(paramDataInput.readUTF(), paramDataInput.readUTF());
+            i += 1;
+          }
+          return new DsoManifest(arrayOfDso);
+        }
+        throw new RuntimeException("illegal number of shared libraries");
+      }
+      throw new RuntimeException("wrong dso manifest version");
+    }
+    
+    public final void write(DataOutput paramDataOutput)
+      throws IOException
+    {
+      paramDataOutput.writeByte(1);
+      paramDataOutput.writeInt(dsos.length);
+      int i = 0;
+      while (i < dsos.length)
+      {
+        paramDataOutput.writeUTF(dsos[i].name);
+        paramDataOutput.writeUTF(dsos[i].hash);
+        i += 1;
+      }
+    }
+  }
+  
+  protected static final class InputDso
+    implements Closeable
+  {
+    public final InputStream content;
+    public final UnpackingSoSource.Dso dso;
+    
+    public InputDso(UnpackingSoSource.Dso paramDso, InputStream paramInputStream)
+    {
+      dso = paramDso;
+      content = paramInputStream;
+    }
+    
+    public void close()
+      throws IOException
+    {
+      content.close();
+    }
+  }
+  
+  protected static abstract class InputDsoIterator
+    implements Closeable
+  {
+    protected InputDsoIterator() {}
+    
+    public void close()
+      throws IOException
+    {}
+    
+    public abstract boolean hasNext();
+    
+    public abstract UnpackingSoSource.InputDso next()
+      throws IOException;
+  }
+  
+  protected static abstract class Unpacker
+    implements Closeable
+  {
+    protected Unpacker() {}
+    
+    public void close()
+      throws IOException
+    {}
+    
+    protected abstract UnpackingSoSource.DsoManifest getDsoManifest()
+      throws IOException;
+    
+    protected abstract UnpackingSoSource.InputDsoIterator openDsoIterator()
+      throws IOException;
+  }
+}

@@ -1,0 +1,90 @@
+package com.google.android.exoplayer2.upstream;
+
+import android.net.Uri;
+import androidx.annotation.Nullable;
+import com.google.android.exoplayer2.util.Assertions;
+import java.io.IOException;
+
+public final class ByteArrayDataSource
+  extends BaseDataSource
+{
+  private int bytesRemaining;
+  private final byte[] data;
+  private boolean opened;
+  private int readPosition;
+  @Nullable
+  private Uri uri;
+  
+  public ByteArrayDataSource(byte[] paramArrayOfByte)
+  {
+    super(false);
+    Assertions.checkNotNull(paramArrayOfByte);
+    if (paramArrayOfByte.length > 0) {
+      bool = true;
+    }
+    Assertions.checkArgument(bool);
+    data = paramArrayOfByte;
+  }
+  
+  public void close()
+    throws IOException
+  {
+    if (opened)
+    {
+      opened = false;
+      transferEnded();
+    }
+    uri = null;
+  }
+  
+  public Uri getUri()
+  {
+    return uri;
+  }
+  
+  public long open(DataSpec paramDataSpec)
+    throws IOException
+  {
+    uri = uri;
+    transferInitializing(paramDataSpec);
+    readPosition = ((int)position);
+    long l;
+    if (length == -1L) {
+      l = data.length - position;
+    } else {
+      l = length;
+    }
+    bytesRemaining = ((int)l);
+    if ((bytesRemaining > 0) && (readPosition + bytesRemaining <= data.length))
+    {
+      opened = true;
+      transferStarted(paramDataSpec);
+      return bytesRemaining;
+    }
+    StringBuilder localStringBuilder = new StringBuilder();
+    localStringBuilder.append("Unsatisfiable range: [");
+    localStringBuilder.append(readPosition);
+    localStringBuilder.append(", ");
+    localStringBuilder.append(length);
+    localStringBuilder.append("], length: ");
+    localStringBuilder.append(data.length);
+    throw new IOException(localStringBuilder.toString());
+  }
+  
+  public int read(byte[] paramArrayOfByte, int paramInt1, int paramInt2)
+    throws IOException
+  {
+    if (paramInt2 == 0) {
+      return 0;
+    }
+    if (bytesRemaining == 0) {
+      return -1;
+    }
+    paramInt2 = Math.min(paramInt2, bytesRemaining);
+    System.arraycopy(data, readPosition, paramArrayOfByte, paramInt1, paramInt2);
+    readPosition += paramInt2;
+    bytesRemaining -= paramInt2;
+    bytesTransferred(paramInt2);
+    return paramInt2;
+  }
+}

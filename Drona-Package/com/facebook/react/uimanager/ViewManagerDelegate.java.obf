@@ -1,0 +1,9 @@
+package com.facebook.react.uimanager;
+
+import android.view.View;
+import androidx.annotation.Nullable;
+
+public abstract interface ViewManagerDelegate<T extends View>
+{
+  public abstract void setProperty(T paramT, String paramString, @Nullable Object paramObject);
+}

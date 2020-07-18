@@ -1,0 +1,63 @@
+package com.bumptech.glide.util;
+
+import android.view.View;
+import androidx.annotation.NonNull;
+import androidx.annotation.Nullable;
+import com.bumptech.glide.ListPreloader.PreloadSizeProvider;
+import com.bumptech.glide.request.target.SizeReadyCallback;
+import com.bumptech.glide.request.target.ViewTarget;
+import com.bumptech.glide.request.transition.Transition;
+import java.util.Arrays;
+
+public class ViewPreloadSizeProvider<T>
+  implements ListPreloader.PreloadSizeProvider<T>, SizeReadyCallback
+{
+  private int[] size;
+  private SizeViewTarget viewTarget;
+  
+  public ViewPreloadSizeProvider() {}
+  
+  public ViewPreloadSizeProvider(@NonNull View paramView)
+  {
+    viewTarget = new SizeViewTarget(paramView, this);
+  }
+  
+  @Nullable
+  public int[] getPreloadSize(@NonNull T paramT, int paramInt1, int paramInt2)
+  {
+    if (size == null) {
+      return null;
+    }
+    return Arrays.copyOf(size, size.length);
+  }
+  
+  public void onSizeReady(int paramInt1, int paramInt2)
+  {
+    size = new int[] { paramInt1, paramInt2 };
+    viewTarget = null;
+  }
+  
+  public void setView(@NonNull View paramView)
+  {
+    if (size == null)
+    {
+      if (viewTarget != null) {
+        return;
+      }
+      viewTarget = new SizeViewTarget(paramView, this);
+      return;
+    }
+  }
+  
+  private static final class SizeViewTarget
+    extends ViewTarget<View, Object>
+  {
+    SizeViewTarget(@NonNull View paramView, @NonNull SizeReadyCallback paramSizeReadyCallback)
+    {
+      super();
+      getSize(paramSizeReadyCallback);
+    }
+    
+    public void onResourceReady(@NonNull Object paramObject, @Nullable Transition<? super Object> paramTransition) {}
+  }
+}

@@ -1,0 +1,8 @@
+package com.google.android.gms.ads.mediation;
+
+public abstract interface InitializationCompleteCallback
+{
+  public abstract void onInitializationFailed(String paramString);
+  
+  public abstract void onInitializationSucceeded();
+}

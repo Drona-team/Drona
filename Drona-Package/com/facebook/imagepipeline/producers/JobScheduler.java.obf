@@ -1,0 +1,282 @@
+package com.facebook.imagepipeline.producers;
+
+import android.os.SystemClock;
+import com.facebook.common.internal.VisibleForTesting;
+import com.facebook.imagepipeline.image.EncodedImage;
+import java.util.concurrent.Executor;
+import java.util.concurrent.Executors;
+import java.util.concurrent.ScheduledExecutorService;
+import java.util.concurrent.TimeUnit;
+import javax.annotation.concurrent.GuardedBy;
+
+public class JobScheduler
+{
+  static final String QUEUE_TIME_KEY = "queueTime";
+  private final Runnable mDoJobRunnable;
+  @VisibleForTesting
+  @GuardedBy("this")
+  EncodedImage mEncodedImage;
+  private final Executor mExecutor;
+  private final JobRunnable mJobRunnable;
+  @VisibleForTesting
+  @GuardedBy("this")
+  long mJobStartTime;
+  @VisibleForTesting
+  @GuardedBy("this")
+  JobState mJobState;
+  @VisibleForTesting
+  @GuardedBy("this")
+  long mJobSubmitTime;
+  private final int mMinimumJobIntervalMs;
+  @VisibleForTesting
+  @GuardedBy("this")
+  int mStatus;
+  private final Runnable mSubmitJobRunnable;
+  
+  public JobScheduler(Executor paramExecutor, JobRunnable paramJobRunnable, int paramInt)
+  {
+    mExecutor = paramExecutor;
+    mJobRunnable = paramJobRunnable;
+    mMinimumJobIntervalMs = paramInt;
+    mDoJobRunnable = new Runnable()
+    {
+      public void run()
+      {
+        JobScheduler.this.doJob();
+      }
+    };
+    mSubmitJobRunnable = new Runnable()
+    {
+      public void run()
+      {
+        JobScheduler.this.submitJob();
+      }
+    };
+    mEncodedImage = null;
+    mStatus = 0;
+    mJobState = JobState.IDLE;
+    mJobSubmitTime = 0L;
+    mJobStartTime = 0L;
+  }
+  
+  /* Error */
+  private void doJob()
+  {
+    // Byte code:
+    //   0: invokestatic 91	android/os/SystemClock:uptimeMillis	()J
+    //   3: lstore_2
+    //   4: aload_0
+    //   5: monitorenter
+    //   6: aload_0
+    //   7: getfield 65	com/facebook/imagepipeline/producers/JobScheduler:mEncodedImage	Lcom/facebook/imagepipeline/image/EncodedImage;
+    //   10: astore 4
+    //   12: aload_0
+    //   13: getfield 67	com/facebook/imagepipeline/producers/JobScheduler:mStatus	I
+    //   16: istore_1
+    //   17: aload_0
+    //   18: aconst_null
+    //   19: putfield 65	com/facebook/imagepipeline/producers/JobScheduler:mEncodedImage	Lcom/facebook/imagepipeline/image/EncodedImage;
+    //   22: aload_0
+    //   23: iconst_0
+    //   24: putfield 67	com/facebook/imagepipeline/producers/JobScheduler:mStatus	I
+    //   27: aload_0
+    //   28: getstatic 94	com/facebook/imagepipeline/producers/JobScheduler$JobState:RUNNING	Lcom/facebook/imagepipeline/producers/JobScheduler$JobState;
+    //   31: putfield 72	com/facebook/imagepipeline/producers/JobScheduler:mJobState	Lcom/facebook/imagepipeline/producers/JobScheduler$JobState;
+    //   34: aload_0
+    //   35: lload_2
+    //   36: putfield 76	com/facebook/imagepipeline/producers/JobScheduler:mJobStartTime	J
+    //   39: aload_0
+    //   40: monitorexit
+    //   41: aload 4
+    //   43: iload_1
+    //   44: invokestatic 98	com/facebook/imagepipeline/producers/JobScheduler:shouldProcess	(Lcom/facebook/imagepipeline/image/EncodedImage;I)Z
+    //   47: ifeq +15 -> 62
+    //   50: aload_0
+    //   51: getfield 53	com/facebook/imagepipeline/producers/JobScheduler:mJobRunnable	Lcom/facebook/imagepipeline/producers/JobScheduler$JobRunnable;
+    //   54: aload 4
+    //   56: iload_1
+    //   57: invokeinterface 102 3 0
+    //   62: aload 4
+    //   64: invokestatic 108	com/facebook/imagepipeline/image/EncodedImage:closeSafely	(Lcom/facebook/imagepipeline/image/EncodedImage;)V
+    //   67: aload_0
+    //   68: invokespecial 111	com/facebook/imagepipeline/producers/JobScheduler:onJobFinished	()V
+    //   71: return
+    //   72: astore 5
+    //   74: aload 4
+    //   76: invokestatic 108	com/facebook/imagepipeline/image/EncodedImage:closeSafely	(Lcom/facebook/imagepipeline/image/EncodedImage;)V
+    //   79: aload_0
+    //   80: invokespecial 111	com/facebook/imagepipeline/producers/JobScheduler:onJobFinished	()V
+    //   83: aload 5
+    //   85: athrow
+    //   86: astore 4
+    //   88: aload_0
+    //   89: monitorexit
+    //   90: aload 4
+    //   92: athrow
+    // Local variable table:
+    //   start	length	slot	name	signature
+    //   0	93	0	this	JobScheduler
+    //   16	41	1	i	int
+    //   3	33	2	l	long
+    //   10	65	4	localEncodedImage	EncodedImage
+    //   86	5	4	localObject1	Object
+    //   72	12	5	localObject2	Object
+    // Exception table:
+    //   from	to	target	type
+    //   41	62	72	finally
+    //   6	41	86	finally
+    //   88	90	86	finally
+  }
+  
+  private void enqueueJob(long paramLong)
+  {
+    if (paramLong > 0L)
+    {
+      JobStartExecutorSupplier.get().schedule(mSubmitJobRunnable, paramLong, TimeUnit.MILLISECONDS);
+      return;
+    }
+    mSubmitJobRunnable.run();
+  }
+  
+  private void onJobFinished()
+  {
+    long l2 = SystemClock.uptimeMillis();
+    try
+    {
+      long l1;
+      int i;
+      if (mJobState == JobState.RUNNING_AND_PENDING)
+      {
+        l1 = Math.max(mJobStartTime + mMinimumJobIntervalMs, l2);
+        i = 1;
+        mJobSubmitTime = l2;
+        mJobState = JobState.QUEUED;
+      }
+      else
+      {
+        mJobState = JobState.IDLE;
+        l1 = 0L;
+        i = 0;
+      }
+      if (i != 0) {
+        enqueueJob(l1 - l2);
+      }
+      return;
+    }
+    finally {}
+  }
+  
+  private static boolean shouldProcess(EncodedImage paramEncodedImage, int paramInt)
+  {
+    return (BaseConsumer.isLast(paramInt)) || (BaseConsumer.statusHasFlag(paramInt, 4)) || (EncodedImage.isValid(paramEncodedImage));
+  }
+  
+  private void submitJob()
+  {
+    mExecutor.execute(mDoJobRunnable);
+  }
+  
+  public void clearJob()
+  {
+    try
+    {
+      EncodedImage localEncodedImage = mEncodedImage;
+      mEncodedImage = null;
+      mStatus = 0;
+      EncodedImage.closeSafely(localEncodedImage);
+      return;
+    }
+    finally {}
+  }
+  
+  public long getQueuedTime()
+  {
+    try
+    {
+      long l1 = mJobStartTime;
+      long l2 = mJobSubmitTime;
+      return l1 - l2;
+    }
+    finally
+    {
+      localObject = finally;
+      throw localObject;
+    }
+  }
+  
+  public boolean scheduleJob()
+  {
+    long l2 = SystemClock.uptimeMillis();
+    try
+    {
+      boolean bool = shouldProcess(mEncodedImage, mStatus);
+      i = 0;
+      if (!bool) {
+        return false;
+      }
+      switch (3.$SwitchMap$com$facebook$imagepipeline$producers$JobScheduler$JobState[mJobState.ordinal()])
+      {
+      case 3: 
+        mJobState = JobState.RUNNING_AND_PENDING;
+      }
+    }
+    finally {}
+    long l1 = Math.max(mJobStartTime + mMinimumJobIntervalMs, l2);
+    mJobSubmitTime = l2;
+    mJobState = JobState.QUEUED;
+    int i = 1;
+    for (;;)
+    {
+      if (i != 0) {
+        enqueueJob(l1 - l2);
+      }
+      return true;
+      l1 = 0L;
+    }
+  }
+  
+  public boolean updateJob(EncodedImage paramEncodedImage, int paramInt)
+  {
+    if (!shouldProcess(paramEncodedImage, paramInt)) {
+      return false;
+    }
+    try
+    {
+      EncodedImage localEncodedImage = mEncodedImage;
+      mEncodedImage = EncodedImage.cloneOrNull(paramEncodedImage);
+      mStatus = paramInt;
+      EncodedImage.closeSafely(localEncodedImage);
+      return true;
+    }
+    finally {}
+  }
+  
+  public static abstract interface JobRunnable
+  {
+    public abstract void run(EncodedImage paramEncodedImage, int paramInt);
+  }
+  
+  @VisibleForTesting
+  static class JobStartExecutorSupplier
+  {
+    private static ScheduledExecutorService sJobStarterExecutor;
+    
+    JobStartExecutorSupplier() {}
+    
+    static ScheduledExecutorService get()
+    {
+      if (sJobStarterExecutor == null) {
+        sJobStarterExecutor = Executors.newSingleThreadScheduledExecutor();
+      }
+      return sJobStarterExecutor;
+    }
+  }
+  
+  @VisibleForTesting
+  static enum JobState
+  {
+    IDLE,  QUEUED,  RUNNING,  RUNNING_AND_PENDING;
+    
+    private JobState() {}
+  }
+}

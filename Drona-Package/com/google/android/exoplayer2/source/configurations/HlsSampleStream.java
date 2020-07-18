@@ -1,0 +1,83 @@
+package com.google.android.exoplayer2.source.configurations;
+
+import com.google.android.exoplayer2.Format;
+import com.google.android.exoplayer2.FormatHolder;
+import com.google.android.exoplayer2.decoder.DecoderInputBuffer;
+import com.google.android.exoplayer2.source.SampleStream;
+import com.google.android.exoplayer2.source.TrackGroup;
+import com.google.android.exoplayer2.source.TrackGroupArray;
+import com.google.android.exoplayer2.util.Assertions;
+import java.io.IOException;
+
+final class HlsSampleStream
+  implements SampleStream
+{
+  private int sampleQueueIndex;
+  private final HlsSampleStreamWrapper sampleStreamWrapper;
+  private final int trackGroupIndex;
+  
+  public HlsSampleStream(HlsSampleStreamWrapper paramHlsSampleStreamWrapper, int paramInt)
+  {
+    sampleStreamWrapper = paramHlsSampleStreamWrapper;
+    trackGroupIndex = paramInt;
+    sampleQueueIndex = -1;
+  }
+  
+  private boolean hasValidSampleQueueIndex()
+  {
+    return (sampleQueueIndex != -1) && (sampleQueueIndex != -3) && (sampleQueueIndex != -2);
+  }
+  
+  public void bindSampleQueue()
+  {
+    boolean bool;
+    if (sampleQueueIndex == -1) {
+      bool = true;
+    } else {
+      bool = false;
+    }
+    Assertions.checkArgument(bool);
+    sampleQueueIndex = sampleStreamWrapper.bindSampleQueueToSampleStream(trackGroupIndex);
+  }
+  
+  public boolean isReady()
+  {
+    return (sampleQueueIndex == -3) || ((hasValidSampleQueueIndex()) && (sampleStreamWrapper.isReady(sampleQueueIndex)));
+  }
+  
+  public void maybeThrowError()
+    throws IOException
+  {
+    if (sampleQueueIndex != -2)
+    {
+      sampleStreamWrapper.maybeThrowError();
+      return;
+    }
+    throw new SampleQueueMappingException(sampleStreamWrapper.getTrackGroups().context(trackGroupIndex).getFormat(0).sampleMimeType);
+  }
+  
+  public int readData(FormatHolder paramFormatHolder, DecoderInputBuffer paramDecoderInputBuffer, boolean paramBoolean)
+  {
+    if (hasValidSampleQueueIndex()) {
+      return sampleStreamWrapper.readData(sampleQueueIndex, paramFormatHolder, paramDecoderInputBuffer, paramBoolean);
+    }
+    return -3;
+  }
+  
+  public int skipData(long paramLong)
+  {
+    if (hasValidSampleQueueIndex()) {
+      return sampleStreamWrapper.skipData(sampleQueueIndex, paramLong);
+    }
+    return 0;
+  }
+  
+  public void unbindSampleQueue()
+  {
+    if (sampleQueueIndex != -1)
+    {
+      sampleStreamWrapper.unbindSampleQueue(trackGroupIndex);
+      sampleQueueIndex = -1;
+    }
+  }
+}

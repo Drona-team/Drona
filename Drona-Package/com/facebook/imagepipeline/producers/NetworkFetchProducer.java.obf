@@ -1,0 +1,209 @@
+package com.facebook.imagepipeline.producers;
+
+import android.os.SystemClock;
+import com.facebook.common.internal.VisibleForTesting;
+import com.facebook.common.memory.ByteArrayPool;
+import com.facebook.common.memory.PooledByteBufferFactory;
+import com.facebook.common.memory.PooledByteBufferOutputStream;
+import com.facebook.imagepipeline.image.EncodedImage;
+import com.facebook.imagepipeline.systrace.FrescoSystrace;
+import java.io.IOException;
+import java.io.InputStream;
+import java.util.Map;
+import javax.annotation.Nullable;
+
+public class NetworkFetchProducer
+  implements Producer<EncodedImage>
+{
+  public static final String INTERMEDIATE_RESULT_PRODUCER_EVENT = "intermediate_result";
+  public static final String PRODUCER_NAME = "NetworkFetchProducer";
+  private static final int READ_SIZE = 16384;
+  @VisibleForTesting
+  static final long TIME_BETWEEN_PARTIAL_RESULTS_MS = 100L;
+  private final ByteArrayPool mByteArrayPool;
+  private final NetworkFetcher mNetworkFetcher;
+  private final PooledByteBufferFactory mPooledByteBufferFactory;
+  
+  public NetworkFetchProducer(PooledByteBufferFactory paramPooledByteBufferFactory, ByteArrayPool paramByteArrayPool, NetworkFetcher paramNetworkFetcher)
+  {
+    mPooledByteBufferFactory = paramPooledByteBufferFactory;
+    mByteArrayPool = paramByteArrayPool;
+    mNetworkFetcher = paramNetworkFetcher;
+  }
+  
+  protected static float calculateProgress(int paramInt1, int paramInt2)
+  {
+    if (paramInt2 > 0) {
+      return paramInt1 / paramInt2;
+    }
+    return 1.0F - (float)Math.exp(-paramInt1 / 50000.0D);
+  }
+  
+  @Nullable
+  private Map<String, String> getExtraMap(FetchState paramFetchState, int paramInt)
+  {
+    if (!paramFetchState.getListener().requiresExtraMap(paramFetchState.getId())) {
+      return null;
+    }
+    return mNetworkFetcher.getExtraMap(paramFetchState, paramInt);
+  }
+  
+  /* Error */
+  protected static void notifyConsumer(PooledByteBufferOutputStream paramPooledByteBufferOutputStream, int paramInt, @Nullable com.facebook.imagepipeline.common.BytesRange paramBytesRange, Consumer<EncodedImage> paramConsumer)
+  {
+    // Byte code:
+    //   0: aload_0
+    //   1: invokevirtual 98	com/facebook/common/memory/PooledByteBufferOutputStream:toByteBuffer	()Lcom/facebook/common/memory/PooledByteBuffer;
+    //   4: invokestatic 104	com/facebook/common/references/CloseableReference:of	(Ljava/io/Closeable;)Lcom/facebook/common/references/CloseableReference;
+    //   7: astore 4
+    //   9: new 106	com/facebook/imagepipeline/image/EncodedImage
+    //   12: dup
+    //   13: aload 4
+    //   15: invokespecial 109	com/facebook/imagepipeline/image/EncodedImage:<init>	(Lcom/facebook/common/references/CloseableReference;)V
+    //   18: astore_0
+    //   19: aload_0
+    //   20: aload_2
+    //   21: invokevirtual 113	com/facebook/imagepipeline/image/EncodedImage:setBytesRange	(Lcom/facebook/imagepipeline/common/BytesRange;)V
+    //   24: aload_0
+    //   25: invokevirtual 116	com/facebook/imagepipeline/image/EncodedImage:parseMetaData	()V
+    //   28: aload_3
+    //   29: aload_0
+    //   30: iload_1
+    //   31: invokeinterface 122 3 0
+    //   36: aload_0
+    //   37: invokestatic 126	com/facebook/imagepipeline/image/EncodedImage:closeSafely	(Lcom/facebook/imagepipeline/image/EncodedImage;)V
+    //   40: aload 4
+    //   42: invokestatic 128	com/facebook/common/references/CloseableReference:closeSafely	(Lcom/facebook/common/references/CloseableReference;)V
+    //   45: return
+    //   46: astore_2
+    //   47: goto +6 -> 53
+    //   50: astore_2
+    //   51: aconst_null
+    //   52: astore_0
+    //   53: aload_0
+    //   54: invokestatic 126	com/facebook/imagepipeline/image/EncodedImage:closeSafely	(Lcom/facebook/imagepipeline/image/EncodedImage;)V
+    //   57: aload 4
+    //   59: invokestatic 128	com/facebook/common/references/CloseableReference:closeSafely	(Lcom/facebook/common/references/CloseableReference;)V
+    //   62: aload_2
+    //   63: athrow
+    // Local variable table:
+    //   start	length	slot	name	signature
+    //   0	64	0	paramPooledByteBufferOutputStream	PooledByteBufferOutputStream
+    //   0	64	1	paramInt	int
+    //   0	64	2	paramBytesRange	com.facebook.imagepipeline.common.BytesRange
+    //   0	64	3	paramConsumer	Consumer<EncodedImage>
+    //   7	51	4	localCloseableReference	com.facebook.common.references.CloseableReference
+    // Exception table:
+    //   from	to	target	type
+    //   19	36	46	finally
+    //   9	19	50	finally
+  }
+  
+  private void onCancellation(FetchState paramFetchState)
+  {
+    paramFetchState.getListener().onProducerFinishWithCancellation(paramFetchState.getId(), "NetworkFetchProducer", null);
+    paramFetchState.getConsumer().onCancellation();
+  }
+  
+  private void onFailure(FetchState paramFetchState, Throwable paramThrowable)
+  {
+    paramFetchState.getListener().onProducerFinishWithFailure(paramFetchState.getId(), "NetworkFetchProducer", paramThrowable, null);
+    paramFetchState.getListener().onUltimateProducerReached(paramFetchState.getId(), "NetworkFetchProducer", false);
+    paramFetchState.getConsumer().onFailure(paramThrowable);
+  }
+  
+  private boolean shouldPropagateIntermediateResults(FetchState paramFetchState)
+  {
+    if (!paramFetchState.getContext().isIntermediateResultExpected()) {
+      return false;
+    }
+    return mNetworkFetcher.shouldPropagate(paramFetchState);
+  }
+  
+  protected void handleFinalResult(PooledByteBufferOutputStream paramPooledByteBufferOutputStream, FetchState paramFetchState)
+  {
+    Map localMap = getExtraMap(paramFetchState, paramPooledByteBufferOutputStream.size());
+    ProducerListener localProducerListener = paramFetchState.getListener();
+    localProducerListener.onProducerFinishWithSuccess(paramFetchState.getId(), "NetworkFetchProducer", localMap);
+    localProducerListener.onUltimateProducerReached(paramFetchState.getId(), "NetworkFetchProducer", true);
+    notifyConsumer(paramPooledByteBufferOutputStream, paramFetchState.getOnNewResultStatusFlags() | 0x1, paramFetchState.getResponseBytesRange(), paramFetchState.getConsumer());
+  }
+  
+  protected void maybeHandleIntermediateResult(PooledByteBufferOutputStream paramPooledByteBufferOutputStream, FetchState paramFetchState)
+  {
+    long l = SystemClock.uptimeMillis();
+    if ((shouldPropagateIntermediateResults(paramFetchState)) && (l - paramFetchState.getLastIntermediateResultTimeMs() >= 100L))
+    {
+      paramFetchState.setLastIntermediateResultTimeMs(l);
+      paramFetchState.getListener().onProducerEvent(paramFetchState.getId(), "NetworkFetchProducer", "intermediate_result");
+      notifyConsumer(paramPooledByteBufferOutputStream, paramFetchState.getOnNewResultStatusFlags(), paramFetchState.getResponseBytesRange(), paramFetchState.getConsumer());
+    }
+  }
+  
+  protected void onResponse(FetchState paramFetchState, InputStream paramInputStream, int paramInt)
+    throws IOException
+  {
+    PooledByteBufferOutputStream localPooledByteBufferOutputStream;
+    if (paramInt > 0) {
+      localPooledByteBufferOutputStream = mPooledByteBufferFactory.newOutputStream(paramInt);
+    } else {
+      localPooledByteBufferOutputStream = mPooledByteBufferFactory.newOutputStream();
+    }
+    byte[] arrayOfByte = (byte[])mByteArrayPool.get(16384);
+    try
+    {
+      for (;;)
+      {
+        int i = paramInputStream.read(arrayOfByte);
+        if (i < 0) {
+          break;
+        }
+        if (i > 0)
+        {
+          localPooledByteBufferOutputStream.write(arrayOfByte, 0, i);
+          maybeHandleIntermediateResult(localPooledByteBufferOutputStream, paramFetchState);
+          float f = calculateProgress(localPooledByteBufferOutputStream.size(), paramInt);
+          paramFetchState.getConsumer().onProgressUpdate(f);
+        }
+      }
+      mNetworkFetcher.onFetchCompletion(paramFetchState, localPooledByteBufferOutputStream.size());
+      handleFinalResult(localPooledByteBufferOutputStream, paramFetchState);
+      return;
+    }
+    finally
+    {
+      mByteArrayPool.release(arrayOfByte);
+      localPooledByteBufferOutputStream.close();
+    }
+  }
+  
+  public void produceResults(final Consumer<EncodedImage> paramConsumer, ProducerContext paramProducerContext)
+  {
+    paramProducerContext.getListener().onProducerStart(paramProducerContext.getId(), "NetworkFetchProducer");
+    paramConsumer = mNetworkFetcher.createFetchState(paramConsumer, paramProducerContext);
+    mNetworkFetcher.fetch(paramConsumer, new NetworkFetcher.Callback()
+    {
+      public void onCancellation()
+      {
+        NetworkFetchProducer.this.onCancellation(paramConsumer);
+      }
+      
+      public void onFailure(Throwable paramAnonymousThrowable)
+      {
+        NetworkFetchProducer.this.onFailure(paramConsumer, paramAnonymousThrowable);
+      }
+      
+      public void onResponse(InputStream paramAnonymousInputStream, int paramAnonymousInt)
+        throws IOException
+      {
+        if (FrescoSystrace.isTracing()) {
+          FrescoSystrace.beginSection("NetworkFetcher->onResponse");
+        }
+        onResponse(paramConsumer, paramAnonymousInputStream, paramAnonymousInt);
+        if (FrescoSystrace.isTracing()) {
+          FrescoSystrace.endSection();
+        }
+      }
+    });
+  }
+}

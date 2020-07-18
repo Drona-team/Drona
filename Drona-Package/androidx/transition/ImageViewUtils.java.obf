@@ -1,0 +1,117 @@
+package androidx.transition;
+
+import android.annotation.SuppressLint;
+import android.graphics.Matrix;
+import android.graphics.drawable.Drawable;
+import android.os.Build.VERSION;
+import android.widget.ImageView;
+import androidx.annotation.NonNull;
+import androidx.annotation.Nullable;
+import androidx.annotation.RequiresApi;
+import java.lang.reflect.Field;
+
+class ImageViewUtils
+{
+  private static Field sDrawMatrixField;
+  private static boolean sDrawMatrixFieldFetched = false;
+  private static boolean sTryHiddenAnimateTransform = true;
+  
+  private ImageViewUtils() {}
+  
+  static void animateTransform(@NonNull ImageView paramImageView, @Nullable Matrix paramMatrix)
+  {
+    if (Build.VERSION.SDK_INT >= 29)
+    {
+      paramImageView.animateTransform(paramMatrix);
+      return;
+    }
+    Matrix localMatrix1;
+    if (paramMatrix == null)
+    {
+      paramMatrix = paramImageView.getDrawable();
+      if (paramMatrix != null)
+      {
+        paramMatrix.setBounds(0, 0, paramImageView.getWidth() - paramImageView.getPaddingLeft() - paramImageView.getPaddingRight(), paramImageView.getHeight() - paramImageView.getPaddingTop() - paramImageView.getPaddingBottom());
+        paramImageView.invalidate();
+      }
+    }
+    else
+    {
+      if (Build.VERSION.SDK_INT >= 21)
+      {
+        hiddenAnimateTransform(paramImageView, paramMatrix);
+        return;
+      }
+      localObject = paramImageView.getDrawable();
+      if (localObject != null)
+      {
+        ((Drawable)localObject).setBounds(0, 0, ((Drawable)localObject).getIntrinsicWidth(), ((Drawable)localObject).getIntrinsicHeight());
+        localMatrix1 = null;
+        localObject = null;
+        fetchDrawMatrixField();
+        if (sDrawMatrixField != null) {
+          localObject = localMatrix1;
+        }
+      }
+    }
+    for (;;)
+    {
+      try
+      {
+        localMatrix2 = (Matrix)sDrawMatrixField.get(paramImageView);
+        if (localMatrix2 != null) {}
+      }
+      catch (IllegalAccessException localIllegalAccessException2)
+      {
+        Matrix localMatrix2;
+        continue;
+      }
+      try
+      {
+        localMatrix1 = new Matrix();
+        localObject = localMatrix1;
+        sDrawMatrixField.set(paramImageView, localMatrix1);
+        localObject = localMatrix1;
+      }
+      catch (IllegalAccessException localIllegalAccessException1) {}
+    }
+    Object localObject = localMatrix2;
+    if (localObject != null) {
+      ((Matrix)localObject).set(paramMatrix);
+    }
+    paramImageView.invalidate();
+  }
+  
+  private static void fetchDrawMatrixField()
+  {
+    if (!sDrawMatrixFieldFetched) {}
+    try
+    {
+      sDrawMatrixField = ImageView.class.getDeclaredField("mDrawMatrix");
+      sDrawMatrixField.setAccessible(true);
+      sDrawMatrixFieldFetched = true;
+      return;
+    }
+    catch (NoSuchFieldException localNoSuchFieldException)
+    {
+      for (;;) {}
+    }
+  }
+  
+  @SuppressLint({"NewApi"})
+  @RequiresApi(21)
+  private static void hiddenAnimateTransform(@NonNull ImageView paramImageView, @Nullable Matrix paramMatrix)
+  {
+    if (sTryHiddenAnimateTransform) {}
+    try
+    {
+      paramImageView.animateTransform(paramMatrix);
+      return;
+    }
+    catch (NoSuchMethodError paramImageView)
+    {
+      for (;;) {}
+    }
+    sTryHiddenAnimateTransform = false;
+  }
+}

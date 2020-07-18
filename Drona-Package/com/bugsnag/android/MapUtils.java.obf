@@ -1,0 +1,19 @@
+package com.bugsnag.android;
+
+import androidx.annotation.Nullable;
+import java.util.Map;
+
+final class MapUtils
+{
+  MapUtils() {}
+  
+  @Nullable
+  static String getStringFromMap(String paramString, Map<String, Object> paramMap)
+  {
+    paramString = paramMap.get(paramString);
+    if ((paramString instanceof String)) {
+      return (String)paramString;
+    }
+    return null;
+  }
+}

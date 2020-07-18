@@ -1,0 +1,189 @@
+package com.google.android.gms.auth.api.signin.internal;
+
+import android.content.ActivityNotFoundException;
+import android.content.Intent;
+import android.os.Bundle;
+import android.os.Parcelable;
+import android.util.Log;
+import android.view.accessibility.AccessibilityEvent;
+import androidx.fragment.app.FragmentActivity;
+import androidx.loader.app.LoaderManager;
+import androidx.loader.app.LoaderManager.LoaderCallbacks;
+import androidx.loader.content.Loader;
+import com.google.android.gms.auth.api.signin.GoogleSignInAccount;
+import com.google.android.gms.auth.api.signin.SignInAccount;
+import com.google.android.gms.common.annotation.KeepName;
+import com.google.android.gms.common.api.GoogleApiClient;
+import com.google.android.gms.common.api.Status;
+
+@KeepName
+public class SignInHubActivity
+  extends FragmentActivity
+{
+  private static boolean zzbt = false;
+  private boolean zzbu = false;
+  private SignInConfiguration zzbv;
+  private boolean zzbw;
+  private int zzbx;
+  private Intent zzby;
+  
+  public SignInHubActivity() {}
+  
+  private final void zzc(int paramInt)
+  {
+    Status localStatus = new Status(paramInt);
+    Intent localIntent = new Intent();
+    localIntent.putExtra("googleSignInStatus", localStatus);
+    setResult(0, localIntent);
+    finish();
+    zzbt = false;
+  }
+  
+  private final void zzn()
+  {
+    getSupportLoaderManager().initLoader(0, null, new zzc(null));
+    zzbt = false;
+  }
+  
+  public boolean dispatchPopulateAccessibilityEvent(AccessibilityEvent paramAccessibilityEvent)
+  {
+    return true;
+  }
+  
+  protected void onActivityResult(int paramInt1, int paramInt2, Intent paramIntent)
+  {
+    if (zzbu) {
+      return;
+    }
+    setResult(0);
+    if (paramInt1 != 40962) {
+      return;
+    }
+    if (paramIntent != null)
+    {
+      Object localObject = (SignInAccount)paramIntent.getParcelableExtra("signInAccount");
+      if ((localObject != null) && (((SignInAccount)localObject).getGoogleSignInAccount() != null))
+      {
+        localObject = ((SignInAccount)localObject).getGoogleSignInAccount();
+        zzp.zzd(this).zzc(zzbv.zzm(), (GoogleSignInAccount)localObject);
+        paramIntent.removeExtra("signInAccount");
+        paramIntent.putExtra("googleSignInAccount", (Parcelable)localObject);
+        zzbw = true;
+        zzbx = paramInt2;
+        zzby = paramIntent;
+        zzn();
+        return;
+      }
+      if (paramIntent.hasExtra("errorCode"))
+      {
+        paramInt2 = paramIntent.getIntExtra("errorCode", 8);
+        paramInt1 = paramInt2;
+        if (paramInt2 == 13) {
+          paramInt1 = 12501;
+        }
+        zzc(paramInt1);
+        return;
+      }
+    }
+    zzc(8);
+  }
+  
+  protected void onCreate(Bundle paramBundle)
+  {
+    super.onCreate(paramBundle);
+    Intent localIntent = getIntent();
+    String str = localIntent.getAction();
+    if ("com.google.android.gms.auth.NO_IMPL".equals(str))
+    {
+      zzc(12500);
+      return;
+    }
+    if ((!str.equals("com.google.android.gms.auth.GOOGLE_SIGN_IN")) && (!str.equals("com.google.android.gms.auth.APPAUTH_SIGN_IN")))
+    {
+      paramBundle = String.valueOf(localIntent.getAction());
+      if (paramBundle.length() != 0) {
+        paramBundle = "Unknown action: ".concat(paramBundle);
+      } else {
+        paramBundle = new String("Unknown action: ");
+      }
+      Log.e("AuthSignInClient", paramBundle);
+      finish();
+      return;
+    }
+    zzbv = ((SignInConfiguration)localIntent.getBundleExtra("config").getParcelable("config"));
+    if (zzbv == null)
+    {
+      Log.e("AuthSignInClient", "Activity started with invalid configuration.");
+      setResult(0);
+      finish();
+      return;
+    }
+    int i;
+    if (paramBundle == null) {
+      i = 1;
+    } else {
+      i = 0;
+    }
+    if (i != 0)
+    {
+      if (zzbt)
+      {
+        setResult(0);
+        zzc(12502);
+        return;
+      }
+      zzbt = true;
+      paramBundle = new Intent(str);
+      if (str.equals("com.google.android.gms.auth.GOOGLE_SIGN_IN")) {
+        paramBundle.setPackage("com.google.android.gms");
+      } else {
+        paramBundle.setPackage(getPackageName());
+      }
+      paramBundle.putExtra("config", zzbv);
+    }
+    try
+    {
+      startActivityForResult(paramBundle, 40962);
+      return;
+    }
+    catch (ActivityNotFoundException paramBundle)
+    {
+      for (;;) {}
+    }
+    zzbu = true;
+    Log.w("AuthSignInClient", "Could not launch sign in Intent. Google Play Service is probably being updated...");
+    zzc(17);
+    return;
+    zzbw = paramBundle.getBoolean("signingInGoogleApiClients");
+    if (zzbw)
+    {
+      zzbx = paramBundle.getInt("signInResultCode");
+      zzby = ((Intent)paramBundle.getParcelable("signInResultData"));
+      zzn();
+    }
+  }
+  
+  protected void onSaveInstanceState(Bundle paramBundle)
+  {
+    super.onSaveInstanceState(paramBundle);
+    paramBundle.putBoolean("signingInGoogleApiClients", zzbw);
+    if (zzbw)
+    {
+      paramBundle.putInt("signInResultCode", zzbx);
+      paramBundle.putParcelable("signInResultData", zzby);
+    }
+  }
+  
+  private final class zzc
+    implements LoaderManager.LoaderCallbacks<Void>
+  {
+    private zzc() {}
+    
+    public final Loader<Void> onCreateLoader(int paramInt, Bundle paramBundle)
+    {
+      return new zze(SignInHubActivity.this, GoogleApiClient.getAllClients());
+    }
+    
+    public final void onLoaderReset(Loader<Void> paramLoader) {}
+  }
+}

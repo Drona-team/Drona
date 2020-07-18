@@ -1,0 +1,127 @@
+package com.facebook.imagepipeline.cache;
+
+import android.net.Uri;
+import com.facebook.cache.common.CacheKey;
+import com.facebook.common.internal.Objects;
+import com.facebook.common.internal.Preconditions;
+import com.facebook.common.time.RealtimeSinceBootClock;
+import com.facebook.common.util.HashCodeUtil;
+import com.facebook.imagepipeline.common.ImageDecodeOptions;
+import com.facebook.imagepipeline.common.ResizeOptions;
+import com.facebook.imagepipeline.common.RotationOptions;
+import java.util.Locale;
+import javax.annotation.Nullable;
+import javax.annotation.concurrent.Immutable;
+
+@Immutable
+public class BitmapMemoryCacheKey
+  implements CacheKey
+{
+  private final long mCacheTime;
+  private final Object mCallerContext;
+  private final int mHash;
+  private final ImageDecodeOptions mImageDecodeOptions;
+  @Nullable
+  private final CacheKey mPostprocessorCacheKey;
+  @Nullable
+  private final String mPostprocessorName;
+  @Nullable
+  private final ResizeOptions mResizeOptions;
+  private final RotationOptions mRotationOptions;
+  private final String mSourceString;
+  
+  public BitmapMemoryCacheKey(String paramString1, @Nullable ResizeOptions paramResizeOptions, RotationOptions paramRotationOptions, ImageDecodeOptions paramImageDecodeOptions, @Nullable CacheKey paramCacheKey, @Nullable String paramString2, Object paramObject)
+  {
+    mSourceString = ((String)Preconditions.checkNotNull(paramString1));
+    mResizeOptions = paramResizeOptions;
+    mRotationOptions = paramRotationOptions;
+    mImageDecodeOptions = paramImageDecodeOptions;
+    mPostprocessorCacheKey = paramCacheKey;
+    mPostprocessorName = paramString2;
+    int j = paramString1.hashCode();
+    int i;
+    if (paramResizeOptions != null) {
+      i = paramResizeOptions.hashCode();
+    } else {
+      i = 0;
+    }
+    mHash = HashCodeUtil.hashCode(Integer.valueOf(j), Integer.valueOf(i), Integer.valueOf(paramRotationOptions.hashCode()), mImageDecodeOptions, mPostprocessorCacheKey, paramString2);
+    mCallerContext = paramObject;
+    mCacheTime = RealtimeSinceBootClock.get().now();
+  }
+  
+  public boolean containsUri(Uri paramUri)
+  {
+    return getUriString().contains(paramUri.toString());
+  }
+  
+  public boolean equals(Object paramObject)
+  {
+    boolean bool1 = paramObject instanceof BitmapMemoryCacheKey;
+    boolean bool2 = false;
+    if (!bool1) {
+      return false;
+    }
+    paramObject = (BitmapMemoryCacheKey)paramObject;
+    bool1 = bool2;
+    if (mHash == mHash)
+    {
+      bool1 = bool2;
+      if (mSourceString.equals(mSourceString))
+      {
+        bool1 = bool2;
+        if (Objects.equal(mResizeOptions, mResizeOptions))
+        {
+          bool1 = bool2;
+          if (Objects.equal(mRotationOptions, mRotationOptions))
+          {
+            bool1 = bool2;
+            if (Objects.equal(mImageDecodeOptions, mImageDecodeOptions))
+            {
+              bool1 = bool2;
+              if (Objects.equal(mPostprocessorCacheKey, mPostprocessorCacheKey))
+              {
+                bool1 = bool2;
+                if (Objects.equal(mPostprocessorName, mPostprocessorName)) {
+                  bool1 = true;
+                }
+              }
+            }
+          }
+        }
+      }
+    }
+    return bool1;
+  }
+  
+  public Object getCallerContext()
+  {
+    return mCallerContext;
+  }
+  
+  public long getInBitmapCacheSince()
+  {
+    return mCacheTime;
+  }
+  
+  @Nullable
+  public String getPostprocessorName()
+  {
+    return mPostprocessorName;
+  }
+  
+  public String getUriString()
+  {
+    return mSourceString;
+  }
+  
+  public int hashCode()
+  {
+    return mHash;
+  }
+  
+  public String toString()
+  {
+    return String.format((Locale)null, "%s_%s_%s_%s_%s_%s_%d", new Object[] { mSourceString, mResizeOptions, mRotationOptions, mImageDecodeOptions, mPostprocessorCacheKey, mPostprocessorName, Integer.valueOf(mHash) });
+  }
+}

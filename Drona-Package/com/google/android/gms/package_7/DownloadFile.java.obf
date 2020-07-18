@@ -1,0 +1,78 @@
+package com.google.android.gms.iid;
+
+import android.content.Context;
+import android.os.Bundle;
+import android.util.Log;
+import androidx.annotation.VisibleForTesting;
+import com.google.android.gms.common.util.concurrent.NamedThreadFactory;
+import com.google.android.gms.internal.gcm.zzf;
+import com.google.android.gms.internal.gcm.zzg;
+import com.google.android.gms.tasks.Task;
+import com.google.android.gms.tasks.TaskCompletionSource;
+import java.util.concurrent.ScheduledExecutorService;
+import javax.annotation.concurrent.GuardedBy;
+
+public final class zzr
+{
+  private final ScheduledExecutorService zzce;
+  @GuardedBy("this")
+  private zzt zzcf = new zzt(this, null);
+  @GuardedBy("this")
+  private int zzcg = 1;
+  private final Context zzl;
+  
+  public zzr(Context paramContext)
+  {
+    this(paramContext, zzg.zzaa().zze(1, new NamedThreadFactory("MessengerIpcClient"), 9));
+  }
+  
+  @VisibleForTesting
+  private zzr(Context paramContext, ScheduledExecutorService paramScheduledExecutorService)
+  {
+    zzl = paramContext.getApplicationContext();
+    zzce = paramScheduledExecutorService;
+  }
+  
+  private final <T> Task<T> zzd(zzz<T> paramZzz)
+  {
+    try
+    {
+      if (Log.isLoggable("MessengerIpcClient", 3))
+      {
+        String str = String.valueOf(paramZzz);
+        StringBuilder localStringBuilder = new StringBuilder(String.valueOf(str).length() + 9);
+        localStringBuilder.append("Queueing ");
+        localStringBuilder.append(str);
+        Log.d("MessengerIpcClient", localStringBuilder.toString());
+      }
+      if (!zzcf.zze(paramZzz))
+      {
+        zzcf = new zzt(this, null);
+        zzcf.zze(paramZzz);
+      }
+      paramZzz = zzcq.getTask();
+      return paramZzz;
+    }
+    finally {}
+  }
+  
+  private final int zzs()
+  {
+    try
+    {
+      int i = zzcg;
+      zzcg = (i + 1);
+      return i;
+    }
+    finally
+    {
+      localObject = finally;
+      throw localObject;
+    }
+  }
+  
+  public final Task<Bundle> zzd(int paramInt, Bundle paramBundle)
+  {
+    return zzd(new zzab(zzs(), 1, paramBundle));
+  }
+}

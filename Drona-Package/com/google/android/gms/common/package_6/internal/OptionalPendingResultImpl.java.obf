@@ -1,0 +1,83 @@
+package com.google.android.gms.common.api.internal;
+
+import androidx.annotation.NonNull;
+import com.google.android.gms.common.annotation.KeepForSdk;
+import com.google.android.gms.common.api.OptionalPendingResult;
+import com.google.android.gms.common.api.PendingResult;
+import com.google.android.gms.common.api.PendingResult.StatusListener;
+import com.google.android.gms.common.api.Result;
+import com.google.android.gms.common.api.ResultCallback;
+import com.google.android.gms.common.api.ResultTransform;
+import com.google.android.gms.common.api.TransformedResult;
+import java.util.concurrent.TimeUnit;
+
+@KeepForSdk
+public final class OptionalPendingResultImpl<R extends Result>
+  extends OptionalPendingResult<R>
+{
+  private final BasePendingResult<R> zajq;
+  
+  public OptionalPendingResultImpl(PendingResult<R> paramPendingResult)
+  {
+    zajq = ((BasePendingResult)paramPendingResult);
+  }
+  
+  public final void addStatusListener(PendingResult.StatusListener paramStatusListener)
+  {
+    zajq.addStatusListener(paramStatusListener);
+  }
+  
+  public final R await()
+  {
+    return zajq.await();
+  }
+  
+  public final R await(long paramLong, TimeUnit paramTimeUnit)
+  {
+    return zajq.await(paramLong, paramTimeUnit);
+  }
+  
+  public final void cancel()
+  {
+    zajq.cancel();
+  }
+  
+  public final R get()
+  {
+    if (isDone()) {
+      return await(0L, TimeUnit.MILLISECONDS);
+    }
+    throw new IllegalStateException("Result is not available. Check that isDone() returns true before calling get().");
+  }
+  
+  public final boolean isCanceled()
+  {
+    return zajq.isCanceled();
+  }
+  
+  public final boolean isDone()
+  {
+    return zajq.isReady();
+  }
+  
+  public final void setResultCallback(ResultCallback<? super R> paramResultCallback)
+  {
+    zajq.setResultCallback(paramResultCallback);
+  }
+  
+  public final void setResultCallback(ResultCallback<? super R> paramResultCallback, long paramLong, TimeUnit paramTimeUnit)
+  {
+    zajq.setResultCallback(paramResultCallback, paramLong, paramTimeUnit);
+  }
+  
+  @NonNull
+  public final <S extends Result> TransformedResult<S> then(@NonNull ResultTransform<? super R, ? extends S> paramResultTransform)
+  {
+    return zajq.then(paramResultTransform);
+  }
+  
+  public final Integer zam()
+  {
+    return zajq.zam();
+  }
+}

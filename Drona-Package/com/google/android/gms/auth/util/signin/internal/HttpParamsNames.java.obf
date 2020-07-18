@@ -1,0 +1,18 @@
+package com.google.android.gms.auth.api.signin.internal;
+
+import android.os.IInterface;
+import android.os.RemoteException;
+import com.google.android.gms.auth.api.signin.GoogleSignInOptions;
+
+public abstract interface zzu
+  extends IInterface
+{
+  public abstract void zzc(zzs paramZzs, GoogleSignInOptions paramGoogleSignInOptions)
+    throws RemoteException;
+  
+  public abstract void zzd(zzs paramZzs, GoogleSignInOptions paramGoogleSignInOptions)
+    throws RemoteException;
+  
+  public abstract void zze(zzs paramZzs, GoogleSignInOptions paramGoogleSignInOptions)
+    throws RemoteException;
+}

@@ -1,0 +1,1027 @@
+package com.RNFetchBlob;
+
+import android.content.ContentResolver;
+import android.content.res.AssetManager;
+import android.net.Uri;
+import android.util.Base64;
+import androidx.annotation.NonNull;
+import com.facebook.react.bridge.Arguments;
+import com.facebook.react.bridge.ReactApplicationContext;
+import com.facebook.react.bridge.ReadableArray;
+import com.facebook.react.bridge.ReadableMap;
+import com.facebook.react.bridge.WritableMap;
+import com.facebook.react.modules.core.DeviceEventManagerModule.RCTDeviceEventEmitter;
+import java.io.ByteArrayInputStream;
+import java.io.File;
+import java.io.FileInputStream;
+import java.io.FileOutputStream;
+import java.io.IOException;
+import java.io.InputStream;
+import okhttp3.MediaType;
+import okhttp3.RequestBody;
+import okio.BufferedSink;
+
+class RNFetchBlobBody
+  extends RequestBody
+{
+  private File bodyCache;
+  private Boolean chunkedEncoding = Boolean.valueOf(false);
+  private long contentLength = 0L;
+  private ReadableArray form;
+  private String mTaskId;
+  private MediaType mime;
+  private String rawBody;
+  int reported = 0;
+  private InputStream requestStream;
+  private RNFetchBlobReq.RequestType requestType;
+  
+  RNFetchBlobBody(String paramString)
+  {
+    mTaskId = paramString;
+  }
+  
+  /* Error */
+  private java.util.ArrayList<FormField> countFormDataLength()
+    throws IOException
+  {
+    // Byte code:
+    //   0: new 56	java/util/ArrayList
+    //   3: dup
+    //   4: invokespecial 57	java/util/ArrayList:<init>	()V
+    //   7: astore 11
+    //   9: getstatic 63	com/RNFetchBlob/RNFetchBlob:RCTContext	Lcom/facebook/react/bridge/ReactApplicationContext;
+    //   12: astore 12
+    //   14: lconst_0
+    //   15: lstore 5
+    //   17: iconst_0
+    //   18: istore_1
+    //   19: iload_1
+    //   20: aload_0
+    //   21: getfield 65	com/RNFetchBlob/RNFetchBlobBody:form	Lcom/facebook/react/bridge/ReadableArray;
+    //   24: invokeinterface 71 1 0
+    //   29: if_icmpge +460 -> 489
+    //   32: new 8	com/RNFetchBlob/RNFetchBlobBody$FormField
+    //   35: dup
+    //   36: aload_0
+    //   37: aload_0
+    //   38: getfield 65	com/RNFetchBlob/RNFetchBlobBody:form	Lcom/facebook/react/bridge/ReadableArray;
+    //   41: iload_1
+    //   42: invokeinterface 75 2 0
+    //   47: invokespecial 78	com/RNFetchBlob/RNFetchBlobBody$FormField:<init>	(Lcom/RNFetchBlob/RNFetchBlobBody;Lcom/facebook/react/bridge/ReadableMap;)V
+    //   50: astore 7
+    //   52: aload 11
+    //   54: aload 7
+    //   56: invokevirtual 82	java/util/ArrayList:add	(Ljava/lang/Object;)Z
+    //   59: pop
+    //   60: aload 7
+    //   62: getfield 85	com/RNFetchBlob/RNFetchBlobBody$FormField:data	Ljava/lang/String;
+    //   65: ifnonnull +53 -> 118
+    //   68: new 87	java/lang/StringBuilder
+    //   71: dup
+    //   72: invokespecial 88	java/lang/StringBuilder:<init>	()V
+    //   75: astore 8
+    //   77: aload 8
+    //   79: ldc 90
+    //   81: invokevirtual 94	java/lang/StringBuilder:append	(Ljava/lang/String;)Ljava/lang/StringBuilder;
+    //   84: pop
+    //   85: aload 8
+    //   87: aload 7
+    //   89: getfield 97	com/RNFetchBlob/RNFetchBlobBody$FormField:name	Ljava/lang/String;
+    //   92: invokevirtual 94	java/lang/StringBuilder:append	(Ljava/lang/String;)Ljava/lang/StringBuilder;
+    //   95: pop
+    //   96: aload 8
+    //   98: ldc 99
+    //   100: invokevirtual 94	java/lang/StringBuilder:append	(Ljava/lang/String;)Ljava/lang/StringBuilder;
+    //   103: pop
+    //   104: aload 8
+    //   106: invokevirtual 103	java/lang/StringBuilder:toString	()Ljava/lang/String;
+    //   109: invokestatic 108	com/RNFetchBlob/RNFetchBlobUtils:emitWarningEvent	(Ljava/lang/String;)V
+    //   112: lload 5
+    //   114: lstore_3
+    //   115: goto +364 -> 479
+    //   118: aload 7
+    //   120: getfield 111	com/RNFetchBlob/RNFetchBlobBody$FormField:filename	Ljava/lang/String;
+    //   123: ifnull +342 -> 465
+    //   126: aload 7
+    //   128: getfield 85	com/RNFetchBlob/RNFetchBlobBody$FormField:data	Ljava/lang/String;
+    //   131: astore 7
+    //   133: aload 7
+    //   135: ldc 113
+    //   137: invokevirtual 119	java/lang/String:startsWith	(Ljava/lang/String;)Z
+    //   140: ifeq +98 -> 238
+    //   143: aload 7
+    //   145: ldc 113
+    //   147: invokevirtual 122	java/lang/String:length	()I
+    //   150: invokevirtual 126	java/lang/String:substring	(I)Ljava/lang/String;
+    //   153: invokestatic 132	com/RNFetchBlob/RNFetchBlobFS:normalizePath	(Ljava/lang/String;)Ljava/lang/String;
+    //   156: astore 7
+    //   158: aload 7
+    //   160: invokestatic 135	com/RNFetchBlob/RNFetchBlobFS:isAsset	(Ljava/lang/String;)Z
+    //   163: ifeq +53 -> 216
+    //   166: aload 7
+    //   168: ldc -119
+    //   170: ldc -117
+    //   172: invokevirtual 143	java/lang/String:replace	(Ljava/lang/CharSequence;Ljava/lang/CharSequence;)Ljava/lang/String;
+    //   175: astore 7
+    //   177: aload 12
+    //   179: invokevirtual 149	com/facebook/react/bridge/ReactApplicationContext:getAssets	()Landroid/content/res/AssetManager;
+    //   182: aload 7
+    //   184: invokevirtual 155	android/content/res/AssetManager:open	(Ljava/lang/String;)Ljava/io/InputStream;
+    //   187: invokevirtual 160	java/io/InputStream:available	()I
+    //   190: istore_2
+    //   191: lload 5
+    //   193: iload_2
+    //   194: i2l
+    //   195: ladd
+    //   196: lstore_3
+    //   197: goto +282 -> 479
+    //   200: astore 7
+    //   202: aload 7
+    //   204: invokevirtual 163	java/io/IOException:getLocalizedMessage	()Ljava/lang/String;
+    //   207: invokestatic 108	com/RNFetchBlob/RNFetchBlobUtils:emitWarningEvent	(Ljava/lang/String;)V
+    //   210: lload 5
+    //   212: lstore_3
+    //   213: goto +266 -> 479
+    //   216: lload 5
+    //   218: new 165	java/io/File
+    //   221: dup
+    //   222: aload 7
+    //   224: invokestatic 132	com/RNFetchBlob/RNFetchBlobFS:normalizePath	(Ljava/lang/String;)Ljava/lang/String;
+    //   227: invokespecial 167	java/io/File:<init>	(Ljava/lang/String;)V
+    //   230: invokevirtual 170	java/io/File:length	()J
+    //   233: ladd
+    //   234: lstore_3
+    //   235: goto +244 -> 479
+    //   238: aload 7
+    //   240: ldc -84
+    //   242: invokevirtual 119	java/lang/String:startsWith	(Ljava/lang/String;)Z
+    //   245: ifeq +205 -> 450
+    //   248: aload 7
+    //   250: ldc -84
+    //   252: invokevirtual 122	java/lang/String:length	()I
+    //   255: invokevirtual 126	java/lang/String:substring	(I)Ljava/lang/String;
+    //   258: astore 13
+    //   260: aconst_null
+    //   261: astore 10
+    //   263: aconst_null
+    //   264: astore 7
+    //   266: aload 12
+    //   268: invokevirtual 176	com/facebook/react/bridge/ReactApplicationContext:getContentResolver	()Landroid/content/ContentResolver;
+    //   271: aload 13
+    //   273: invokestatic 182	android/net/Uri:parse	(Ljava/lang/String;)Landroid/net/Uri;
+    //   276: invokevirtual 188	android/content/ContentResolver:openInputStream	(Landroid/net/Uri;)Ljava/io/InputStream;
+    //   279: astore 8
+    //   281: aload 8
+    //   283: invokevirtual 160	java/io/InputStream:available	()I
+    //   286: istore_2
+    //   287: lload 5
+    //   289: iload_2
+    //   290: i2l
+    //   291: ladd
+    //   292: lstore 5
+    //   294: lload 5
+    //   296: lstore_3
+    //   297: aload 8
+    //   299: ifnull +180 -> 479
+    //   302: aload 8
+    //   304: invokevirtual 191	java/io/InputStream:close	()V
+    //   307: lload 5
+    //   309: lstore_3
+    //   310: goto +169 -> 479
+    //   313: astore 9
+    //   315: aload 8
+    //   317: astore 7
+    //   319: aload 9
+    //   321: astore 8
+    //   323: goto +114 -> 437
+    //   326: astore 9
+    //   328: goto +14 -> 342
+    //   331: astore 8
+    //   333: goto +104 -> 437
+    //   336: astore 9
+    //   338: aload 10
+    //   340: astore 8
+    //   342: aload 8
+    //   344: astore 7
+    //   346: new 87	java/lang/StringBuilder
+    //   349: dup
+    //   350: invokespecial 88	java/lang/StringBuilder:<init>	()V
+    //   353: astore 10
+    //   355: aload 8
+    //   357: astore 7
+    //   359: aload 10
+    //   361: ldc -63
+    //   363: invokevirtual 94	java/lang/StringBuilder:append	(Ljava/lang/String;)Ljava/lang/StringBuilder;
+    //   366: pop
+    //   367: aload 8
+    //   369: astore 7
+    //   371: aload 10
+    //   373: aload 13
+    //   375: invokevirtual 94	java/lang/StringBuilder:append	(Ljava/lang/String;)Ljava/lang/StringBuilder;
+    //   378: pop
+    //   379: aload 8
+    //   381: astore 7
+    //   383: aload 10
+    //   385: ldc -61
+    //   387: invokevirtual 94	java/lang/StringBuilder:append	(Ljava/lang/String;)Ljava/lang/StringBuilder;
+    //   390: pop
+    //   391: aload 8
+    //   393: astore 7
+    //   395: aload 10
+    //   397: aload 9
+    //   399: invokevirtual 196	java/lang/Exception:getLocalizedMessage	()Ljava/lang/String;
+    //   402: invokevirtual 94	java/lang/StringBuilder:append	(Ljava/lang/String;)Ljava/lang/StringBuilder;
+    //   405: pop
+    //   406: aload 8
+    //   408: astore 7
+    //   410: aload 10
+    //   412: invokevirtual 103	java/lang/StringBuilder:toString	()Ljava/lang/String;
+    //   415: invokestatic 108	com/RNFetchBlob/RNFetchBlobUtils:emitWarningEvent	(Ljava/lang/String;)V
+    //   418: lload 5
+    //   420: lstore_3
+    //   421: aload 8
+    //   423: ifnull +56 -> 479
+    //   426: aload 8
+    //   428: invokevirtual 191	java/io/InputStream:close	()V
+    //   431: lload 5
+    //   433: lstore_3
+    //   434: goto +45 -> 479
+    //   437: aload 7
+    //   439: ifnull +8 -> 447
+    //   442: aload 7
+    //   444: invokevirtual 191	java/io/InputStream:close	()V
+    //   447: aload 8
+    //   449: athrow
+    //   450: lload 5
+    //   452: aload 7
+    //   454: iconst_0
+    //   455: invokestatic 202	android/util/Base64:decode	(Ljava/lang/String;I)[B
+    //   458: arraylength
+    //   459: i2l
+    //   460: ladd
+    //   461: lstore_3
+    //   462: goto +17 -> 479
+    //   465: lload 5
+    //   467: aload 7
+    //   469: getfield 85	com/RNFetchBlob/RNFetchBlobBody$FormField:data	Ljava/lang/String;
+    //   472: invokevirtual 206	java/lang/String:getBytes	()[B
+    //   475: arraylength
+    //   476: i2l
+    //   477: ladd
+    //   478: lstore_3
+    //   479: iload_1
+    //   480: iconst_1
+    //   481: iadd
+    //   482: istore_1
+    //   483: lload_3
+    //   484: lstore 5
+    //   486: goto -467 -> 19
+    //   489: aload_0
+    //   490: lload 5
+    //   492: putfield 35	com/RNFetchBlob/RNFetchBlobBody:contentLength	J
+    //   495: aload 11
+    //   497: areturn
+    // Local variable table:
+    //   start	length	slot	name	signature
+    //   0	498	0	this	RNFetchBlobBody
+    //   18	465	1	i	int
+    //   190	100	2	j	int
+    //   114	370	3	l1	long
+    //   15	476	5	l2	long
+    //   50	133	7	localObject1	Object
+    //   200	49	7	localIOException	IOException
+    //   264	204	7	localObject2	Object
+    //   75	247	8	localObject3	Object
+    //   331	1	8	localObject4	Object
+    //   340	108	8	localObject5	Object
+    //   313	7	9	localObject6	Object
+    //   326	1	9	localException1	Exception
+    //   336	62	9	localException2	Exception
+    //   261	150	10	localStringBuilder	StringBuilder
+    //   7	489	11	localArrayList	java.util.ArrayList
+    //   12	255	12	localReactApplicationContext	ReactApplicationContext
+    //   258	116	13	str	String
+    // Exception table:
+    //   from	to	target	type
+    //   166	191	200	java/io/IOException
+    //   281	287	313	finally
+    //   281	287	326	java/lang/Exception
+    //   266	281	331	finally
+    //   346	355	331	finally
+    //   359	367	331	finally
+    //   371	379	331	finally
+    //   383	391	331	finally
+    //   395	406	331	finally
+    //   410	418	331	finally
+    //   266	281	336	java/lang/Exception
+  }
+  
+  /* Error */
+  private File createMultipartBodyCache()
+    throws IOException
+  {
+    // Byte code:
+    //   0: new 87	java/lang/StringBuilder
+    //   3: dup
+    //   4: invokespecial 88	java/lang/StringBuilder:<init>	()V
+    //   7: astore_1
+    //   8: aload_1
+    //   9: ldc -43
+    //   11: invokevirtual 94	java/lang/StringBuilder:append	(Ljava/lang/String;)Ljava/lang/StringBuilder;
+    //   14: pop
+    //   15: aload_1
+    //   16: aload_0
+    //   17: getfield 47	com/RNFetchBlob/RNFetchBlobBody:mTaskId	Ljava/lang/String;
+    //   20: invokevirtual 94	java/lang/StringBuilder:append	(Ljava/lang/String;)Ljava/lang/StringBuilder;
+    //   23: pop
+    //   24: aload_1
+    //   25: invokevirtual 103	java/lang/StringBuilder:toString	()Ljava/lang/String;
+    //   28: astore 5
+    //   30: ldc -41
+    //   32: ldc -117
+    //   34: getstatic 63	com/RNFetchBlob/RNFetchBlob:RCTContext	Lcom/facebook/react/bridge/ReactApplicationContext;
+    //   37: invokevirtual 218	com/facebook/react/bridge/ReactApplicationContext:getCacheDir	()Ljava/io/File;
+    //   40: invokestatic 222	java/io/File:createTempFile	(Ljava/lang/String;Ljava/lang/String;Ljava/io/File;)Ljava/io/File;
+    //   43: astore 6
+    //   45: new 224	java/io/FileOutputStream
+    //   48: dup
+    //   49: aload 6
+    //   51: invokespecial 227	java/io/FileOutputStream:<init>	(Ljava/io/File;)V
+    //   54: astore 7
+    //   56: aload_0
+    //   57: invokespecial 229	com/RNFetchBlob/RNFetchBlobBody:countFormDataLength	()Ljava/util/ArrayList;
+    //   60: astore_1
+    //   61: getstatic 63	com/RNFetchBlob/RNFetchBlob:RCTContext	Lcom/facebook/react/bridge/ReactApplicationContext;
+    //   64: astore 8
+    //   66: aload_1
+    //   67: invokevirtual 233	java/util/ArrayList:iterator	()Ljava/util/Iterator;
+    //   70: astore 9
+    //   72: aload 9
+    //   74: invokeinterface 239 1 0
+    //   79: ifeq +673 -> 752
+    //   82: aload 9
+    //   84: invokeinterface 243 1 0
+    //   89: checkcast 8	com/RNFetchBlob/RNFetchBlobBody$FormField
+    //   92: astore_1
+    //   93: aload_1
+    //   94: getfield 85	com/RNFetchBlob/RNFetchBlobBody$FormField:data	Ljava/lang/String;
+    //   97: astore_2
+    //   98: aload_1
+    //   99: getfield 97	com/RNFetchBlob/RNFetchBlobBody$FormField:name	Ljava/lang/String;
+    //   102: astore_3
+    //   103: aload_3
+    //   104: ifnull -32 -> 72
+    //   107: aload_2
+    //   108: ifnonnull +6 -> 114
+    //   111: goto -39 -> 72
+    //   114: new 87	java/lang/StringBuilder
+    //   117: dup
+    //   118: invokespecial 88	java/lang/StringBuilder:<init>	()V
+    //   121: astore 4
+    //   123: aload 4
+    //   125: ldc -11
+    //   127: invokevirtual 94	java/lang/StringBuilder:append	(Ljava/lang/String;)Ljava/lang/StringBuilder;
+    //   130: pop
+    //   131: aload 4
+    //   133: aload 5
+    //   135: invokevirtual 94	java/lang/StringBuilder:append	(Ljava/lang/String;)Ljava/lang/StringBuilder;
+    //   138: pop
+    //   139: aload 4
+    //   141: ldc -9
+    //   143: invokevirtual 94	java/lang/StringBuilder:append	(Ljava/lang/String;)Ljava/lang/StringBuilder;
+    //   146: pop
+    //   147: aload 4
+    //   149: invokevirtual 103	java/lang/StringBuilder:toString	()Ljava/lang/String;
+    //   152: astore 4
+    //   154: aload_1
+    //   155: getfield 111	com/RNFetchBlob/RNFetchBlobBody$FormField:filename	Ljava/lang/String;
+    //   158: ifnull +479 -> 637
+    //   161: new 87	java/lang/StringBuilder
+    //   164: dup
+    //   165: invokespecial 88	java/lang/StringBuilder:<init>	()V
+    //   168: astore 10
+    //   170: aload 10
+    //   172: aload 4
+    //   174: invokevirtual 94	java/lang/StringBuilder:append	(Ljava/lang/String;)Ljava/lang/StringBuilder;
+    //   177: pop
+    //   178: aload 10
+    //   180: ldc -7
+    //   182: invokevirtual 94	java/lang/StringBuilder:append	(Ljava/lang/String;)Ljava/lang/StringBuilder;
+    //   185: pop
+    //   186: aload 10
+    //   188: aload_3
+    //   189: invokevirtual 94	java/lang/StringBuilder:append	(Ljava/lang/String;)Ljava/lang/StringBuilder;
+    //   192: pop
+    //   193: aload 10
+    //   195: ldc -5
+    //   197: invokevirtual 94	java/lang/StringBuilder:append	(Ljava/lang/String;)Ljava/lang/StringBuilder;
+    //   200: pop
+    //   201: aload 10
+    //   203: aload_1
+    //   204: getfield 111	com/RNFetchBlob/RNFetchBlobBody$FormField:filename	Ljava/lang/String;
+    //   207: invokevirtual 94	java/lang/StringBuilder:append	(Ljava/lang/String;)Ljava/lang/StringBuilder;
+    //   210: pop
+    //   211: aload 10
+    //   213: ldc -3
+    //   215: invokevirtual 94	java/lang/StringBuilder:append	(Ljava/lang/String;)Ljava/lang/StringBuilder;
+    //   218: pop
+    //   219: aload 10
+    //   221: invokevirtual 103	java/lang/StringBuilder:toString	()Ljava/lang/String;
+    //   224: astore_3
+    //   225: new 87	java/lang/StringBuilder
+    //   228: dup
+    //   229: invokespecial 88	java/lang/StringBuilder:<init>	()V
+    //   232: astore 4
+    //   234: aload 4
+    //   236: aload_3
+    //   237: invokevirtual 94	java/lang/StringBuilder:append	(Ljava/lang/String;)Ljava/lang/StringBuilder;
+    //   240: pop
+    //   241: aload 4
+    //   243: ldc -1
+    //   245: invokevirtual 94	java/lang/StringBuilder:append	(Ljava/lang/String;)Ljava/lang/StringBuilder;
+    //   248: pop
+    //   249: aload 4
+    //   251: aload_1
+    //   252: getfield 257	com/RNFetchBlob/RNFetchBlobBody$FormField:mime	Ljava/lang/String;
+    //   255: invokevirtual 94	java/lang/StringBuilder:append	(Ljava/lang/String;)Ljava/lang/StringBuilder;
+    //   258: pop
+    //   259: aload 4
+    //   261: ldc_w 259
+    //   264: invokevirtual 94	java/lang/StringBuilder:append	(Ljava/lang/String;)Ljava/lang/StringBuilder;
+    //   267: pop
+    //   268: aload 7
+    //   270: aload 4
+    //   272: invokevirtual 103	java/lang/StringBuilder:toString	()Ljava/lang/String;
+    //   275: invokevirtual 206	java/lang/String:getBytes	()[B
+    //   278: invokevirtual 263	java/io/FileOutputStream:write	([B)V
+    //   281: aload_2
+    //   282: ldc 113
+    //   284: invokevirtual 119	java/lang/String:startsWith	(Ljava/lang/String;)Z
+    //   287: ifeq +175 -> 462
+    //   290: aload_2
+    //   291: ldc 113
+    //   293: invokevirtual 122	java/lang/String:length	()I
+    //   296: invokevirtual 126	java/lang/String:substring	(I)Ljava/lang/String;
+    //   299: invokestatic 132	com/RNFetchBlob/RNFetchBlobFS:normalizePath	(Ljava/lang/String;)Ljava/lang/String;
+    //   302: astore_1
+    //   303: aload_1
+    //   304: invokestatic 135	com/RNFetchBlob/RNFetchBlobFS:isAsset	(Ljava/lang/String;)Z
+    //   307: ifeq +79 -> 386
+    //   310: aload_1
+    //   311: ldc -119
+    //   313: ldc -117
+    //   315: invokevirtual 143	java/lang/String:replace	(Ljava/lang/CharSequence;Ljava/lang/CharSequence;)Ljava/lang/String;
+    //   318: astore_2
+    //   319: aload_0
+    //   320: aload 8
+    //   322: invokevirtual 149	com/facebook/react/bridge/ReactApplicationContext:getAssets	()Landroid/content/res/AssetManager;
+    //   325: aload_2
+    //   326: invokevirtual 155	android/content/res/AssetManager:open	(Ljava/lang/String;)Ljava/io/InputStream;
+    //   329: aload 7
+    //   331: invokespecial 267	com/RNFetchBlob/RNFetchBlobBody:pipeStreamToFileStream	(Ljava/io/InputStream;Ljava/io/FileOutputStream;)V
+    //   334: goto +405 -> 739
+    //   337: astore_2
+    //   338: new 87	java/lang/StringBuilder
+    //   341: dup
+    //   342: invokespecial 88	java/lang/StringBuilder:<init>	()V
+    //   345: astore_3
+    //   346: aload_3
+    //   347: ldc_w 269
+    //   350: invokevirtual 94	java/lang/StringBuilder:append	(Ljava/lang/String;)Ljava/lang/StringBuilder;
+    //   353: pop
+    //   354: aload_3
+    //   355: aload_1
+    //   356: invokevirtual 94	java/lang/StringBuilder:append	(Ljava/lang/String;)Ljava/lang/StringBuilder;
+    //   359: pop
+    //   360: aload_3
+    //   361: ldc -61
+    //   363: invokevirtual 94	java/lang/StringBuilder:append	(Ljava/lang/String;)Ljava/lang/StringBuilder;
+    //   366: pop
+    //   367: aload_3
+    //   368: aload_2
+    //   369: invokevirtual 163	java/io/IOException:getLocalizedMessage	()Ljava/lang/String;
+    //   372: invokevirtual 94	java/lang/StringBuilder:append	(Ljava/lang/String;)Ljava/lang/StringBuilder;
+    //   375: pop
+    //   376: aload_3
+    //   377: invokevirtual 103	java/lang/StringBuilder:toString	()Ljava/lang/String;
+    //   380: invokestatic 108	com/RNFetchBlob/RNFetchBlobUtils:emitWarningEvent	(Ljava/lang/String;)V
+    //   383: goto +356 -> 739
+    //   386: new 165	java/io/File
+    //   389: dup
+    //   390: aload_1
+    //   391: invokestatic 132	com/RNFetchBlob/RNFetchBlobFS:normalizePath	(Ljava/lang/String;)Ljava/lang/String;
+    //   394: invokespecial 167	java/io/File:<init>	(Ljava/lang/String;)V
+    //   397: astore_2
+    //   398: aload_2
+    //   399: invokevirtual 272	java/io/File:exists	()Z
+    //   402: ifeq +20 -> 422
+    //   405: aload_0
+    //   406: new 274	java/io/FileInputStream
+    //   409: dup
+    //   410: aload_2
+    //   411: invokespecial 275	java/io/FileInputStream:<init>	(Ljava/io/File;)V
+    //   414: aload 7
+    //   416: invokespecial 267	com/RNFetchBlob/RNFetchBlobBody:pipeStreamToFileStream	(Ljava/io/InputStream;Ljava/io/FileOutputStream;)V
+    //   419: goto +320 -> 739
+    //   422: new 87	java/lang/StringBuilder
+    //   425: dup
+    //   426: invokespecial 88	java/lang/StringBuilder:<init>	()V
+    //   429: astore_2
+    //   430: aload_2
+    //   431: ldc_w 277
+    //   434: invokevirtual 94	java/lang/StringBuilder:append	(Ljava/lang/String;)Ljava/lang/StringBuilder;
+    //   437: pop
+    //   438: aload_2
+    //   439: aload_1
+    //   440: invokevirtual 94	java/lang/StringBuilder:append	(Ljava/lang/String;)Ljava/lang/StringBuilder;
+    //   443: pop
+    //   444: aload_2
+    //   445: ldc_w 279
+    //   448: invokevirtual 94	java/lang/StringBuilder:append	(Ljava/lang/String;)Ljava/lang/StringBuilder;
+    //   451: pop
+    //   452: aload_2
+    //   453: invokevirtual 103	java/lang/StringBuilder:toString	()Ljava/lang/String;
+    //   456: invokestatic 108	com/RNFetchBlob/RNFetchBlobUtils:emitWarningEvent	(Ljava/lang/String;)V
+    //   459: goto +280 -> 739
+    //   462: aload_2
+    //   463: ldc -84
+    //   465: invokevirtual 119	java/lang/String:startsWith	(Ljava/lang/String;)Z
+    //   468: ifeq +156 -> 624
+    //   471: aload_2
+    //   472: ldc -84
+    //   474: invokevirtual 122	java/lang/String:length	()I
+    //   477: invokevirtual 126	java/lang/String:substring	(I)Ljava/lang/String;
+    //   480: astore 10
+    //   482: aconst_null
+    //   483: astore 4
+    //   485: aconst_null
+    //   486: astore_1
+    //   487: aload 8
+    //   489: invokevirtual 176	com/facebook/react/bridge/ReactApplicationContext:getContentResolver	()Landroid/content/ContentResolver;
+    //   492: aload 10
+    //   494: invokestatic 182	android/net/Uri:parse	(Ljava/lang/String;)Landroid/net/Uri;
+    //   497: invokevirtual 188	android/content/ContentResolver:openInputStream	(Landroid/net/Uri;)Ljava/io/InputStream;
+    //   500: astore_2
+    //   501: aload_0
+    //   502: aload_2
+    //   503: aload 7
+    //   505: invokespecial 267	com/RNFetchBlob/RNFetchBlobBody:pipeStreamToFileStream	(Ljava/io/InputStream;Ljava/io/FileOutputStream;)V
+    //   508: aload_2
+    //   509: ifnull +230 -> 739
+    //   512: aload_2
+    //   513: invokevirtual 191	java/io/InputStream:close	()V
+    //   516: goto +223 -> 739
+    //   519: astore_3
+    //   520: aload_2
+    //   521: astore_1
+    //   522: aload_3
+    //   523: astore_2
+    //   524: goto +90 -> 614
+    //   527: astore_3
+    //   528: goto +11 -> 539
+    //   531: astore_2
+    //   532: goto +82 -> 614
+    //   535: astore_3
+    //   536: aload 4
+    //   538: astore_2
+    //   539: aload_2
+    //   540: astore_1
+    //   541: new 87	java/lang/StringBuilder
+    //   544: dup
+    //   545: invokespecial 88	java/lang/StringBuilder:<init>	()V
+    //   548: astore 4
+    //   550: aload_2
+    //   551: astore_1
+    //   552: aload 4
+    //   554: ldc_w 281
+    //   557: invokevirtual 94	java/lang/StringBuilder:append	(Ljava/lang/String;)Ljava/lang/StringBuilder;
+    //   560: pop
+    //   561: aload_2
+    //   562: astore_1
+    //   563: aload 4
+    //   565: aload 10
+    //   567: invokevirtual 94	java/lang/StringBuilder:append	(Ljava/lang/String;)Ljava/lang/StringBuilder;
+    //   570: pop
+    //   571: aload_2
+    //   572: astore_1
+    //   573: aload 4
+    //   575: ldc -61
+    //   577: invokevirtual 94	java/lang/StringBuilder:append	(Ljava/lang/String;)Ljava/lang/StringBuilder;
+    //   580: pop
+    //   581: aload_2
+    //   582: astore_1
+    //   583: aload 4
+    //   585: aload_3
+    //   586: invokevirtual 196	java/lang/Exception:getLocalizedMessage	()Ljava/lang/String;
+    //   589: invokevirtual 94	java/lang/StringBuilder:append	(Ljava/lang/String;)Ljava/lang/StringBuilder;
+    //   592: pop
+    //   593: aload_2
+    //   594: astore_1
+    //   595: aload 4
+    //   597: invokevirtual 103	java/lang/StringBuilder:toString	()Ljava/lang/String;
+    //   600: invokestatic 108	com/RNFetchBlob/RNFetchBlobUtils:emitWarningEvent	(Ljava/lang/String;)V
+    //   603: aload_2
+    //   604: ifnull +135 -> 739
+    //   607: aload_2
+    //   608: invokevirtual 191	java/io/InputStream:close	()V
+    //   611: goto +128 -> 739
+    //   614: aload_1
+    //   615: ifnull +7 -> 622
+    //   618: aload_1
+    //   619: invokevirtual 191	java/io/InputStream:close	()V
+    //   622: aload_2
+    //   623: athrow
+    //   624: aload 7
+    //   626: aload_2
+    //   627: iconst_0
+    //   628: invokestatic 202	android/util/Base64:decode	(Ljava/lang/String;I)[B
+    //   631: invokevirtual 263	java/io/FileOutputStream:write	([B)V
+    //   634: goto +105 -> 739
+    //   637: new 87	java/lang/StringBuilder
+    //   640: dup
+    //   641: invokespecial 88	java/lang/StringBuilder:<init>	()V
+    //   644: astore_2
+    //   645: aload_2
+    //   646: aload 4
+    //   648: invokevirtual 94	java/lang/StringBuilder:append	(Ljava/lang/String;)Ljava/lang/StringBuilder;
+    //   651: pop
+    //   652: aload_2
+    //   653: ldc -7
+    //   655: invokevirtual 94	java/lang/StringBuilder:append	(Ljava/lang/String;)Ljava/lang/StringBuilder;
+    //   658: pop
+    //   659: aload_2
+    //   660: aload_3
+    //   661: invokevirtual 94	java/lang/StringBuilder:append	(Ljava/lang/String;)Ljava/lang/StringBuilder;
+    //   664: pop
+    //   665: aload_2
+    //   666: ldc -3
+    //   668: invokevirtual 94	java/lang/StringBuilder:append	(Ljava/lang/String;)Ljava/lang/StringBuilder;
+    //   671: pop
+    //   672: aload_2
+    //   673: invokevirtual 103	java/lang/StringBuilder:toString	()Ljava/lang/String;
+    //   676: astore_2
+    //   677: new 87	java/lang/StringBuilder
+    //   680: dup
+    //   681: invokespecial 88	java/lang/StringBuilder:<init>	()V
+    //   684: astore_3
+    //   685: aload_3
+    //   686: aload_2
+    //   687: invokevirtual 94	java/lang/StringBuilder:append	(Ljava/lang/String;)Ljava/lang/StringBuilder;
+    //   690: pop
+    //   691: aload_3
+    //   692: ldc -1
+    //   694: invokevirtual 94	java/lang/StringBuilder:append	(Ljava/lang/String;)Ljava/lang/StringBuilder;
+    //   697: pop
+    //   698: aload_3
+    //   699: aload_1
+    //   700: getfield 257	com/RNFetchBlob/RNFetchBlobBody$FormField:mime	Ljava/lang/String;
+    //   703: invokevirtual 94	java/lang/StringBuilder:append	(Ljava/lang/String;)Ljava/lang/StringBuilder;
+    //   706: pop
+    //   707: aload_3
+    //   708: ldc_w 259
+    //   711: invokevirtual 94	java/lang/StringBuilder:append	(Ljava/lang/String;)Ljava/lang/StringBuilder;
+    //   714: pop
+    //   715: aload 7
+    //   717: aload_3
+    //   718: invokevirtual 103	java/lang/StringBuilder:toString	()Ljava/lang/String;
+    //   721: invokevirtual 206	java/lang/String:getBytes	()[B
+    //   724: invokevirtual 263	java/io/FileOutputStream:write	([B)V
+    //   727: aload 7
+    //   729: aload_1
+    //   730: getfield 85	com/RNFetchBlob/RNFetchBlobBody$FormField:data	Ljava/lang/String;
+    //   733: invokevirtual 206	java/lang/String:getBytes	()[B
+    //   736: invokevirtual 263	java/io/FileOutputStream:write	([B)V
+    //   739: aload 7
+    //   741: ldc -9
+    //   743: invokevirtual 206	java/lang/String:getBytes	()[B
+    //   746: invokevirtual 263	java/io/FileOutputStream:write	([B)V
+    //   749: goto -677 -> 72
+    //   752: new 87	java/lang/StringBuilder
+    //   755: dup
+    //   756: invokespecial 88	java/lang/StringBuilder:<init>	()V
+    //   759: astore_1
+    //   760: aload_1
+    //   761: ldc -11
+    //   763: invokevirtual 94	java/lang/StringBuilder:append	(Ljava/lang/String;)Ljava/lang/StringBuilder;
+    //   766: pop
+    //   767: aload_1
+    //   768: aload 5
+    //   770: invokevirtual 94	java/lang/StringBuilder:append	(Ljava/lang/String;)Ljava/lang/StringBuilder;
+    //   773: pop
+    //   774: aload_1
+    //   775: ldc_w 283
+    //   778: invokevirtual 94	java/lang/StringBuilder:append	(Ljava/lang/String;)Ljava/lang/StringBuilder;
+    //   781: pop
+    //   782: aload 7
+    //   784: aload_1
+    //   785: invokevirtual 103	java/lang/StringBuilder:toString	()Ljava/lang/String;
+    //   788: invokevirtual 206	java/lang/String:getBytes	()[B
+    //   791: invokevirtual 263	java/io/FileOutputStream:write	([B)V
+    //   794: aload 7
+    //   796: invokevirtual 286	java/io/FileOutputStream:flush	()V
+    //   799: aload 7
+    //   801: invokevirtual 287	java/io/FileOutputStream:close	()V
+    //   804: aload 6
+    //   806: areturn
+    // Local variable table:
+    //   start	length	slot	name	signature
+    //   0	807	0	this	RNFetchBlobBody
+    //   7	778	1	localObject1	Object
+    //   97	229	2	str1	String
+    //   337	32	2	localIOException	IOException
+    //   397	127	2	localObject2	Object
+    //   531	1	2	localObject3	Object
+    //   538	149	2	localObject4	Object
+    //   102	275	3	localObject5	Object
+    //   519	4	3	localObject6	Object
+    //   527	1	3	localException1	Exception
+    //   535	126	3	localException2	Exception
+    //   684	34	3	localStringBuilder	StringBuilder
+    //   121	526	4	localObject7	Object
+    //   28	741	5	str2	String
+    //   43	762	6	localFile	File
+    //   54	746	7	localFileOutputStream	FileOutputStream
+    //   64	424	8	localReactApplicationContext	ReactApplicationContext
+    //   70	13	9	localIterator	java.util.Iterator
+    //   168	398	10	localObject8	Object
+    // Exception table:
+    //   from	to	target	type
+    //   310	334	337	java/io/IOException
+    //   501	508	519	finally
+    //   501	508	527	java/lang/Exception
+    //   487	501	531	finally
+    //   541	550	531	finally
+    //   552	561	531	finally
+    //   563	571	531	finally
+    //   573	581	531	finally
+    //   583	593	531	finally
+    //   595	603	531	finally
+    //   487	501	535	java/lang/Exception
+  }
+  
+  private void emitUploadProgress(long paramLong)
+  {
+    Object localObject = RNFetchBlobReq.getReportUploadProgress(mTaskId);
+    if ((localObject != null) && (contentLength != 0L) && (((RNFetchBlobProgressConfig)localObject).shouldReport((float)paramLong / (float)contentLength)))
+    {
+      localObject = Arguments.createMap();
+      ((WritableMap)localObject).putString("taskId", mTaskId);
+      ((WritableMap)localObject).putString("written", String.valueOf(paramLong));
+      ((WritableMap)localObject).putString("total", String.valueOf(contentLength));
+      ((DeviceEventManagerModule.RCTDeviceEventEmitter)RNFetchBlob.RCTContext.getJSModule(DeviceEventManagerModule.RCTDeviceEventEmitter.class)).emit("RNFetchBlobProgress-upload", localObject);
+    }
+  }
+  
+  private InputStream getRequestStream()
+    throws Exception
+  {
+    Object localObject4;
+    if (rawBody.startsWith("RNFetchBlob-file://"))
+    {
+      Object localObject1 = RNFetchBlobFS.normalizePath(rawBody.substring("RNFetchBlob-file://".length()));
+      if (RNFetchBlobFS.isAsset((String)localObject1)) {
+        try
+        {
+          localObject1 = ((String)localObject1).replace("bundle-assets://", "");
+          localObject1 = RNFetchBlob.RCTContext.getAssets().open((String)localObject1);
+          return localObject1;
+        }
+        catch (Exception localException1)
+        {
+          localObject4 = new StringBuilder();
+          ((StringBuilder)localObject4).append("error when getting request stream from asset : ");
+          ((StringBuilder)localObject4).append(localException1.getLocalizedMessage());
+          throw new Exception(((StringBuilder)localObject4).toString());
+        }
+      }
+      Object localObject2 = new File(RNFetchBlobFS.normalizePath(localException1));
+      try
+      {
+        if (!((File)localObject2).exists()) {
+          ((File)localObject2).createNewFile();
+        }
+        localObject2 = new FileInputStream((File)localObject2);
+        return localObject2;
+      }
+      catch (Exception localException2)
+      {
+        localObject4 = new StringBuilder();
+        ((StringBuilder)localObject4).append("error when getting request stream: ");
+        ((StringBuilder)localObject4).append(localException2.getLocalizedMessage());
+        throw new Exception(((StringBuilder)localObject4).toString());
+      }
+    }
+    Object localObject3;
+    if (rawBody.startsWith("RNFetchBlob-content://"))
+    {
+      localObject3 = rawBody.substring("RNFetchBlob-content://".length());
+      try
+      {
+        localObject4 = RNFetchBlob.RCTContext.getContentResolver().openInputStream(Uri.parse((String)localObject3));
+        return localObject4;
+      }
+      catch (Exception localException4)
+      {
+        StringBuilder localStringBuilder2 = new StringBuilder();
+        localStringBuilder2.append("error when getting request stream for content URI: ");
+        localStringBuilder2.append((String)localObject3);
+        throw new Exception(localStringBuilder2.toString(), localException4);
+      }
+    }
+    try
+    {
+      localObject3 = new ByteArrayInputStream(Base64.decode(rawBody, 0));
+      return localObject3;
+    }
+    catch (Exception localException3)
+    {
+      StringBuilder localStringBuilder1 = new StringBuilder();
+      localStringBuilder1.append("error when getting request stream: ");
+      localStringBuilder1.append(localException3.getLocalizedMessage());
+      throw new Exception(localStringBuilder1.toString());
+    }
+  }
+  
+  private void pipeStreamToFileStream(InputStream paramInputStream, FileOutputStream paramFileOutputStream)
+    throws IOException
+  {
+    byte[] arrayOfByte = new byte['?'];
+    for (;;)
+    {
+      int i = paramInputStream.read(arrayOfByte);
+      if (i <= 0) {
+        break;
+      }
+      paramFileOutputStream.write(arrayOfByte, 0, i);
+    }
+    paramInputStream.close();
+  }
+  
+  private void pipeStreamToSink(InputStream paramInputStream, BufferedSink paramBufferedSink)
+    throws IOException
+  {
+    byte[] arrayOfByte = new byte['?'];
+    long l = 0L;
+    for (;;)
+    {
+      int i = paramInputStream.read(arrayOfByte, 0, 10240);
+      if (i <= 0) {
+        break;
+      }
+      paramBufferedSink.write(arrayOfByte, 0, i);
+      l += i;
+      emitUploadProgress(l);
+    }
+    paramInputStream.close();
+  }
+  
+  RNFetchBlobBody chunkedEncoding(boolean paramBoolean)
+  {
+    chunkedEncoding = Boolean.valueOf(paramBoolean);
+    return this;
+  }
+  
+  boolean clearRequestBody()
+  {
+    try
+    {
+      if ((bodyCache != null) && (bodyCache.exists())) {
+        bodyCache.delete();
+      }
+      return true;
+    }
+    catch (Exception localException)
+    {
+      RNFetchBlobUtils.emitWarningEvent(localException.getLocalizedMessage());
+    }
+    return false;
+  }
+  
+  public long contentLength()
+  {
+    if (chunkedEncoding.booleanValue()) {
+      return -1L;
+    }
+    return contentLength;
+  }
+  
+  public MediaType contentType()
+  {
+    return mime;
+  }
+  
+  RNFetchBlobBody setBody(ReadableArray paramReadableArray)
+  {
+    form = paramReadableArray;
+    try
+    {
+      bodyCache = createMultipartBodyCache();
+      requestStream = new FileInputStream(bodyCache);
+      contentLength = bodyCache.length();
+      return this;
+    }
+    catch (Exception paramReadableArray)
+    {
+      paramReadableArray.printStackTrace();
+      StringBuilder localStringBuilder = new StringBuilder();
+      localStringBuilder.append("RNFetchBlob failed to create request multipart body :");
+      localStringBuilder.append(paramReadableArray.getLocalizedMessage());
+      RNFetchBlobUtils.emitWarningEvent(localStringBuilder.toString());
+    }
+    return this;
+  }
+  
+  RNFetchBlobBody setBody(String paramString)
+  {
+    rawBody = paramString;
+    if (rawBody == null)
+    {
+      rawBody = "";
+      requestType = RNFetchBlobReq.RequestType.AsIs;
+    }
+    try
+    {
+      switch (1.$SwitchMap$com$RNFetchBlob$RNFetchBlobReq$RequestType[requestType.ordinal()])
+      {
+      case 2: 
+        contentLength = rawBody.getBytes().length;
+        requestStream = new ByteArrayInputStream(rawBody.getBytes());
+        return this;
+      }
+    }
+    catch (Exception paramString)
+    {
+      paramString.printStackTrace();
+      StringBuilder localStringBuilder = new StringBuilder();
+      localStringBuilder.append("RNFetchBlob failed to create single content request body :");
+      localStringBuilder.append(paramString.getLocalizedMessage());
+      localStringBuilder.append("\r\n");
+      RNFetchBlobUtils.emitWarningEvent(localStringBuilder.toString());
+      return this;
+    }
+    requestStream = getRequestStream();
+    contentLength = requestStream.available();
+    return this;
+    return this;
+  }
+  
+  RNFetchBlobBody setMIME(MediaType paramMediaType)
+  {
+    mime = paramMediaType;
+    return this;
+  }
+  
+  RNFetchBlobBody setRequestType(RNFetchBlobReq.RequestType paramRequestType)
+  {
+    requestType = paramRequestType;
+    return this;
+  }
+  
+  public void writeTo(@NonNull BufferedSink paramBufferedSink)
+  {
+    try
+    {
+      pipeStreamToSink(requestStream, paramBufferedSink);
+      return;
+    }
+    catch (Exception paramBufferedSink)
+    {
+      RNFetchBlobUtils.emitWarningEvent(paramBufferedSink.getLocalizedMessage());
+      paramBufferedSink.printStackTrace();
+    }
+  }
+  
+  private class FormField
+  {
+    public String data;
+    String filename;
+    String mime;
+    public String name;
+    
+    FormField(ReadableMap paramReadableMap)
+    {
+      if (paramReadableMap.hasKey("name")) {
+        name = paramReadableMap.getString("name");
+      }
+      if (paramReadableMap.hasKey("filename")) {
+        filename = paramReadableMap.getString("filename");
+      }
+      if (paramReadableMap.hasKey("type"))
+      {
+        mime = paramReadableMap.getString("type");
+      }
+      else
+      {
+        if (filename == null) {
+          this$1 = "text/plain";
+        } else {
+          this$1 = "application/octet-stream";
+        }
+        mime = RNFetchBlobBody.this;
+      }
+      if (paramReadableMap.hasKey("data")) {
+        data = paramReadableMap.getString("data");
+      }
+    }
+  }
+}

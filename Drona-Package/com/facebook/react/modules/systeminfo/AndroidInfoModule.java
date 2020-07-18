@@ -1,0 +1,105 @@
+package com.facebook.react.modules.systeminfo;
+
+import android.annotation.SuppressLint;
+import android.app.UiModeManager;
+import android.content.Context;
+import android.content.ContextWrapper;
+import android.content.res.Resources;
+import android.os.Build;
+import android.os.Build.VERSION;
+import android.provider.Settings.Secure;
+import com.facebook.react.R.integer;
+import com.facebook.react.bridge.ReactApplicationContext;
+import com.facebook.react.bridge.ReactContext;
+import com.facebook.react.bridge.ReactContextBaseJavaModule;
+import com.facebook.react.module.annotations.ReactModule;
+import com.facebook.react.turbomodule.core.interfaces.TurboModule;
+import java.util.HashMap;
+import java.util.Map;
+
+@ReactModule(name="PlatformConstants")
+@SuppressLint({"HardwareIds"})
+public class AndroidInfoModule
+  extends ReactContextBaseJavaModule
+  implements TurboModule
+{
+  private static final String IS_TESTING = "IS_TESTING";
+  public static final String NAME = "PlatformConstants";
+  
+  public AndroidInfoModule(ReactApplicationContext paramReactApplicationContext)
+  {
+    super(paramReactApplicationContext);
+  }
+  
+  private String getServerHost()
+  {
+    return AndroidInfoHelpers.getServerHost(Integer.valueOf(getReactApplicationContext().getApplicationContext().getResources().getInteger(R.integer.react_native_dev_server_port)));
+  }
+  
+  private Boolean isRunningScreenshotTest()
+  {
+    try
+    {
+      Class.forName("androidx.test.rule.ActivityTestRule");
+      return Boolean.valueOf(true);
+    }
+    catch (ClassNotFoundException localClassNotFoundException)
+    {
+      for (;;) {}
+    }
+    return Boolean.valueOf(false);
+  }
+  
+  private String uiMode()
+  {
+    int i = ((UiModeManager)getReactApplicationContext().getSystemService("uimode")).getCurrentModeType();
+    if (i != 6)
+    {
+      switch (i)
+      {
+      default: 
+        return "unknown";
+      case 4: 
+        return "tv";
+      case 3: 
+        return "car";
+      case 2: 
+        return "desk";
+      }
+      return "normal";
+    }
+    return "watch";
+  }
+  
+  public String getAndroidID()
+  {
+    return Settings.Secure.getString(getReactApplicationContext().getContentResolver(), "android_id");
+  }
+  
+  public Map getConstants()
+  {
+    HashMap localHashMap = new HashMap();
+    localHashMap.put("Version", Integer.valueOf(Build.VERSION.SDK_INT));
+    localHashMap.put("Release", Build.VERSION.RELEASE);
+    localHashMap.put("Serial", Build.SERIAL);
+    localHashMap.put("Fingerprint", Build.FINGERPRINT);
+    localHashMap.put("Model", Build.MODEL);
+    boolean bool;
+    if ((!"true".equals(System.getProperty("IS_TESTING"))) && (!isRunningScreenshotTest().booleanValue())) {
+      bool = false;
+    } else {
+      bool = true;
+    }
+    localHashMap.put("isTesting", Boolean.valueOf(bool));
+    localHashMap.put("reactNativeVersion", ReactNativeVersion.VERSION);
+    localHashMap.put("uiMode", uiMode());
+    return localHashMap;
+  }
+  
+  public String getName()
+  {
+    return "PlatformConstants";
+  }
+  
+  public void invalidate() {}
+}

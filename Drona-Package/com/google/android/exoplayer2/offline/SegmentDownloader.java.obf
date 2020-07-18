@@ -1,0 +1,228 @@
+package com.google.android.exoplayer2.offline;
+
+import android.net.Uri;
+import androidx.annotation.NonNull;
+import com.google.android.exoplayer2.upstream.DataSource;
+import com.google.android.exoplayer2.upstream.DataSpec;
+import com.google.android.exoplayer2.upstream.cache.Cache;
+import com.google.android.exoplayer2.upstream.cache.CacheDataSource;
+import com.google.android.exoplayer2.upstream.cache.CacheUtil;
+import com.google.android.exoplayer2.upstream.cache.CacheUtil.CachingCounters;
+import com.google.android.exoplayer2.util.PriorityTaskManager;
+import com.google.android.exoplayer2.util.Util;
+import java.io.IOException;
+import java.util.ArrayList;
+import java.util.Collections;
+import java.util.List;
+import java.util.concurrent.atomic.AtomicBoolean;
+
+public abstract class SegmentDownloader<M extends FilterableManifest<M>>
+  implements Downloader
+{
+  private static final int BUFFER_SIZE_BYTES = 131072;
+  private final Cache cache;
+  private final CacheDataSource dataSource;
+  private volatile long downloadedBytes;
+  private volatile int downloadedSegments;
+  private final AtomicBoolean isCanceled;
+  private final Uri manifestUri;
+  private final CacheDataSource offlineDataSource;
+  private final PriorityTaskManager priorityTaskManager;
+  private final ArrayList<StreamKey> streamKeys;
+  private volatile int totalSegments;
+  
+  public SegmentDownloader(Uri paramUri, List<StreamKey> paramList, DownloaderConstructorHelper paramDownloaderConstructorHelper)
+  {
+    manifestUri = paramUri;
+    streamKeys = new ArrayList(paramList);
+    cache = paramDownloaderConstructorHelper.getCache();
+    dataSource = paramDownloaderConstructorHelper.buildCacheDataSource(false);
+    offlineDataSource = paramDownloaderConstructorHelper.buildCacheDataSource(true);
+    priorityTaskManager = paramDownloaderConstructorHelper.getPriorityTaskManager();
+    totalSegments = -1;
+    isCanceled = new AtomicBoolean();
+  }
+  
+  private List<Segment> initDownload()
+    throws IOException, InterruptedException
+  {
+    Object localObject2 = getManifest(dataSource, manifestUri);
+    Object localObject1 = localObject2;
+    if (!streamKeys.isEmpty()) {
+      localObject1 = (FilterableManifest)((FilterableManifest)localObject2).copy(streamKeys);
+    }
+    localObject1 = getSegments(dataSource, (FilterableManifest)localObject1, false);
+    localObject2 = new CacheUtil.CachingCounters();
+    totalSegments = ((List)localObject1).size();
+    downloadedSegments = 0;
+    downloadedBytes = 0L;
+    int i = ((List)localObject1).size() - 1;
+    while (i >= 0)
+    {
+      CacheUtil.getCached(getdataSpec, cache, (CacheUtil.CachingCounters)localObject2);
+      downloadedBytes += alreadyCachedBytes;
+      if (alreadyCachedBytes == contentLength)
+      {
+        downloadedSegments += 1;
+        ((List)localObject1).remove(i);
+      }
+      i -= 1;
+    }
+    return localObject1;
+  }
+  
+  private void removeUri(Uri paramUri)
+  {
+    CacheUtil.remove(cache, CacheUtil.generateKey(paramUri));
+  }
+  
+  public void cancel()
+  {
+    isCanceled.set(true);
+  }
+  
+  public final void download()
+    throws IOException, InterruptedException
+  {
+    priorityTaskManager.add(64536);
+    try
+    {
+      List localList = initDownload();
+      Collections.sort(localList);
+      byte[] arrayOfByte = new byte[131072];
+      CacheUtil.CachingCounters localCachingCounters = new CacheUtil.CachingCounters();
+      int i = 0;
+      for (;;)
+      {
+        int j = localList.size();
+        if (i < j) {}
+        try
+        {
+          CacheUtil.cache(getdataSpec, cache, dataSource, arrayOfByte, priorityTaskManager, 64536, localCachingCounters, isCanceled, true);
+          downloadedSegments += 1;
+          downloadedBytes += newlyCachedBytes;
+          i += 1;
+        }
+        finally
+        {
+          downloadedBytes += newlyCachedBytes;
+        }
+      }
+      return;
+    }
+    finally
+    {
+      priorityTaskManager.remove(64536);
+    }
+  }
+  
+  public final float getDownloadPercentage()
+  {
+    int i = totalSegments;
+    int j = downloadedSegments;
+    if ((i != -1) && (j != -1))
+    {
+      if (i == 0) {
+        return 100.0F;
+      }
+      return j * 100.0F / i;
+    }
+    return -1.0F;
+  }
+  
+  public final long getDownloadedBytes()
+  {
+    return downloadedBytes;
+  }
+  
+  protected abstract M getManifest(DataSource paramDataSource, Uri paramUri)
+    throws IOException;
+  
+  protected abstract List<Segment> getSegments(DataSource paramDataSource, M paramM, boolean paramBoolean)
+    throws InterruptedException, IOException;
+  
+  /* Error */
+  public final void remove()
+    throws InterruptedException
+  {
+    // Byte code:
+    //   0: aload_0
+    //   1: aload_0
+    //   2: getfield 61	com/google/android/exoplayer2/offline/SegmentDownloader:offlineDataSource	Lcom/google/android/exoplayer2/upstream/cache/CacheDataSource;
+    //   5: aload_0
+    //   6: getfield 38	com/google/android/exoplayer2/offline/SegmentDownloader:manifestUri	Landroid/net/Uri;
+    //   9: invokevirtual 87	com/google/android/exoplayer2/offline/SegmentDownloader:getManifest	(Lcom/google/android/exoplayer2/upstream/DataSource;Landroid/net/Uri;)Lcom/google/android/exoplayer2/offline/FilterableManifest;
+    //   12: astore_2
+    //   13: aload_0
+    //   14: aload_0
+    //   15: getfield 61	com/google/android/exoplayer2/offline/SegmentDownloader:offlineDataSource	Lcom/google/android/exoplayer2/upstream/cache/CacheDataSource;
+    //   18: aload_2
+    //   19: iconst_1
+    //   20: invokevirtual 101	com/google/android/exoplayer2/offline/SegmentDownloader:getSegments	(Lcom/google/android/exoplayer2/upstream/DataSource;Lcom/google/android/exoplayer2/offline/FilterableManifest;Z)Ljava/util/List;
+    //   23: astore_2
+    //   24: iconst_0
+    //   25: istore_1
+    //   26: iload_1
+    //   27: aload_2
+    //   28: invokeinterface 110 1 0
+    //   33: if_icmpge +41 -> 74
+    //   36: aload_0
+    //   37: aload_2
+    //   38: iload_1
+    //   39: invokeinterface 118 2 0
+    //   44: checkcast 9	com/google/android/exoplayer2/offline/SegmentDownloader$Segment
+    //   47: getfield 122	com/google/android/exoplayer2/offline/SegmentDownloader$Segment:dataSpec	Lcom/google/android/exoplayer2/upstream/DataSpec;
+    //   50: getfield 187	com/google/android/exoplayer2/upstream/DataSpec:uri	Landroid/net/Uri;
+    //   53: invokespecial 189	com/google/android/exoplayer2/offline/SegmentDownloader:removeUri	(Landroid/net/Uri;)V
+    //   56: iload_1
+    //   57: iconst_1
+    //   58: iadd
+    //   59: istore_1
+    //   60: goto -34 -> 26
+    //   63: astore_2
+    //   64: aload_0
+    //   65: aload_0
+    //   66: getfield 38	com/google/android/exoplayer2/offline/SegmentDownloader:manifestUri	Landroid/net/Uri;
+    //   69: invokespecial 189	com/google/android/exoplayer2/offline/SegmentDownloader:removeUri	(Landroid/net/Uri;)V
+    //   72: aload_2
+    //   73: athrow
+    //   74: aload_0
+    //   75: aload_0
+    //   76: getfield 38	com/google/android/exoplayer2/offline/SegmentDownloader:manifestUri	Landroid/net/Uri;
+    //   79: invokespecial 189	com/google/android/exoplayer2/offline/SegmentDownloader:removeUri	(Landroid/net/Uri;)V
+    //   82: return
+    //   83: astore_2
+    //   84: goto -10 -> 74
+    // Local variable table:
+    //   start	length	slot	name	signature
+    //   0	87	0	this	SegmentDownloader
+    //   25	35	1	i	int
+    //   12	26	2	localObject1	Object
+    //   63	10	2	localObject2	Object
+    //   83	1	2	localIOException	IOException
+    // Exception table:
+    //   from	to	target	type
+    //   0	24	63	finally
+    //   26	56	63	finally
+    //   0	24	83	java/io/IOException
+    //   26	56	83	java/io/IOException
+  }
+  
+  protected static class Segment
+    implements Comparable<Segment>
+  {
+    public final DataSpec dataSpec;
+    public final long startTimeUs;
+    
+    public Segment(long paramLong, DataSpec paramDataSpec)
+    {
+      startTimeUs = paramLong;
+      dataSpec = paramDataSpec;
+    }
+    
+    public int compareTo(@NonNull Segment paramSegment)
+    {
+      return Util.compareLong(startTimeUs, startTimeUs);
+    }
+  }
+}

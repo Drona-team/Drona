@@ -1,0 +1,404 @@
+package com.facebook.soloader;
+
+import android.content.Context;
+import java.io.File;
+import java.io.FileInputStream;
+import java.io.IOException;
+import java.io.InputStream;
+
+public final class ExoSoSource
+  extends UnpackingSoSource
+{
+  public ExoSoSource(Context paramContext, String paramString)
+  {
+    super(paramContext, paramString);
+  }
+  
+  protected UnpackingSoSource.Unpacker makeUnpacker()
+    throws IOException
+  {
+    return new ExoUnpacker(this);
+  }
+  
+  private final class ExoUnpacker
+    extends UnpackingSoSource.Unpacker
+  {
+    private final ExoSoSource.FileDso[] mDsos;
+    
+    /* Error */
+    ExoUnpacker(UnpackingSoSource paramUnpackingSoSource)
+      throws IOException
+    {
+      // Byte code:
+      //   0: aload_0
+      //   1: aload_1
+      //   2: putfield 22	com/facebook/soloader/ExoSoSource$ExoUnpacker:this$0	Lcom/facebook/soloader/ExoSoSource;
+      //   5: aload_0
+      //   6: invokespecial 25	com/facebook/soloader/UnpackingSoSource$Unpacker:<init>	()V
+      //   9: aload_1
+      //   10: getfield 29	com/facebook/soloader/ExoSoSource:mContext	Landroid/content/Context;
+      //   13: astore_1
+      //   14: new 31	java/lang/StringBuilder
+      //   17: dup
+      //   18: invokespecial 32	java/lang/StringBuilder:<init>	()V
+      //   21: astore 8
+      //   23: aload 8
+      //   25: ldc 34
+      //   27: invokevirtual 38	java/lang/StringBuilder:append	(Ljava/lang/String;)Ljava/lang/StringBuilder;
+      //   30: pop
+      //   31: aload 8
+      //   33: aload_1
+      //   34: invokevirtual 44	android/content/Context:getPackageName	()Ljava/lang/String;
+      //   37: invokevirtual 38	java/lang/StringBuilder:append	(Ljava/lang/String;)Ljava/lang/StringBuilder;
+      //   40: pop
+      //   41: aload 8
+      //   43: ldc 46
+      //   45: invokevirtual 38	java/lang/StringBuilder:append	(Ljava/lang/String;)Ljava/lang/StringBuilder;
+      //   48: pop
+      //   49: new 48	java/io/File
+      //   52: dup
+      //   53: aload 8
+      //   55: invokevirtual 51	java/lang/StringBuilder:toString	()Ljava/lang/String;
+      //   58: invokespecial 54	java/io/File:<init>	(Ljava/lang/String;)V
+      //   61: astore_1
+      //   62: new 56	java/util/ArrayList
+      //   65: dup
+      //   66: invokespecial 57	java/util/ArrayList:<init>	()V
+      //   69: astore 10
+      //   71: new 59	java/util/LinkedHashSet
+      //   74: dup
+      //   75: invokespecial 60	java/util/LinkedHashSet:<init>	()V
+      //   78: astore 11
+      //   80: invokestatic 66	com/facebook/soloader/SysUtil:getSupportedAbis	()[Ljava/lang/String;
+      //   83: astore 12
+      //   85: aload 12
+      //   87: arraylength
+      //   88: istore 5
+      //   90: iconst_0
+      //   91: istore_3
+      //   92: iload_3
+      //   93: iload 5
+      //   95: if_icmpge +388 -> 483
+      //   98: aload 12
+      //   100: iload_3
+      //   101: aaload
+      //   102: astore 8
+      //   104: new 48	java/io/File
+      //   107: dup
+      //   108: aload_1
+      //   109: aload 8
+      //   111: invokespecial 69	java/io/File:<init>	(Ljava/io/File;Ljava/lang/String;)V
+      //   114: astore 13
+      //   116: aload 13
+      //   118: invokevirtual 73	java/io/File:isDirectory	()Z
+      //   121: ifne +6 -> 127
+      //   124: goto +272 -> 396
+      //   127: aload 11
+      //   129: aload 8
+      //   131: invokeinterface 79 2 0
+      //   136: pop
+      //   137: new 48	java/io/File
+      //   140: dup
+      //   141: aload 13
+      //   143: ldc 81
+      //   145: invokespecial 69	java/io/File:<init>	(Ljava/io/File;Ljava/lang/String;)V
+      //   148: astore 8
+      //   150: aload 8
+      //   152: invokevirtual 84	java/io/File:isFile	()Z
+      //   155: ifne +6 -> 161
+      //   158: goto +238 -> 396
+      //   161: new 86	java/io/FileReader
+      //   164: dup
+      //   165: aload 8
+      //   167: invokespecial 89	java/io/FileReader:<init>	(Ljava/io/File;)V
+      //   170: astore 8
+      //   172: new 91	java/io/BufferedReader
+      //   175: dup
+      //   176: aload 8
+      //   178: invokespecial 94	java/io/BufferedReader:<init>	(Ljava/io/Reader;)V
+      //   181: astore 9
+      //   183: iconst_0
+      //   184: istore 4
+      //   186: aload 9
+      //   188: invokevirtual 97	java/io/BufferedReader:readLine	()Ljava/lang/String;
+      //   191: astore 14
+      //   193: aload 14
+      //   195: ifnull +191 -> 386
+      //   198: aload 14
+      //   200: invokevirtual 103	java/lang/String:length	()I
+      //   203: ifne +6 -> 209
+      //   206: goto -23 -> 183
+      //   209: aload 14
+      //   211: bipush 32
+      //   213: invokevirtual 107	java/lang/String:indexOf	(I)I
+      //   216: istore 6
+      //   218: iload 6
+      //   220: iconst_m1
+      //   221: if_icmpeq +124 -> 345
+      //   224: new 31	java/lang/StringBuilder
+      //   227: dup
+      //   228: invokespecial 32	java/lang/StringBuilder:<init>	()V
+      //   231: astore 15
+      //   233: aload 15
+      //   235: aload 14
+      //   237: iconst_0
+      //   238: iload 6
+      //   240: invokevirtual 111	java/lang/String:substring	(II)Ljava/lang/String;
+      //   243: invokevirtual 38	java/lang/StringBuilder:append	(Ljava/lang/String;)Ljava/lang/StringBuilder;
+      //   246: pop
+      //   247: aload 15
+      //   249: ldc 113
+      //   251: invokevirtual 38	java/lang/StringBuilder:append	(Ljava/lang/String;)Ljava/lang/StringBuilder;
+      //   254: pop
+      //   255: aload 15
+      //   257: invokevirtual 51	java/lang/StringBuilder:toString	()Ljava/lang/String;
+      //   260: astore 15
+      //   262: aload 10
+      //   264: invokevirtual 116	java/util/ArrayList:size	()I
+      //   267: istore 7
+      //   269: iload 4
+      //   271: iload 7
+      //   273: if_icmpge +264 -> 537
+      //   276: aload 10
+      //   278: iload 4
+      //   280: invokevirtual 120	java/util/ArrayList:get	(I)Ljava/lang/Object;
+      //   283: checkcast 122	com/facebook/soloader/ExoSoSource$FileDso
+      //   286: getfield 126	com/facebook/soloader/ExoSoSource$FileDso:name	Ljava/lang/String;
+      //   289: aload 15
+      //   291: invokevirtual 129	java/lang/String:equals	(Ljava/lang/Object;)Z
+      //   294: ifeq +234 -> 528
+      //   297: iconst_1
+      //   298: istore 4
+      //   300: goto +240 -> 540
+      //   303: aload 14
+      //   305: iload 6
+      //   307: iconst_1
+      //   308: iadd
+      //   309: invokevirtual 132	java/lang/String:substring	(I)Ljava/lang/String;
+      //   312: astore 14
+      //   314: aload 10
+      //   316: new 122	com/facebook/soloader/ExoSoSource$FileDso
+      //   319: dup
+      //   320: aload 15
+      //   322: aload 14
+      //   324: new 48	java/io/File
+      //   327: dup
+      //   328: aload 13
+      //   330: aload 14
+      //   332: invokespecial 69	java/io/File:<init>	(Ljava/io/File;Ljava/lang/String;)V
+      //   335: invokespecial 135	com/facebook/soloader/ExoSoSource$FileDso:<init>	(Ljava/lang/String;Ljava/lang/String;Ljava/io/File;)V
+      //   338: invokevirtual 136	java/util/ArrayList:add	(Ljava/lang/Object;)Z
+      //   341: pop
+      //   342: goto +203 -> 545
+      //   345: new 31	java/lang/StringBuilder
+      //   348: dup
+      //   349: invokespecial 32	java/lang/StringBuilder:<init>	()V
+      //   352: astore_1
+      //   353: aload_1
+      //   354: ldc -118
+      //   356: invokevirtual 38	java/lang/StringBuilder:append	(Ljava/lang/String;)Ljava/lang/StringBuilder;
+      //   359: pop
+      //   360: aload_1
+      //   361: aload 14
+      //   363: invokevirtual 38	java/lang/StringBuilder:append	(Ljava/lang/String;)Ljava/lang/StringBuilder;
+      //   366: pop
+      //   367: aload_1
+      //   368: ldc -116
+      //   370: invokevirtual 38	java/lang/StringBuilder:append	(Ljava/lang/String;)Ljava/lang/StringBuilder;
+      //   373: pop
+      //   374: new 142	java/lang/RuntimeException
+      //   377: dup
+      //   378: aload_1
+      //   379: invokevirtual 51	java/lang/StringBuilder:toString	()Ljava/lang/String;
+      //   382: invokespecial 143	java/lang/RuntimeException:<init>	(Ljava/lang/String;)V
+      //   385: athrow
+      //   386: aload 9
+      //   388: invokevirtual 146	java/io/BufferedReader:close	()V
+      //   391: aload 8
+      //   393: invokevirtual 147	java/io/FileReader:close	()V
+      //   396: iload_3
+      //   397: iconst_1
+      //   398: iadd
+      //   399: istore_3
+      //   400: goto -308 -> 92
+      //   403: astore_1
+      //   404: aconst_null
+      //   405: astore_2
+      //   406: goto +7 -> 413
+      //   409: astore_2
+      //   410: aload_2
+      //   411: athrow
+      //   412: astore_1
+      //   413: aload_2
+      //   414: ifnull +22 -> 436
+      //   417: aload 9
+      //   419: invokevirtual 146	java/io/BufferedReader:close	()V
+      //   422: goto +19 -> 441
+      //   425: astore 9
+      //   427: aload_2
+      //   428: aload 9
+      //   430: invokevirtual 151	java/lang/Throwable:addSuppressed	(Ljava/lang/Throwable;)V
+      //   433: goto +8 -> 441
+      //   436: aload 9
+      //   438: invokevirtual 146	java/io/BufferedReader:close	()V
+      //   441: aload_1
+      //   442: athrow
+      //   443: astore_1
+      //   444: aconst_null
+      //   445: astore_2
+      //   446: goto +7 -> 453
+      //   449: astore_2
+      //   450: aload_2
+      //   451: athrow
+      //   452: astore_1
+      //   453: aload_2
+      //   454: ifnull +22 -> 476
+      //   457: aload 8
+      //   459: invokevirtual 147	java/io/FileReader:close	()V
+      //   462: goto +19 -> 481
+      //   465: astore 8
+      //   467: aload_2
+      //   468: aload 8
+      //   470: invokevirtual 151	java/lang/Throwable:addSuppressed	(Ljava/lang/Throwable;)V
+      //   473: goto +8 -> 481
+      //   476: aload 8
+      //   478: invokevirtual 147	java/io/FileReader:close	()V
+      //   481: aload_1
+      //   482: athrow
+      //   483: aload_2
+      //   484: aload 11
+      //   486: aload 11
+      //   488: invokeinterface 152 1 0
+      //   493: anewarray 99	java/lang/String
+      //   496: invokeinterface 156 2 0
+      //   501: checkcast 158	[Ljava/lang/String;
+      //   504: invokevirtual 164	com/facebook/soloader/UnpackingSoSource:setSoSourceAbis	([Ljava/lang/String;)V
+      //   507: aload_0
+      //   508: aload 10
+      //   510: aload 10
+      //   512: invokevirtual 116	java/util/ArrayList:size	()I
+      //   515: anewarray 122	com/facebook/soloader/ExoSoSource$FileDso
+      //   518: invokevirtual 165	java/util/ArrayList:toArray	([Ljava/lang/Object;)[Ljava/lang/Object;
+      //   521: checkcast 166	[Lcom/facebook/soloader/ExoSoSource$FileDso;
+      //   524: putfield 168	com/facebook/soloader/ExoSoSource$ExoUnpacker:mDsos	[Lcom/facebook/soloader/ExoSoSource$FileDso;
+      //   527: return
+      //   528: iload 4
+      //   530: iconst_1
+      //   531: iadd
+      //   532: istore 4
+      //   534: goto -265 -> 269
+      //   537: iconst_0
+      //   538: istore 4
+      //   540: iload 4
+      //   542: ifeq -239 -> 303
+      //   545: goto -362 -> 183
+      // Local variable table:
+      //   start	length	slot	name	signature
+      //   0	548	0	this	ExoUnpacker
+      //   0	548	1	this$1	ExoSoSource
+      //   0	548	2	paramUnpackingSoSource	UnpackingSoSource
+      //   91	309	3	i	int
+      //   184	357	4	j	int
+      //   88	8	5	k	int
+      //   216	93	6	m	int
+      //   267	7	7	n	int
+      //   21	437	8	localObject1	Object
+      //   465	12	8	localThrowable1	Throwable
+      //   181	237	9	localBufferedReader	java.io.BufferedReader
+      //   425	12	9	localThrowable2	Throwable
+      //   69	442	10	localArrayList	java.util.ArrayList
+      //   78	409	11	localLinkedHashSet	java.util.LinkedHashSet
+      //   83	16	12	arrayOfString	String[]
+      //   114	215	13	localFile	File
+      //   191	171	14	str	String
+      //   231	90	15	localObject2	Object
+      // Exception table:
+      //   from	to	target	type
+      //   186	193	403	finally
+      //   198	206	403	finally
+      //   209	218	403	finally
+      //   224	269	403	finally
+      //   276	297	403	finally
+      //   303	342	403	finally
+      //   345	386	403	finally
+      //   186	193	409	java/lang/Throwable
+      //   198	206	409	java/lang/Throwable
+      //   209	218	409	java/lang/Throwable
+      //   224	269	409	java/lang/Throwable
+      //   276	297	409	java/lang/Throwable
+      //   303	342	409	java/lang/Throwable
+      //   345	386	409	java/lang/Throwable
+      //   410	412	412	finally
+      //   417	422	425	java/lang/Throwable
+      //   172	183	443	finally
+      //   386	391	443	finally
+      //   417	422	443	finally
+      //   427	433	443	finally
+      //   436	441	443	finally
+      //   441	443	443	finally
+      //   172	183	449	java/lang/Throwable
+      //   386	391	449	java/lang/Throwable
+      //   427	433	449	java/lang/Throwable
+      //   436	441	449	java/lang/Throwable
+      //   441	443	449	java/lang/Throwable
+      //   450	452	452	finally
+      //   457	462	465	java/lang/Throwable
+    }
+    
+    protected UnpackingSoSource.DsoManifest getDsoManifest()
+      throws IOException
+    {
+      return new UnpackingSoSource.DsoManifest(mDsos);
+    }
+    
+    protected UnpackingSoSource.InputDsoIterator openDsoIterator()
+      throws IOException
+    {
+      return new FileBackedInputDsoIterator(null);
+    }
+    
+    private final class FileBackedInputDsoIterator
+      extends UnpackingSoSource.InputDsoIterator
+    {
+      private int mCurrentDso;
+      
+      private FileBackedInputDsoIterator() {}
+      
+      public boolean hasNext()
+      {
+        return mCurrentDso < mDsos.length;
+      }
+      
+      public UnpackingSoSource.InputDso next()
+        throws IOException
+      {
+        Object localObject1 = mDsos;
+        int i = mCurrentDso;
+        mCurrentDso = (i + 1);
+        Object localObject2 = localObject1[i];
+        localObject1 = new FileInputStream(backingFile);
+        try
+        {
+          localObject2 = new UnpackingSoSource.InputDso((UnpackingSoSource.Dso)localObject2, (InputStream)localObject1);
+          return localObject2;
+        }
+        finally
+        {
+          ((FileInputStream)localObject1).close();
+        }
+      }
+    }
+  }
+  
+  private static final class FileDso
+    extends UnpackingSoSource.Dso
+  {
+    final File backingFile;
+    
+    FileDso(String paramString1, String paramString2, File paramFile)
+    {
+      super(paramString2);
+      backingFile = paramFile;
+    }
+  }
+}

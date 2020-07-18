@@ -1,0 +1,54 @@
+package com.google.android.gms.iid;
+
+import android.os.Bundle;
+import android.util.Log;
+import com.google.android.gms.tasks.TaskCompletionSource;
+
+abstract class zzz<T>
+{
+  final int what;
+  final int zzcp;
+  final TaskCompletionSource<T> zzcq = new TaskCompletionSource();
+  final Bundle zzcr;
+  
+  zzz(int paramInt1, int paramInt2, Bundle paramBundle)
+  {
+    zzcp = paramInt1;
+    what = paramInt2;
+    zzcr = paramBundle;
+  }
+  
+  public String toString()
+  {
+    int i = what;
+    int j = zzcp;
+    zzw();
+    StringBuilder localStringBuilder = new StringBuilder(55);
+    localStringBuilder.append("Request { what=");
+    localStringBuilder.append(i);
+    localStringBuilder.append(" id=");
+    localStringBuilder.append(j);
+    localStringBuilder.append(" oneWay=false}");
+    return localStringBuilder.toString();
+  }
+  
+  final void zzd(zzaa paramZzaa)
+  {
+    if (Log.isLoggable("MessengerIpcClient", 3))
+    {
+      String str1 = String.valueOf(this);
+      String str2 = String.valueOf(paramZzaa);
+      StringBuilder localStringBuilder = new StringBuilder(String.valueOf(str1).length() + 14 + String.valueOf(str2).length());
+      localStringBuilder.append("Failing ");
+      localStringBuilder.append(str1);
+      localStringBuilder.append(" with ");
+      localStringBuilder.append(str2);
+      Log.d("MessengerIpcClient", localStringBuilder.toString());
+    }
+    zzcq.setException(paramZzaa);
+  }
+  
+  abstract void zzh(Bundle paramBundle);
+  
+  abstract boolean zzw();
+}

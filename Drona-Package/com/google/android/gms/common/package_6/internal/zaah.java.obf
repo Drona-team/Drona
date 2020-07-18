@@ -1,0 +1,110 @@
+package com.google.android.gms.common.api.internal;
+
+import android.os.Bundle;
+import android.os.DeadObjectException;
+import com.google.android.gms.common.ConnectionResult;
+import com.google.android.gms.common.api.Api;
+import com.google.android.gms.common.api.Api.AnyClient;
+import com.google.android.gms.common.api.Api.Client;
+import com.google.android.gms.common.api.Result;
+import com.google.android.gms.common.api.Status;
+import com.google.android.gms.common.internal.Preconditions;
+import com.google.android.gms.common.internal.SimpleClientAdapter;
+import java.util.Iterator;
+import java.util.Map;
+import java.util.Set;
+
+public final class zaah
+  implements zabd
+{
+  private final zabe zaft;
+  private boolean zafu = false;
+  
+  public zaah(zabe paramZabe)
+  {
+    zaft = paramZabe;
+  }
+  
+  public final void begin() {}
+  
+  public final void connect()
+  {
+    if (zafu)
+    {
+      zafu = false;
+      zaft.zaa(new zaaj(this, this));
+    }
+  }
+  
+  public final boolean disconnect()
+  {
+    if (zafu) {
+      return false;
+    }
+    if (zaft.zaee.zaax())
+    {
+      zafu = true;
+      Iterator localIterator = zaft.zaee.zahe.iterator();
+      while (localIterator.hasNext()) {
+        ((zacm)localIterator.next()).zabv();
+      }
+      return false;
+    }
+    zaft.zaf(null);
+    return true;
+  }
+  
+  public final <A extends Api.AnyClient, R extends Result, T extends BaseImplementation.ApiMethodImpl<R, A>> T enqueue(T paramT)
+  {
+    return execute(paramT);
+  }
+  
+  public final <A extends Api.AnyClient, T extends BaseImplementation.ApiMethodImpl<? extends Result, A>> T execute(T paramT)
+  {
+    try
+    {
+      zaft.zaee.zahf.zab(paramT);
+      Object localObject1 = zaft.zaee;
+      Object localObject2 = paramT.getClientKey();
+      localObject2 = (Api.Client)zagz.get(localObject2);
+      Preconditions.checkNotNull(localObject2, "Appropriate Api was not requested.");
+      if ((!((Api.Client)localObject2).isConnected()) && (zaft.zahp.containsKey(paramT.getClientKey())))
+      {
+        paramT.setFailedResult(new Status(17));
+        return paramT;
+      }
+      localObject1 = localObject2;
+      if ((localObject2 instanceof SimpleClientAdapter)) {
+        localObject1 = ((SimpleClientAdapter)localObject2).getClient();
+      }
+      paramT.run((Api.AnyClient)localObject1);
+      return paramT;
+    }
+    catch (DeadObjectException localDeadObjectException)
+    {
+      for (;;) {}
+    }
+    zaft.zaa(new zaai(this, this));
+    return paramT;
+  }
+  
+  public final void onConnected(Bundle paramBundle) {}
+  
+  public final void onConnectionSuspended(int paramInt)
+  {
+    zaft.zaf(null);
+    zaft.zaht.zab(paramInt, zafu);
+  }
+  
+  public final void zaa(ConnectionResult paramConnectionResult, Api<?> paramApi, boolean paramBoolean) {}
+  
+  final void zaam()
+  {
+    if (zafu)
+    {
+      zafu = false;
+      zaft.zaee.zahf.release();
+      disconnect();
+    }
+  }
+}

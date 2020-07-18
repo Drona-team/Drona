@@ -1,0 +1,105 @@
+package com.google.android.exoplayer2.source;
+
+import android.os.Handler;
+import com.google.android.exoplayer2.ExoPlayer;
+import com.google.android.exoplayer2.Timeline;
+import com.google.android.exoplayer2.upstream.Allocator;
+import com.google.android.exoplayer2.upstream.TransferListener;
+import java.io.IOException;
+
+public abstract interface MediaSource
+{
+  public abstract void addEventListener(Handler paramHandler, MediaSourceEventListener paramMediaSourceEventListener);
+  
+  public abstract MediaPeriod createPeriod(MediaPeriodId paramMediaPeriodId, Allocator paramAllocator);
+  
+  public abstract void maybeThrowSourceInfoRefreshError()
+    throws IOException;
+  
+  public abstract void prepareSource(ExoPlayer paramExoPlayer, boolean paramBoolean, SourceInfoRefreshListener paramSourceInfoRefreshListener);
+  
+  public abstract void prepareSource(ExoPlayer paramExoPlayer, boolean paramBoolean, SourceInfoRefreshListener paramSourceInfoRefreshListener, TransferListener paramTransferListener);
+  
+  public abstract void releasePeriod(MediaPeriod paramMediaPeriod);
+  
+  public abstract void releaseSource(SourceInfoRefreshListener paramSourceInfoRefreshListener);
+  
+  public abstract void removeEventListener(MediaSourceEventListener paramMediaSourceEventListener);
+  
+  public static final class MediaPeriodId
+  {
+    public final int adGroupIndex;
+    public final int adIndexInAdGroup;
+    public final long endPositionUs;
+    public final Object periodUid;
+    public final long windowSequenceNumber;
+    
+    public MediaPeriodId(Object paramObject)
+    {
+      this(paramObject, -1L);
+    }
+    
+    public MediaPeriodId(Object paramObject, int paramInt1, int paramInt2, long paramLong)
+    {
+      this(paramObject, paramInt1, paramInt2, paramLong, Long.MIN_VALUE);
+    }
+    
+    private MediaPeriodId(Object paramObject, int paramInt1, int paramInt2, long paramLong1, long paramLong2)
+    {
+      periodUid = paramObject;
+      adGroupIndex = paramInt1;
+      adIndexInAdGroup = paramInt2;
+      windowSequenceNumber = paramLong1;
+      endPositionUs = paramLong2;
+    }
+    
+    public MediaPeriodId(Object paramObject, long paramLong)
+    {
+      this(paramObject, -1, -1, paramLong, Long.MIN_VALUE);
+    }
+    
+    public MediaPeriodId(Object paramObject, long paramLong1, long paramLong2)
+    {
+      this(paramObject, -1, -1, paramLong1, paramLong2);
+    }
+    
+    public MediaPeriodId copyWithPeriodUid(Object paramObject)
+    {
+      if (periodUid.equals(paramObject)) {
+        return this;
+      }
+      return new MediaPeriodId(paramObject, adGroupIndex, adIndexInAdGroup, windowSequenceNumber, endPositionUs);
+    }
+    
+    public boolean equals(Object paramObject)
+    {
+      if (this == paramObject) {
+        return true;
+      }
+      if (paramObject != null)
+      {
+        if (getClass() != paramObject.getClass()) {
+          return false;
+        }
+        paramObject = (MediaPeriodId)paramObject;
+        return (periodUid.equals(periodUid)) && (adGroupIndex == adGroupIndex) && (adIndexInAdGroup == adIndexInAdGroup) && (windowSequenceNumber == windowSequenceNumber) && (endPositionUs == endPositionUs);
+      }
+      return false;
+    }
+    
+    public int hashCode()
+    {
+      return ((((527 + periodUid.hashCode()) * 31 + adGroupIndex) * 31 + adIndexInAdGroup) * 31 + (int)windowSequenceNumber) * 31 + (int)endPositionUs;
+    }
+    
+    public boolean isAd()
+    {
+      return adGroupIndex != -1;
+    }
+  }
+  
+  public static abstract interface SourceInfoRefreshListener
+  {
+    public abstract void onSourceInfoRefreshed(MediaSource paramMediaSource, Timeline paramTimeline, Object paramObject);
+  }
+}

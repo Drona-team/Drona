@@ -1,0 +1,53 @@
+package co.apptailor.googlesignin;
+
+import android.view.View;
+import android.view.View.OnClickListener;
+import com.facebook.react.modules.core.DeviceEventManagerModule.RCTDeviceEventEmitter;
+import com.facebook.react.uimanager.SimpleViewManager;
+import com.facebook.react.uimanager.ThemedReactContext;
+import com.facebook.react.uimanager.annotations.ReactProp;
+import com.google.android.gms.common.SignInButton;
+
+public class RNGoogleSigninButtonViewManager
+  extends SimpleViewManager<SignInButton>
+{
+  public RNGoogleSigninButtonViewManager() {}
+  
+  protected SignInButton createViewInstance(final ThemedReactContext paramThemedReactContext)
+  {
+    SignInButton localSignInButton = new SignInButton(paramThemedReactContext);
+    localSignInButton.setSize(0);
+    localSignInButton.setColorScheme(2);
+    localSignInButton.setOnClickListener(new View.OnClickListener()
+    {
+      public void onClick(View paramAnonymousView)
+      {
+        ((DeviceEventManagerModule.RCTDeviceEventEmitter)paramThemedReactContext.getJSModule(DeviceEventManagerModule.RCTDeviceEventEmitter.class)).emit("RNGoogleSigninButtonClicked", null);
+      }
+    });
+    return localSignInButton;
+  }
+  
+  public String getName()
+  {
+    return "RNGoogleSigninButton";
+  }
+  
+  @ReactProp(name="color")
+  public void setColor(SignInButton paramSignInButton, int paramInt)
+  {
+    paramSignInButton.setColorScheme(paramInt);
+  }
+  
+  @ReactProp(name="disabled")
+  public void setDisabled(SignInButton paramSignInButton, boolean paramBoolean)
+  {
+    paramSignInButton.setEnabled(paramBoolean ^ true);
+  }
+  
+  @ReactProp(name="size")
+  public void setSize(SignInButton paramSignInButton, int paramInt)
+  {
+    paramSignInButton.setSize(paramInt);
+  }
+}

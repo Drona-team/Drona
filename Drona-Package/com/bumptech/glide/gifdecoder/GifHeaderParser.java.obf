@@ -1,0 +1,412 @@
+package com.bumptech.glide.gifdecoder;
+
+import android.util.Log;
+import androidx.annotation.NonNull;
+import androidx.annotation.Nullable;
+import java.nio.BufferUnderflowException;
+import java.nio.ByteBuffer;
+import java.nio.ByteOrder;
+import java.util.Arrays;
+import java.util.List;
+
+public class GifHeaderParser
+{
+  static final int DEFAULT_FRAME_DELAY = 10;
+  private static final int DESCRIPTOR_MASK_INTERLACE_FLAG = 64;
+  private static final int DESCRIPTOR_MASK_LCT_FLAG = 128;
+  private static final int DESCRIPTOR_MASK_LCT_SIZE = 7;
+  private static final int EXTENSION_INTRODUCER = 33;
+  private static final int GCE_DISPOSAL_METHOD_SHIFT = 2;
+  private static final int GCE_MASK_DISPOSAL_METHOD = 28;
+  private static final int GCE_MASK_TRANSPARENT_COLOR_FLAG = 1;
+  private static final int IMAGE_SEPARATOR = 44;
+  private static final int LABEL_APPLICATION_EXTENSION = 255;
+  private static final int LABEL_COMMENT_EXTENSION = 254;
+  private static final int LABEL_GRAPHIC_CONTROL_EXTENSION = 249;
+  private static final int LABEL_PLAIN_TEXT_EXTENSION = 1;
+  private static final int LSD_MASK_GCT_FLAG = 128;
+  private static final int LSD_MASK_GCT_SIZE = 7;
+  private static final int MASK_INT_LOWEST_BYTE = 255;
+  private static final int MAX_BLOCK_SIZE = 256;
+  static final int MIN_FRAME_DELAY = 2;
+  private static final String TAG = "GifHeaderParser";
+  private static final int TRAILER = 59;
+  private final byte[] block = new byte['?'];
+  private int blockSize = 0;
+  private GifHeader header;
+  private ByteBuffer rawData;
+  
+  public GifHeaderParser() {}
+  
+  private boolean err()
+  {
+    return header.status != 0;
+  }
+  
+  private int read()
+  {
+    try
+    {
+      int i = rawData.get();
+      return i & 0xFF;
+    }
+    catch (Exception localException)
+    {
+      for (;;) {}
+    }
+    header.status = 1;
+    return 0;
+  }
+  
+  private void readBitmap()
+  {
+    header.currentFrame.ix = readShort();
+    header.currentFrame.iy = readShort();
+    header.currentFrame.iw = readShort();
+    header.currentFrame.ih = readShort();
+    int j = read();
+    boolean bool = false;
+    int i;
+    if ((j & 0x80) != 0) {
+      i = 1;
+    } else {
+      i = 0;
+    }
+    int k = (int)Math.pow(2.0D, (j & 0x7) + 1);
+    Object localObject = header.currentFrame;
+    if ((j & 0x40) != 0) {
+      bool = true;
+    }
+    interlace = bool;
+    if (i != 0) {
+      header.currentFrame.lct = readColorTable(k);
+    } else {
+      header.currentFrame.lct = null;
+    }
+    header.currentFrame.bufferFrameStart = rawData.position();
+    skipImageData();
+    if (err()) {
+      return;
+    }
+    localObject = header;
+    frameCount += 1;
+    header.frames.add(header.currentFrame);
+  }
+  
+  private void readBlock()
+  {
+    blockSize = read();
+    if (blockSize > 0)
+    {
+      int j = 0;
+      int i = 0;
+      for (;;)
+      {
+        int k = i;
+        try
+        {
+          if (j < blockSize)
+          {
+            k = i;
+            i = blockSize - j;
+            k = i;
+            rawData.get(block, j, i);
+            j += i;
+          }
+        }
+        catch (Exception localException)
+        {
+          if (Log.isLoggable("GifHeaderParser", 3))
+          {
+            StringBuilder localStringBuilder = new StringBuilder();
+            localStringBuilder.append("Error Reading Block n: ");
+            localStringBuilder.append(j);
+            localStringBuilder.append(" count: ");
+            localStringBuilder.append(k);
+            localStringBuilder.append(" blockSize: ");
+            localStringBuilder.append(blockSize);
+            Log.d("GifHeaderParser", localStringBuilder.toString(), localException);
+          }
+          header.status = 1;
+        }
+      }
+    }
+  }
+  
+  @Nullable
+  private int[] readColorTable(int paramInt)
+  {
+    byte[] arrayOfByte = new byte[paramInt * 3];
+    try
+    {
+      rawData.get(arrayOfByte);
+      int[] arrayOfInt2 = new int['?'];
+      int i = 0;
+      int j = 0;
+      int[] arrayOfInt1;
+      for (;;)
+      {
+        arrayOfInt1 = arrayOfInt2;
+        if (i >= paramInt) {
+          break;
+        }
+        int k = j + 1;
+        j = arrayOfByte[j];
+        int m = k + 1;
+        arrayOfInt2[i] = ((j & 0xFF) << 16 | 0xFF000000 | (arrayOfByte[k] & 0xFF) << 8 | arrayOfByte[m] & 0xFF);
+        j = m + 1;
+        i += 1;
+      }
+      return arrayOfInt1;
+    }
+    catch (BufferUnderflowException localBufferUnderflowException)
+    {
+      arrayOfInt1 = null;
+      if (Log.isLoggable("GifHeaderParser", 3)) {
+        Log.d("GifHeaderParser", "Format Error Reading Color Table", localBufferUnderflowException);
+      }
+      header.status = 1;
+    }
+  }
+  
+  private void readContents()
+  {
+    readContents(Integer.MAX_VALUE);
+  }
+  
+  private void readContents(int paramInt)
+  {
+    int i = 0;
+    while ((i == 0) && (!err()) && (header.frameCount <= paramInt))
+    {
+      int j = read();
+      if (j != 33)
+      {
+        if (j != 44)
+        {
+          if (j != 59) {
+            header.status = 1;
+          } else {
+            i = 1;
+          }
+        }
+        else
+        {
+          if (header.currentFrame == null) {
+            header.currentFrame = new GifFrame();
+          }
+          readBitmap();
+        }
+      }
+      else
+      {
+        j = read();
+        if (j != 1)
+        {
+          if (j != 249)
+          {
+            switch (j)
+            {
+            default: 
+              skip();
+              break;
+            case 255: 
+              readBlock();
+              StringBuilder localStringBuilder = new StringBuilder();
+              j = 0;
+              while (j < 11)
+              {
+                localStringBuilder.append((char)block[j]);
+                j += 1;
+              }
+              if (localStringBuilder.toString().equals("NETSCAPE2.0"))
+              {
+                readNetscapeExt();
+                continue;
+              }
+              skip();
+              break;
+            case 254: 
+              skip();
+              break;
+            }
+          }
+          else
+          {
+            header.currentFrame = new GifFrame();
+            readGraphicControlExt();
+          }
+        }
+        else {
+          skip();
+        }
+      }
+    }
+  }
+  
+  private void readGraphicControlExt()
+  {
+    read();
+    int i = read();
+    header.currentFrame.dispose = ((i & 0x1C) >> 2);
+    int j = header.currentFrame.dispose;
+    boolean bool = true;
+    if (j == 0) {
+      header.currentFrame.dispose = 1;
+    }
+    GifFrame localGifFrame = header.currentFrame;
+    if ((i & 0x1) == 0) {
+      bool = false;
+    }
+    transparency = bool;
+    j = readShort();
+    i = j;
+    if (j < 2) {
+      i = 10;
+    }
+    header.currentFrame.delay = (i * 10);
+    header.currentFrame.transIndex = read();
+    read();
+  }
+  
+  private void readHeader()
+  {
+    StringBuilder localStringBuilder = new StringBuilder();
+    int i = 0;
+    while (i < 6)
+    {
+      localStringBuilder.append((char)read());
+      i += 1;
+    }
+    if (!localStringBuilder.toString().startsWith("GIF"))
+    {
+      header.status = 1;
+      return;
+    }
+    readLSD();
+    if ((header.gctFlag) && (!err()))
+    {
+      header.gct = readColorTable(header.gctSize);
+      header.bgColor = header.gct[header.bgIndex];
+    }
+  }
+  
+  private void readLSD()
+  {
+    header.width = readShort();
+    header.height = readShort();
+    int i = read();
+    GifHeader localGifHeader = header;
+    boolean bool;
+    if ((i & 0x80) != 0) {
+      bool = true;
+    } else {
+      bool = false;
+    }
+    gctFlag = bool;
+    header.gctSize = ((int)Math.pow(2.0D, (i & 0x7) + 1));
+    header.bgIndex = read();
+    header.pixelAspect = read();
+  }
+  
+  private void readNetscapeExt()
+  {
+    do
+    {
+      readBlock();
+      if (block[0] == 1)
+      {
+        int i = block[1];
+        int j = block[2];
+        header.loopCount = (i & 0xFF | (j & 0xFF) << 8);
+      }
+    } while ((blockSize > 0) && (!err()));
+  }
+  
+  private int readShort()
+  {
+    return rawData.getShort();
+  }
+  
+  private void reset()
+  {
+    rawData = null;
+    Arrays.fill(block, (byte)0);
+    header = new GifHeader();
+    blockSize = 0;
+  }
+  
+  private void skip()
+  {
+    int i;
+    do
+    {
+      i = read();
+      int j = Math.min(rawData.position() + i, rawData.limit());
+      rawData.position(j);
+    } while (i > 0);
+  }
+  
+  private void skipImageData()
+  {
+    read();
+    skip();
+  }
+  
+  public void clear()
+  {
+    rawData = null;
+    header = null;
+  }
+  
+  public boolean isAnimated()
+  {
+    readHeader();
+    if (!err()) {
+      readContents(2);
+    }
+    return header.frameCount > 1;
+  }
+  
+  @NonNull
+  public GifHeader parseHeader()
+  {
+    if (rawData != null)
+    {
+      if (err()) {
+        return header;
+      }
+      readHeader();
+      if (!err())
+      {
+        readContents();
+        if (header.frameCount < 0) {
+          header.status = 1;
+        }
+      }
+      return header;
+    }
+    throw new IllegalStateException("You must call setData() before parseHeader()");
+  }
+  
+  public GifHeaderParser setData(@NonNull ByteBuffer paramByteBuffer)
+  {
+    reset();
+    rawData = paramByteBuffer.asReadOnlyBuffer();
+    rawData.position(0);
+    rawData.order(ByteOrder.LITTLE_ENDIAN);
+    return this;
+  }
+  
+  public GifHeaderParser setData(@Nullable byte[] paramArrayOfByte)
+  {
+    if (paramArrayOfByte != null)
+    {
+      setData(ByteBuffer.wrap(paramArrayOfByte));
+      return this;
+    }
+    rawData = null;
+    header.status = 2;
+    return this;
+  }
+}

@@ -1,0 +1,192 @@
+package com.google.android.exoplayer2.upstream.cache;
+
+import com.google.android.exoplayer2.upstream.DataSink;
+import com.google.android.exoplayer2.upstream.DataSpec;
+import com.google.android.exoplayer2.util.Assertions;
+import com.google.android.exoplayer2.util.ReusableBufferedOutputStream;
+import com.google.android.exoplayer2.util.Util;
+import java.io.File;
+import java.io.FileDescriptor;
+import java.io.FileOutputStream;
+import java.io.IOException;
+import java.io.OutputStream;
+
+public final class CacheDataSink
+  implements DataSink
+{
+  public static final int DEFAULT_BUFFER_SIZE = 20480;
+  private final int bufferSize;
+  private ReusableBufferedOutputStream bufferedOutputStream;
+  private final Cache cache;
+  private DataSpec dataSpec;
+  private long dataSpecBytesWritten;
+  private File file;
+  private final long maxCacheFileSize;
+  private OutputStream outputStream;
+  private long outputStreamBytesWritten;
+  private final boolean syncFileDescriptor;
+  private FileOutputStream underlyingFileOutputStream;
+  
+  public CacheDataSink(Cache paramCache, long paramLong)
+  {
+    this(paramCache, paramLong, 20480, true);
+  }
+  
+  public CacheDataSink(Cache paramCache, long paramLong, int paramInt)
+  {
+    this(paramCache, paramLong, paramInt, true);
+  }
+  
+  public CacheDataSink(Cache paramCache, long paramLong, int paramInt, boolean paramBoolean)
+  {
+    cache = ((Cache)Assertions.checkNotNull(paramCache));
+    maxCacheFileSize = paramLong;
+    bufferSize = paramInt;
+    syncFileDescriptor = paramBoolean;
+  }
+  
+  public CacheDataSink(Cache paramCache, long paramLong, boolean paramBoolean)
+  {
+    this(paramCache, paramLong, 20480, paramBoolean);
+  }
+  
+  private void closeCurrentOutputStream()
+    throws IOException
+  {
+    if (outputStream == null) {
+      return;
+    }
+    try
+    {
+      outputStream.flush();
+      boolean bool = syncFileDescriptor;
+      if (bool) {
+        underlyingFileOutputStream.getFD().sync();
+      }
+      Util.closeQuietly(outputStream);
+      outputStream = null;
+      File localFile1 = file;
+      file = null;
+      cache.commitFile(localFile1);
+      return;
+    }
+    catch (Throwable localThrowable)
+    {
+      Util.closeQuietly(outputStream);
+      outputStream = null;
+      File localFile2 = file;
+      file = null;
+      localFile2.delete();
+      throw localThrowable;
+    }
+  }
+  
+  private void openNextOutputStream()
+    throws IOException
+  {
+    if (dataSpec.length == -1L) {}
+    for (long l1 = maxCacheFileSize;; l1 = Math.min(dataSpec.length - dataSpecBytesWritten, maxCacheFileSize)) {
+      break;
+    }
+    Cache localCache = cache;
+    String str = dataSpec.key;
+    long l2 = dataSpec.absoluteStreamPosition;
+    file = localCache.startFile(str, dataSpecBytesWritten + l2, l1);
+    underlyingFileOutputStream = new FileOutputStream(file);
+    if (bufferSize > 0)
+    {
+      if (bufferedOutputStream == null) {
+        bufferedOutputStream = new ReusableBufferedOutputStream(underlyingFileOutputStream, bufferSize);
+      } else {
+        bufferedOutputStream.reset(underlyingFileOutputStream);
+      }
+      outputStream = bufferedOutputStream;
+    }
+    else
+    {
+      outputStream = underlyingFileOutputStream;
+    }
+    outputStreamBytesWritten = 0L;
+  }
+  
+  public void close()
+    throws CacheDataSink.CacheDataSinkException
+  {
+    if (dataSpec == null) {
+      return;
+    }
+    try
+    {
+      closeCurrentOutputStream();
+      return;
+    }
+    catch (IOException localIOException)
+    {
+      throw new CacheDataSinkException(localIOException);
+    }
+  }
+  
+  public void open(DataSpec paramDataSpec)
+    throws CacheDataSink.CacheDataSinkException
+  {
+    if ((length == -1L) && (!paramDataSpec.isFlagSet(2)))
+    {
+      dataSpec = null;
+      return;
+    }
+    dataSpec = paramDataSpec;
+    dataSpecBytesWritten = 0L;
+    try
+    {
+      openNextOutputStream();
+      return;
+    }
+    catch (IOException paramDataSpec)
+    {
+      throw new CacheDataSinkException(paramDataSpec);
+    }
+  }
+  
+  public void write(byte[] paramArrayOfByte, int paramInt1, int paramInt2)
+    throws CacheDataSink.CacheDataSinkException
+  {
+    if (dataSpec == null) {
+      return;
+    }
+    int i = 0;
+    while (i < paramInt2)
+    {
+      if (outputStreamBytesWritten == maxCacheFileSize) {}
+      try
+      {
+        closeCurrentOutputStream();
+        openNextOutputStream();
+        long l1 = paramInt2 - i;
+        long l2 = maxCacheFileSize;
+        long l3 = outputStreamBytesWritten;
+        l1 = Math.min(l1, l2 - l3);
+        int j = (int)l1;
+        OutputStream localOutputStream = outputStream;
+        localOutputStream.write(paramArrayOfByte, paramInt1 + i, j);
+        i += j;
+        l1 = outputStreamBytesWritten;
+        l2 = j;
+        outputStreamBytesWritten = (l1 + l2);
+        dataSpecBytesWritten += l2;
+      }
+      catch (IOException paramArrayOfByte)
+      {
+        throw new CacheDataSinkException(paramArrayOfByte);
+      }
+    }
+  }
+  
+  public static class CacheDataSinkException
+    extends Cache.CacheException
+  {
+    public CacheDataSinkException(IOException paramIOException)
+    {
+      super();
+    }
+  }
+}

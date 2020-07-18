@@ -1,0 +1,223 @@
+package com.google.android.exoplayer2.source.dash.offline;
+
+import android.net.Uri;
+import androidx.annotation.Nullable;
+import com.google.android.exoplayer2.C;
+import com.google.android.exoplayer2.offline.DownloaderConstructorHelper;
+import com.google.android.exoplayer2.offline.SegmentDownloader;
+import com.google.android.exoplayer2.offline.SegmentDownloader.Segment;
+import com.google.android.exoplayer2.offline.StreamKey;
+import com.google.android.exoplayer2.source.dash.DashSegmentIndex;
+import com.google.android.exoplayer2.source.dash.DashUtil;
+import com.google.android.exoplayer2.source.dash.DashWrappingSegmentIndex;
+import com.google.android.exoplayer2.source.dash.manifest.AdaptationSet;
+import com.google.android.exoplayer2.source.dash.manifest.DashManifest;
+import com.google.android.exoplayer2.source.dash.manifest.Period;
+import com.google.android.exoplayer2.source.dash.manifest.RangedUri;
+import com.google.android.exoplayer2.source.dash.manifest.Representation;
+import com.google.android.exoplayer2.upstream.DataSource;
+import com.google.android.exoplayer2.upstream.DataSpec;
+import java.io.IOException;
+import java.util.ArrayList;
+import java.util.List;
+
+public final class DashDownloader
+  extends SegmentDownloader<DashManifest>
+{
+  public DashDownloader(Uri paramUri, List<StreamKey> paramList, DownloaderConstructorHelper paramDownloaderConstructorHelper)
+  {
+    super(paramUri, paramList, paramDownloaderConstructorHelper);
+  }
+  
+  private static void addSegment(long paramLong, String paramString, RangedUri paramRangedUri, ArrayList<SegmentDownloader.Segment> paramArrayList)
+  {
+    paramArrayList.add(new SegmentDownloader.Segment(paramLong, new DataSpec(paramRangedUri.resolveUri(paramString), start, length, null)));
+  }
+  
+  /* Error */
+  private static void addSegmentsForAdaptationSet(DataSource paramDataSource, AdaptationSet paramAdaptationSet, long paramLong1, long paramLong2, boolean paramBoolean, ArrayList<SegmentDownloader.Segment> paramArrayList)
+    throws IOException, InterruptedException
+  {
+    // Byte code:
+    //   0: iconst_0
+    //   1: istore 8
+    //   3: aload_1
+    //   4: astore 16
+    //   6: iload 8
+    //   8: aload 16
+    //   10: getfield 56	com/google/android/exoplayer2/source/dash/manifest/AdaptationSet:representations	Ljava/util/List;
+    //   13: invokeinterface 62 1 0
+    //   18: if_icmpge +226 -> 244
+    //   21: aload 16
+    //   23: getfield 56	com/google/android/exoplayer2/source/dash/manifest/AdaptationSet:representations	Ljava/util/List;
+    //   26: iload 8
+    //   28: invokeinterface 66 2 0
+    //   33: checkcast 68	com/google/android/exoplayer2/source/dash/manifest/Representation
+    //   36: astore 17
+    //   38: aload 16
+    //   40: getfield 72	com/google/android/exoplayer2/source/dash/manifest/AdaptationSet:type	I
+    //   43: istore 9
+    //   45: aload_0
+    //   46: iload 9
+    //   48: aload 17
+    //   50: invokestatic 76	com/google/android/exoplayer2/source/dash/offline/DashDownloader:getSegmentIndex	(Lcom/google/android/exoplayer2/upstream/DataSource;ILcom/google/android/exoplayer2/source/dash/manifest/Representation;)Lcom/google/android/exoplayer2/source/dash/DashSegmentIndex;
+    //   53: astore 16
+    //   55: aload 16
+    //   57: ifnull +148 -> 205
+    //   60: aload 16
+    //   62: lload 4
+    //   64: invokeinterface 82 3 0
+    //   69: istore 9
+    //   71: iload 9
+    //   73: iconst_m1
+    //   74: if_icmpeq +121 -> 195
+    //   77: aload 17
+    //   79: getfield 86	com/google/android/exoplayer2/source/dash/manifest/Representation:baseUrl	Ljava/lang/String;
+    //   82: astore 18
+    //   84: aload 17
+    //   86: invokevirtual 90	com/google/android/exoplayer2/source/dash/manifest/Representation:getInitializationUri	()Lcom/google/android/exoplayer2/source/dash/manifest/RangedUri;
+    //   89: astore 19
+    //   91: aload 19
+    //   93: ifnull +13 -> 106
+    //   96: lload_2
+    //   97: aload 18
+    //   99: aload 19
+    //   101: aload 7
+    //   103: invokestatic 92	com/google/android/exoplayer2/source/dash/offline/DashDownloader:addSegment	(JLjava/lang/String;Lcom/google/android/exoplayer2/source/dash/manifest/RangedUri;Ljava/util/ArrayList;)V
+    //   106: aload 17
+    //   108: invokevirtual 95	com/google/android/exoplayer2/source/dash/manifest/Representation:getIndexUri	()Lcom/google/android/exoplayer2/source/dash/manifest/RangedUri;
+    //   111: astore 17
+    //   113: aload 17
+    //   115: ifnull +13 -> 128
+    //   118: lload_2
+    //   119: aload 18
+    //   121: aload 17
+    //   123: aload 7
+    //   125: invokestatic 92	com/google/android/exoplayer2/source/dash/offline/DashDownloader:addSegment	(JLjava/lang/String;Lcom/google/android/exoplayer2/source/dash/manifest/RangedUri;Ljava/util/ArrayList;)V
+    //   128: aload 16
+    //   130: invokeinterface 99 1 0
+    //   135: lstore 12
+    //   137: iload 9
+    //   139: i2l
+    //   140: lstore 14
+    //   142: lload 12
+    //   144: lstore 10
+    //   146: lload 10
+    //   148: lload 14
+    //   150: lload 12
+    //   152: ladd
+    //   153: lconst_1
+    //   154: lsub
+    //   155: lcmp
+    //   156: ifgt +76 -> 232
+    //   159: lload_2
+    //   160: aload 16
+    //   162: lload 10
+    //   164: invokeinterface 103 3 0
+    //   169: ladd
+    //   170: aload 18
+    //   172: aload 16
+    //   174: lload 10
+    //   176: invokeinterface 107 3 0
+    //   181: aload 7
+    //   183: invokestatic 92	com/google/android/exoplayer2/source/dash/offline/DashDownloader:addSegment	(JLjava/lang/String;Lcom/google/android/exoplayer2/source/dash/manifest/RangedUri;Ljava/util/ArrayList;)V
+    //   186: lload 10
+    //   188: lconst_1
+    //   189: ladd
+    //   190: lstore 10
+    //   192: goto -46 -> 146
+    //   195: new 109	com/google/android/exoplayer2/offline/DownloadException
+    //   198: dup
+    //   199: ldc 111
+    //   201: invokespecial 114	com/google/android/exoplayer2/offline/DownloadException:<init>	(Ljava/lang/String;)V
+    //   204: athrow
+    //   205: new 109	com/google/android/exoplayer2/offline/DownloadException
+    //   208: dup
+    //   209: ldc 116
+    //   211: invokespecial 114	com/google/android/exoplayer2/offline/DownloadException:<init>	(Ljava/lang/String;)V
+    //   214: athrow
+    //   215: astore 16
+    //   217: goto +10 -> 227
+    //   220: astore 16
+    //   222: goto +5 -> 227
+    //   225: astore 16
+    //   227: iload 6
+    //   229: ifeq +12 -> 241
+    //   232: iload 8
+    //   234: iconst_1
+    //   235: iadd
+    //   236: istore 8
+    //   238: goto -235 -> 3
+    //   241: aload 16
+    //   243: athrow
+    //   244: return
+    // Local variable table:
+    //   start	length	slot	name	signature
+    //   0	245	0	paramDataSource	DataSource
+    //   0	245	1	paramAdaptationSet	AdaptationSet
+    //   0	245	2	paramLong1	long
+    //   0	245	4	paramLong2	long
+    //   0	245	6	paramBoolean	boolean
+    //   0	245	7	paramArrayList	ArrayList<SegmentDownloader.Segment>
+    //   1	236	8	i	int
+    //   43	95	9	j	int
+    //   144	47	10	l1	long
+    //   135	16	12	l2	long
+    //   140	9	14	l3	long
+    //   4	169	16	localObject1	Object
+    //   215	1	16	localIOException1	IOException
+    //   220	1	16	localIOException2	IOException
+    //   225	17	16	localIOException3	IOException
+    //   36	86	17	localObject2	Object
+    //   82	89	18	str	String
+    //   89	11	19	localRangedUri	RangedUri
+    // Exception table:
+    //   from	to	target	type
+    //   205	215	215	java/io/IOException
+    //   45	55	220	java/io/IOException
+    //   38	45	225	java/io/IOException
+  }
+  
+  @Nullable
+  private static DashSegmentIndex getSegmentIndex(DataSource paramDataSource, int paramInt, Representation paramRepresentation)
+    throws IOException, InterruptedException
+  {
+    DashSegmentIndex localDashSegmentIndex = paramRepresentation.getIndex();
+    if (localDashSegmentIndex != null) {
+      return localDashSegmentIndex;
+    }
+    paramDataSource = DashUtil.loadChunkIndex(paramDataSource, paramInt, paramRepresentation);
+    if (paramDataSource == null) {
+      return null;
+    }
+    return new DashWrappingSegmentIndex(paramDataSource, presentationTimeOffsetUs);
+  }
+  
+  protected DashManifest getManifest(DataSource paramDataSource, Uri paramUri)
+    throws IOException
+  {
+    return DashUtil.loadManifest(paramDataSource, paramUri);
+  }
+  
+  protected List<SegmentDownloader.Segment> getSegments(DataSource paramDataSource, DashManifest paramDashManifest, boolean paramBoolean)
+    throws InterruptedException, IOException
+  {
+    ArrayList localArrayList = new ArrayList();
+    int i = 0;
+    while (i < paramDashManifest.getPeriodCount())
+    {
+      Object localObject = paramDashManifest.getPeriod(i);
+      long l1 = C.msToUs(startMs);
+      long l2 = paramDashManifest.getPeriodDurationUs(i);
+      localObject = adaptationSets;
+      int j = 0;
+      while (j < ((List)localObject).size())
+      {
+        addSegmentsForAdaptationSet(paramDataSource, (AdaptationSet)((List)localObject).get(j), l1, l2, paramBoolean, localArrayList);
+        j += 1;
+      }
+      i += 1;
+    }
+    return localArrayList;
+  }
+}

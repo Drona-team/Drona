@@ -1,0 +1,110 @@
+package com.google.android.exoplayer2.extractor.configurations;
+
+import com.google.android.exoplayer2.Format;
+import com.google.android.exoplayer2.extractor.ExtractorOutput;
+import com.google.android.exoplayer2.extractor.TrackOutput;
+import com.google.android.exoplayer2.util.ParsableByteArray;
+import java.util.Collections;
+import java.util.List;
+
+public final class DvbSubtitleReader
+  implements ElementaryStreamReader
+{
+  private int bytesToCheck;
+  private final TrackOutput[] outputs;
+  private int sampleBytesWritten;
+  private long sampleTimeUs;
+  private final List<com.google.android.exoplayer2.extractor.ts.TsPayloadReader.DvbSubtitleInfo> subtitleInfos;
+  private boolean writingSample;
+  
+  public DvbSubtitleReader(List paramList)
+  {
+    subtitleInfos = paramList;
+    outputs = new TrackOutput[paramList.size()];
+  }
+  
+  private boolean checkNextByte(ParsableByteArray paramParsableByteArray, int paramInt)
+  {
+    if (paramParsableByteArray.bytesLeft() == 0) {
+      return false;
+    }
+    if (paramParsableByteArray.readUnsignedByte() != paramInt) {
+      writingSample = false;
+    }
+    bytesToCheck -= 1;
+    return writingSample;
+  }
+  
+  public void consume(ParsableByteArray paramParsableByteArray)
+  {
+    if (writingSample)
+    {
+      if ((bytesToCheck == 2) && (!checkNextByte(paramParsableByteArray, 32))) {
+        return;
+      }
+      int j = bytesToCheck;
+      int i = 0;
+      if ((j == 1) && (!checkNextByte(paramParsableByteArray, 0))) {
+        return;
+      }
+      j = paramParsableByteArray.getPosition();
+      int k = paramParsableByteArray.bytesLeft();
+      TrackOutput[] arrayOfTrackOutput = outputs;
+      int m = arrayOfTrackOutput.length;
+      while (i < m)
+      {
+        TrackOutput localTrackOutput = arrayOfTrackOutput[i];
+        paramParsableByteArray.setPosition(j);
+        localTrackOutput.sampleData(paramParsableByteArray, k);
+        i += 1;
+      }
+      sampleBytesWritten += k;
+    }
+  }
+  
+  public void createTracks(ExtractorOutput paramExtractorOutput, TsPayloadReader.TrackIdGenerator paramTrackIdGenerator)
+  {
+    int i = 0;
+    while (i < outputs.length)
+    {
+      TsPayloadReader.DvbSubtitleInfo localDvbSubtitleInfo = (TsPayloadReader.DvbSubtitleInfo)subtitleInfos.get(i);
+      paramTrackIdGenerator.generateNewId();
+      TrackOutput localTrackOutput = paramExtractorOutput.track(paramTrackIdGenerator.getTrackId(), 3);
+      localTrackOutput.format(Format.createImageSampleFormat(paramTrackIdGenerator.getFormatId(), "application/dvbsubs", null, -1, 0, Collections.singletonList(initializationData), language, null));
+      outputs[i] = localTrackOutput;
+      i += 1;
+    }
+  }
+  
+  public void packetFinished()
+  {
+    if (writingSample)
+    {
+      TrackOutput[] arrayOfTrackOutput = outputs;
+      int j = arrayOfTrackOutput.length;
+      int i = 0;
+      while (i < j)
+      {
+        arrayOfTrackOutput[i].sampleMetadata(sampleTimeUs, 1, sampleBytesWritten, 0, null);
+        i += 1;
+      }
+      writingSample = false;
+    }
+  }
+  
+  public void packetStarted(long paramLong, boolean paramBoolean)
+  {
+    if (!paramBoolean) {
+      return;
+    }
+    writingSample = true;
+    sampleTimeUs = paramLong;
+    sampleBytesWritten = 0;
+    bytesToCheck = 2;
+  }
+  
+  public void seek()
+  {
+    writingSample = false;
+  }
+}

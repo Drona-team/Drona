@@ -1,0 +1,11 @@
+package androidx.lifecycle;
+
+import androidx.annotation.NonNull;
+
+@Deprecated
+public abstract interface LifecycleRegistryOwner
+  extends LifecycleOwner
+{
+  @NonNull
+  public abstract LifecycleRegistry getLifecycle();
+}

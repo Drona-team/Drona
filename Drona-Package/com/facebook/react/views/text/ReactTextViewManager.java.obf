@@ -1,0 +1,86 @@
+package com.facebook.react.views.text;
+
+import android.content.Context;
+import androidx.annotation.Nullable;
+import com.facebook.react.bridge.ReadableMap;
+import com.facebook.react.bridge.ReadableNativeMap;
+import com.facebook.react.common.MapBuilder;
+import com.facebook.react.common.annotations.VisibleForTesting;
+import com.facebook.react.module.annotations.ReactModule;
+import com.facebook.react.uimanager.IViewManagerWithChildren;
+import com.facebook.react.uimanager.ReactStylesDiffMap;
+import com.facebook.react.uimanager.StateWrapper;
+import com.facebook.react.uimanager.ThemedReactContext;
+import com.facebook.yoga.YogaMeasureMode;
+import java.util.Map;
+
+@ReactModule(name="RCTText")
+public class ReactTextViewManager
+  extends ReactTextAnchorViewManager<ReactTextView, ReactTextShadowNode>
+  implements IViewManagerWithChildren
+{
+  @VisibleForTesting
+  public static final String REACT_CLASS = "RCTText";
+  
+  public ReactTextViewManager() {}
+  
+  public ReactTextShadowNode createShadowNodeInstance()
+  {
+    return new ReactTextShadowNode();
+  }
+  
+  public ReactTextView createViewInstance(ThemedReactContext paramThemedReactContext)
+  {
+    return new ReactTextView(paramThemedReactContext);
+  }
+  
+  @Nullable
+  public Map getExportedCustomDirectEventTypeConstants()
+  {
+    return MapBuilder.of("topTextLayout", MapBuilder.of("registrationName", "onTextLayout"), "topInlineViewLayout", MapBuilder.of("registrationName", "onInlineViewLayout"));
+  }
+  
+  public String getName()
+  {
+    return "RCTText";
+  }
+  
+  public Class<ReactTextShadowNode> getShadowNodeClass()
+  {
+    return ReactTextShadowNode.class;
+  }
+  
+  public long measure(Context paramContext, ReadableMap paramReadableMap1, ReadableMap paramReadableMap2, ReadableMap paramReadableMap3, float paramFloat1, YogaMeasureMode paramYogaMeasureMode1, float paramFloat2, YogaMeasureMode paramYogaMeasureMode2)
+  {
+    return TextLayoutManager.measureText(paramContext, paramReadableMap1, paramReadableMap2, paramFloat1, paramYogaMeasureMode1, paramFloat2, paramYogaMeasureMode2);
+  }
+  
+  public boolean needsCustomLayoutForChildren()
+  {
+    return true;
+  }
+  
+  protected void onAfterUpdateTransaction(ReactTextView paramReactTextView)
+  {
+    super.onAfterUpdateTransaction(paramReactTextView);
+    paramReactTextView.updateView();
+  }
+  
+  public void updateExtraData(ReactTextView paramReactTextView, Object paramObject)
+  {
+    paramObject = (ReactTextUpdate)paramObject;
+    if (paramObject.containsImages()) {
+      TextInlineImageSpan.possiblyUpdateInlineImageSpans(paramObject.getText(), paramReactTextView);
+    }
+    paramReactTextView.setText(paramObject);
+  }
+  
+  public Object updateState(ReactTextView paramReactTextView, ReactStylesDiffMap paramReactStylesDiffMap, StateWrapper paramStateWrapper)
+  {
+    paramStateWrapper = paramStateWrapper.getState().getMap("attributedString");
+    paramStateWrapper = TextLayoutManager.getOrCreateSpannableForText(paramReactTextView.getContext(), paramStateWrapper);
+    paramReactTextView.setSpanned(paramStateWrapper);
+    paramReactTextView = new TextAttributeProps(paramReactStylesDiffMap);
+    return new ReactTextUpdate(paramStateWrapper, -1, false, paramReactTextView.getStartPadding(), paramReactTextView.getTopPadding(), paramReactTextView.getEndPadding(), paramReactTextView.getBottomPadding(), 0, 1, 0);
+  }
+}

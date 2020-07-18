@@ -1,0 +1,9 @@
+package androidx.lifecycle;
+
+import androidx.annotation.NonNull;
+
+public abstract interface LifecycleEventObserver
+  extends LifecycleObserver
+{
+  public abstract void onStateChanged(@NonNull LifecycleOwner paramLifecycleOwner, @NonNull Lifecycle.Event paramEvent);
+}

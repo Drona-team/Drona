@@ -1,0 +1,21 @@
+package com.facebook.react.bridge;
+
+import androidx.annotation.Nullable;
+
+public abstract interface WritableArray
+  extends ReadableArray
+{
+  public abstract void pushArray(@Nullable ReadableArray paramReadableArray);
+  
+  public abstract void pushBoolean(boolean paramBoolean);
+  
+  public abstract void pushDouble(double paramDouble);
+  
+  public abstract void pushInt(int paramInt);
+  
+  public abstract void pushMap(@Nullable ReadableMap paramReadableMap);
+  
+  public abstract void pushNull();
+  
+  public abstract void pushString(@Nullable String paramString);
+}

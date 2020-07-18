@@ -1,0 +1,36 @@
+package com.facebook.react.fabric.mounting.mountitems;
+
+import androidx.annotation.Nullable;
+import com.facebook.react.bridge.ReadableArray;
+import com.facebook.react.fabric.mounting.MountingManager;
+
+public class DispatchStringCommandMountItem
+  implements MountItem
+{
+  @Nullable
+  private final ReadableArray mCommandArgs;
+  private final String mCommandId;
+  private final int mReactTag;
+  
+  public DispatchStringCommandMountItem(int paramInt, String paramString, ReadableArray paramReadableArray)
+  {
+    mReactTag = paramInt;
+    mCommandId = paramString;
+    mCommandArgs = paramReadableArray;
+  }
+  
+  public void execute(MountingManager paramMountingManager)
+  {
+    paramMountingManager.receiveCommand(mReactTag, mCommandId, mCommandArgs);
+  }
+  
+  public String toString()
+  {
+    StringBuilder localStringBuilder = new StringBuilder();
+    localStringBuilder.append("DispatchStringCommandMountItem [");
+    localStringBuilder.append(mReactTag);
+    localStringBuilder.append("] ");
+    localStringBuilder.append(mCommandId);
+    return localStringBuilder.toString();
+  }
+}

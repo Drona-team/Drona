@@ -1,0 +1,218 @@
+package com.google.android.gms.ads.doubleclick;
+
+import android.content.Context;
+import android.util.AttributeSet;
+import android.view.View;
+import android.view.ViewGroup;
+import androidx.annotation.RequiresPermission;
+import com.google.android.gms.ads.AdListener;
+import com.google.android.gms.ads.AdSize;
+import com.google.android.gms.ads.Correlator;
+import com.google.android.gms.ads.VideoController;
+import com.google.android.gms.ads.VideoOptions;
+import com.google.android.gms.common.internal.Preconditions;
+import com.google.android.gms.internal.ads.zzabb;
+import com.google.android.gms.internal.ads.zzbad;
+import com.google.android.gms.internal.ads.zzzk;
+
+public final class PublisherAdView
+  extends ViewGroup
+{
+  private final zzabb zzabf;
+  
+  public PublisherAdView(Context paramContext)
+  {
+    super(paramContext);
+    zzabf = new zzabb(this);
+  }
+  
+  public PublisherAdView(Context paramContext, AttributeSet paramAttributeSet)
+  {
+    super(paramContext, paramAttributeSet);
+    zzabf = new zzabb(this, paramAttributeSet, true);
+    Preconditions.checkNotNull(paramContext, "Context cannot be null");
+  }
+  
+  public PublisherAdView(Context paramContext, AttributeSet paramAttributeSet, int paramInt)
+  {
+    super(paramContext, paramAttributeSet, paramInt);
+    zzabf = new zzabb(this, paramAttributeSet, true);
+  }
+  
+  public final void destroy()
+  {
+    zzabf.destroy();
+  }
+  
+  public final AdListener getAdListener()
+  {
+    return zzabf.getAdListener();
+  }
+  
+  public final AdSize getAdSize()
+  {
+    return zzabf.getAdSize();
+  }
+  
+  public final AdSize[] getAdSizes()
+  {
+    return zzabf.getAdSizes();
+  }
+  
+  public final String getAdUnitId()
+  {
+    return zzabf.getAdUnitId();
+  }
+  
+  public final AppEventListener getAppEventListener()
+  {
+    return zzabf.getAppEventListener();
+  }
+  
+  public final String getMediationAdapterClassName()
+  {
+    return zzabf.getMediationAdapterClassName();
+  }
+  
+  public final OnCustomRenderedAdLoadedListener getOnCustomRenderedAdLoadedListener()
+  {
+    return zzabf.getOnCustomRenderedAdLoadedListener();
+  }
+  
+  public final VideoController getVideoController()
+  {
+    return zzabf.getVideoController();
+  }
+  
+  public final VideoOptions getVideoOptions()
+  {
+    return zzabf.getVideoOptions();
+  }
+  
+  public final boolean isLoading()
+  {
+    return zzabf.isLoading();
+  }
+  
+  @RequiresPermission("android.permission.INTERNET")
+  public final void loadAd(PublisherAdRequest paramPublisherAdRequest)
+  {
+    zzabf.zza(paramPublisherAdRequest.zzde());
+  }
+  
+  protected final void onLayout(boolean paramBoolean, int paramInt1, int paramInt2, int paramInt3, int paramInt4)
+  {
+    View localView = getChildAt(0);
+    if ((localView != null) && (localView.getVisibility() != 8))
+    {
+      int i = localView.getMeasuredWidth();
+      int j = localView.getMeasuredHeight();
+      paramInt1 = (paramInt3 - paramInt1 - i) / 2;
+      paramInt2 = (paramInt4 - paramInt2 - j) / 2;
+      localView.layout(paramInt1, paramInt2, i + paramInt1, j + paramInt2);
+    }
+  }
+  
+  protected final void onMeasure(int paramInt1, int paramInt2)
+  {
+    int i = 0;
+    Object localObject = getChildAt(0);
+    if ((localObject != null) && (((View)localObject).getVisibility() != 8))
+    {
+      measureChild((View)localObject, paramInt1, paramInt2);
+      i = ((View)localObject).getMeasuredWidth();
+      j = ((View)localObject).getMeasuredHeight();
+    }
+    else
+    {
+      localObject = null;
+      try
+      {
+        AdSize localAdSize = getAdSize();
+        localObject = localAdSize;
+      }
+      catch (NullPointerException localNullPointerException)
+      {
+        zzbad.zzc("Unable to retrieve ad size.", localNullPointerException);
+      }
+      if (localObject != null)
+      {
+        Context localContext = getContext();
+        i = ((AdSize)localObject).getWidthInPixels(localContext);
+        j = ((AdSize)localObject).getHeightInPixels(localContext);
+      }
+      else
+      {
+        j = 0;
+      }
+    }
+    i = Math.max(i, getSuggestedMinimumWidth());
+    int j = Math.max(j, getSuggestedMinimumHeight());
+    setMeasuredDimension(View.resolveSize(i, paramInt1), View.resolveSize(j, paramInt2));
+  }
+  
+  public final void pause()
+  {
+    zzabf.pause();
+  }
+  
+  public final void recordManualImpression()
+  {
+    zzabf.recordManualImpression();
+  }
+  
+  public final void resume()
+  {
+    zzabf.resume();
+  }
+  
+  public final void setAdListener(AdListener paramAdListener)
+  {
+    zzabf.setAdListener(paramAdListener);
+  }
+  
+  public final void setAdSizes(AdSize... paramVarArgs)
+  {
+    if ((paramVarArgs != null) && (paramVarArgs.length > 0))
+    {
+      zzabf.zza(paramVarArgs);
+      return;
+    }
+    throw new IllegalArgumentException("The supported ad sizes must contain at least one valid ad size.");
+  }
+  
+  public final void setAdUnitId(String paramString)
+  {
+    zzabf.setAdUnitId(paramString);
+  }
+  
+  public final void setAppEventListener(AppEventListener paramAppEventListener)
+  {
+    zzabf.setAppEventListener(paramAppEventListener);
+  }
+  
+  public final void setCorrelator(Correlator paramCorrelator)
+  {
+    zzabf.setCorrelator(paramCorrelator);
+  }
+  
+  public final void setManualImpressionsEnabled(boolean paramBoolean)
+  {
+    zzabf.setManualImpressionsEnabled(paramBoolean);
+  }
+  
+  public final void setOnCustomRenderedAdLoadedListener(OnCustomRenderedAdLoadedListener paramOnCustomRenderedAdLoadedListener)
+  {
+    zzabf.setOnCustomRenderedAdLoadedListener(paramOnCustomRenderedAdLoadedListener);
+  }
+  
+  public final void setVideoOptions(VideoOptions paramVideoOptions)
+  {
+    zzabf.setVideoOptions(paramVideoOptions);
+  }
+  
+  public final boolean zza(zzzk paramZzzk)
+  {
+    return zzabf.zza(paramZzzk);
+  }
+}

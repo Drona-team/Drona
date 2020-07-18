@@ -1,0 +1,203 @@
+package com.google.android.exoplayer2.upstream.cache;
+
+import androidx.annotation.Nullable;
+import com.google.android.exoplayer2.util.Assertions;
+import java.io.DataInputStream;
+import java.io.DataOutputStream;
+import java.io.File;
+import java.io.IOException;
+import java.util.Iterator;
+import java.util.NavigableSet;
+import java.util.TreeSet;
+
+final class CachedContent
+{
+  private static final int VERSION_MAX = Integer.MAX_VALUE;
+  private static final int VERSION_METADATA_INTRODUCED = 2;
+  private final TreeSet<SimpleCacheSpan> cachedSpans;
+  public final int id;
+  public final String key;
+  private boolean locked;
+  private DefaultContentMetadata metadata;
+  
+  public CachedContent(int paramInt, String paramString)
+  {
+    id = paramInt;
+    key = paramString;
+    metadata = DefaultContentMetadata.EMPTY;
+    cachedSpans = new TreeSet();
+  }
+  
+  public static CachedContent readFromStream(int paramInt, DataInputStream paramDataInputStream)
+    throws IOException
+  {
+    CachedContent localCachedContent = new CachedContent(paramDataInputStream.readInt(), paramDataInputStream.readUTF());
+    if (paramInt < 2)
+    {
+      long l = paramDataInputStream.readLong();
+      paramDataInputStream = new ContentMetadataMutations();
+      ContentMetadataInternal.setContentLength(paramDataInputStream, l);
+      localCachedContent.applyMetadataMutations(paramDataInputStream);
+      return localCachedContent;
+    }
+    metadata = DefaultContentMetadata.readFromStream(paramDataInputStream);
+    return localCachedContent;
+  }
+  
+  public void addSpan(SimpleCacheSpan paramSimpleCacheSpan)
+  {
+    cachedSpans.add(paramSimpleCacheSpan);
+  }
+  
+  public boolean applyMetadataMutations(ContentMetadataMutations paramContentMetadataMutations)
+  {
+    DefaultContentMetadata localDefaultContentMetadata = metadata;
+    metadata = metadata.copyWithMutationsApplied(paramContentMetadataMutations);
+    return metadata.equals(localDefaultContentMetadata) ^ true;
+  }
+  
+  public boolean equals(@Nullable Object paramObject)
+  {
+    if (this == paramObject) {
+      return true;
+    }
+    if (paramObject != null)
+    {
+      if (getClass() != paramObject.getClass()) {
+        return false;
+      }
+      paramObject = (CachedContent)paramObject;
+      return (id == id) && (key.equals(key)) && (cachedSpans.equals(cachedSpans)) && (metadata.equals(metadata));
+    }
+    return false;
+  }
+  
+  public long getCachedBytesLength(long paramLong1, long paramLong2)
+  {
+    Object localObject = getSpan(paramLong1);
+    if (((SimpleCacheSpan)localObject).isHoleSpan())
+    {
+      if (((SimpleCacheSpan)localObject).isOpenEnded()) {
+        paramLong1 = Long.MAX_VALUE;
+      } else {
+        paramLong1 = length;
+      }
+      return -Math.min(paramLong1, paramLong2);
+    }
+    long l3 = paramLong1 + paramLong2;
+    long l1 = position + length;
+    long l2 = l1;
+    if (l1 < l3)
+    {
+      localObject = cachedSpans.tailSet(localObject, false).iterator();
+      do
+      {
+        l2 = l1;
+        if (!((Iterator)localObject).hasNext()) {
+          break;
+        }
+        SimpleCacheSpan localSimpleCacheSpan = (SimpleCacheSpan)((Iterator)localObject).next();
+        if (position > l1)
+        {
+          l2 = l1;
+          break;
+        }
+        l2 = Math.max(l1, position + length);
+        l1 = l2;
+      } while (l2 < l3);
+    }
+    return Math.min(l2 - paramLong1, paramLong2);
+  }
+  
+  public ContentMetadata getMetadata()
+  {
+    return metadata;
+  }
+  
+  public SimpleCacheSpan getSpan(long paramLong)
+  {
+    SimpleCacheSpan localSimpleCacheSpan1 = SimpleCacheSpan.createLookup(key, paramLong);
+    SimpleCacheSpan localSimpleCacheSpan2 = (SimpleCacheSpan)cachedSpans.floor(localSimpleCacheSpan1);
+    if ((localSimpleCacheSpan2 != null) && (position + length > paramLong)) {
+      return localSimpleCacheSpan2;
+    }
+    localSimpleCacheSpan1 = (SimpleCacheSpan)cachedSpans.ceiling(localSimpleCacheSpan1);
+    if (localSimpleCacheSpan1 == null) {
+      return SimpleCacheSpan.createOpenHole(key, paramLong);
+    }
+    return SimpleCacheSpan.createClosedHole(key, paramLong, position - paramLong);
+  }
+  
+  public TreeSet<SimpleCacheSpan> getSpans()
+  {
+    return cachedSpans;
+  }
+  
+  public int hashCode()
+  {
+    return headerHashCode(Integer.MAX_VALUE) * 31 + cachedSpans.hashCode();
+  }
+  
+  public int headerHashCode(int paramInt)
+  {
+    int i = id * 31 + key.hashCode();
+    if (paramInt < 2)
+    {
+      long l = ContentMetadataInternal.getContentLength(metadata);
+      return i * 31 + (int)(l ^ l >>> 32);
+    }
+    return i * 31 + metadata.hashCode();
+  }
+  
+  public boolean isEmpty()
+  {
+    return cachedSpans.isEmpty();
+  }
+  
+  public boolean isLocked()
+  {
+    return locked;
+  }
+  
+  public boolean removeSpan(CacheSpan paramCacheSpan)
+  {
+    if (cachedSpans.remove(paramCacheSpan))
+    {
+      file.delete();
+      return true;
+    }
+    return false;
+  }
+  
+  public void setLocked(boolean paramBoolean)
+  {
+    locked = paramBoolean;
+  }
+  
+  public SimpleCacheSpan touch(SimpleCacheSpan paramSimpleCacheSpan)
+    throws Cache.CacheException
+  {
+    SimpleCacheSpan localSimpleCacheSpan = paramSimpleCacheSpan.copyWithUpdatedLastAccessTime(id);
+    if (file.renameTo(file))
+    {
+      Assertions.checkState(cachedSpans.remove(paramSimpleCacheSpan));
+      cachedSpans.add(localSimpleCacheSpan);
+      return localSimpleCacheSpan;
+    }
+    StringBuilder localStringBuilder = new StringBuilder();
+    localStringBuilder.append("Renaming of ");
+    localStringBuilder.append(file);
+    localStringBuilder.append(" to ");
+    localStringBuilder.append(file);
+    localStringBuilder.append(" failed.");
+    throw new Cache.CacheException(localStringBuilder.toString());
+  }
+  
+  public void writeToStream(DataOutputStream paramDataOutputStream)
+    throws IOException
+  {
+    paramDataOutputStream.writeInt(id);
+    paramDataOutputStream.writeUTF(key);
+    metadata.writeToStream(paramDataOutputStream);
+  }
+}

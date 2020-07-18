@@ -1,0 +1,28 @@
+package com.airbnb.lottie.utils;
+
+public class MeanCalculator
+{
+  private int n;
+  private float sum;
+  
+  public MeanCalculator() {}
+  
+  public void add(float paramFloat)
+  {
+    sum += paramFloat;
+    n += 1;
+    if (n == Integer.MAX_VALUE)
+    {
+      sum /= 2.0F;
+      n /= 2;
+    }
+  }
+  
+  public float getMean()
+  {
+    if (n == 0) {
+      return 0.0F;
+    }
+    return sum / n;
+  }
+}

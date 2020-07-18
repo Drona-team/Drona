@@ -1,0 +1,51 @@
+package com.airbnb.android.react.maps;
+
+import com.facebook.react.common.MapBuilder;
+import com.facebook.react.uimanager.LayoutShadowNode;
+import com.facebook.react.uimanager.ThemedReactContext;
+import com.facebook.react.uimanager.ViewGroupManager;
+import com.facebook.react.uimanager.annotations.ReactProp;
+import java.util.Map;
+import javax.annotation.Nullable;
+
+public class AirMapCalloutManager
+  extends ViewGroupManager<AirMapCallout>
+{
+  public AirMapCalloutManager() {}
+  
+  public LayoutShadowNode createShadowNodeInstance()
+  {
+    return new SizeReportingShadowNode();
+  }
+  
+  public AirMapCallout createViewInstance(ThemedReactContext paramThemedReactContext)
+  {
+    return new AirMapCallout(paramThemedReactContext);
+  }
+  
+  @Nullable
+  public Map getExportedCustomDirectEventTypeConstants()
+  {
+    return MapBuilder.of("onPress", MapBuilder.of("registrationName", "onPress"));
+  }
+  
+  public String getName()
+  {
+    return "AIRMapCallout";
+  }
+  
+  @ReactProp(defaultBoolean=false, name="tooltip")
+  public void setTooltip(AirMapCallout paramAirMapCallout, boolean paramBoolean)
+  {
+    paramAirMapCallout.setTooltip(paramBoolean);
+  }
+  
+  public void updateExtraData(AirMapCallout paramAirMapCallout, Object paramObject)
+  {
+    paramObject = (Map)paramObject;
+    float f1 = ((Float)paramObject.get("width")).floatValue();
+    float f2 = ((Float)paramObject.get("height")).floatValue();
+    width = ((int)f1);
+    height = ((int)f2);
+  }
+}

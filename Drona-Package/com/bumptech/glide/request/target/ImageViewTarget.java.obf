@@ -1,0 +1,106 @@
+package com.bumptech.glide.request.target;
+
+import android.graphics.drawable.Animatable;
+import android.graphics.drawable.Drawable;
+import android.widget.ImageView;
+import androidx.annotation.NonNull;
+import androidx.annotation.Nullable;
+import com.bumptech.glide.request.transition.Transition;
+import com.bumptech.glide.request.transition.Transition.ViewAdapter;
+
+public abstract class ImageViewTarget<Z>
+  extends ViewTarget<ImageView, Z>
+  implements Transition.ViewAdapter
+{
+  @Nullable
+  private Animatable animatable;
+  
+  public ImageViewTarget(ImageView paramImageView)
+  {
+    super(paramImageView);
+  }
+  
+  @Deprecated
+  public ImageViewTarget(ImageView paramImageView, boolean paramBoolean)
+  {
+    super(paramImageView, paramBoolean);
+  }
+  
+  private void maybeUpdateAnimatable(@Nullable Z paramZ)
+  {
+    if ((paramZ instanceof Animatable))
+    {
+      animatable = ((Animatable)paramZ);
+      animatable.start();
+      return;
+    }
+    animatable = null;
+  }
+  
+  private void setResourceInternal(@Nullable Z paramZ)
+  {
+    setResource(paramZ);
+    maybeUpdateAnimatable(paramZ);
+  }
+  
+  @Nullable
+  public Drawable getCurrentDrawable()
+  {
+    return ((ImageView)view).getDrawable();
+  }
+  
+  public void onLoadCleared(@Nullable Drawable paramDrawable)
+  {
+    super.onLoadCleared(paramDrawable);
+    if (animatable != null) {
+      animatable.stop();
+    }
+    setResourceInternal(null);
+    setDrawable(paramDrawable);
+  }
+  
+  public void onLoadFailed(@Nullable Drawable paramDrawable)
+  {
+    super.onLoadFailed(paramDrawable);
+    setResourceInternal(null);
+    setDrawable(paramDrawable);
+  }
+  
+  public void onLoadStarted(@Nullable Drawable paramDrawable)
+  {
+    super.onLoadStarted(paramDrawable);
+    setResourceInternal(null);
+    setDrawable(paramDrawable);
+  }
+  
+  public void onResourceReady(@NonNull Z paramZ, @Nullable Transition<? super Z> paramTransition)
+  {
+    if ((paramTransition != null) && (paramTransition.transition(paramZ, this)))
+    {
+      maybeUpdateAnimatable(paramZ);
+      return;
+    }
+    setResourceInternal(paramZ);
+  }
+  
+  public void onStart()
+  {
+    if (animatable != null) {
+      animatable.start();
+    }
+  }
+  
+  public void onStop()
+  {
+    if (animatable != null) {
+      animatable.stop();
+    }
+  }
+  
+  public void setDrawable(Drawable paramDrawable)
+  {
+    ((ImageView)view).setImageDrawable(paramDrawable);
+  }
+  
+  protected abstract void setResource(@Nullable Z paramZ);
+}

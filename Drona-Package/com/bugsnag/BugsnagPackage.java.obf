@@ -1,0 +1,30 @@
+package com.bugsnag;
+
+import com.facebook.react.ReactPackage;
+import com.facebook.react.bridge.JavaScriptModule;
+import com.facebook.react.bridge.NativeModule;
+import com.facebook.react.bridge.ReactApplicationContext;
+import com.facebook.react.uimanager.ViewManager;
+import java.util.Collections;
+import java.util.List;
+
+class BugsnagPackage
+  implements ReactPackage
+{
+  BugsnagPackage() {}
+  
+  public List<Class<? extends JavaScriptModule>> createJSModules()
+  {
+    return Collections.emptyList();
+  }
+  
+  public List<NativeModule> createNativeModules(ReactApplicationContext paramReactApplicationContext)
+  {
+    return Collections.singletonList(new BugsnagReactNative(paramReactApplicationContext));
+  }
+  
+  public List<ViewManager> createViewManagers(ReactApplicationContext paramReactApplicationContext)
+  {
+    return Collections.emptyList();
+  }
+}

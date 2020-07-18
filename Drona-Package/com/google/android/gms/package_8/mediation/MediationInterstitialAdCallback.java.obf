@@ -1,0 +1,7 @@
+package com.google.android.gms.ads.mediation;
+
+public abstract interface MediationInterstitialAdCallback
+  extends MediationAdCallback
+{
+  public abstract void onAdLeftApplication();
+}

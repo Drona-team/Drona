@@ -1,0 +1,9 @@
+package com.google.android.exoplayer2.metadata;
+
+import androidx.annotation.Nullable;
+
+public abstract interface MetadataDecoder
+{
+  @Nullable
+  public abstract Metadata decode(MetadataInputBuffer paramMetadataInputBuffer);
+}

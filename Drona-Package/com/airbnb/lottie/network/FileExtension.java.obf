@@ -1,0 +1,48 @@
+package com.airbnb.lottie.network;
+
+import com.airbnb.lottie.utils.Logger;
+
+public enum FileExtension
+{
+  JSON(".json"),  ZIP(".zip");
+  
+  public final String extension;
+  
+  private FileExtension(String paramString)
+  {
+    extension = paramString;
+  }
+  
+  public static FileExtension forFile(String paramString)
+  {
+    Object localObject = values();
+    int j = localObject.length;
+    int i = 0;
+    while (i < j)
+    {
+      FileExtension localFileExtension = localObject[i];
+      if (paramString.endsWith(extension)) {
+        return localFileExtension;
+      }
+      i += 1;
+    }
+    localObject = new StringBuilder();
+    ((StringBuilder)localObject).append("Unable to find correct extension for ");
+    ((StringBuilder)localObject).append(paramString);
+    Logger.warning(((StringBuilder)localObject).toString());
+    return JSON;
+  }
+  
+  public String tempExtension()
+  {
+    StringBuilder localStringBuilder = new StringBuilder();
+    localStringBuilder.append(".temp");
+    localStringBuilder.append(extension);
+    return localStringBuilder.toString();
+  }
+  
+  public String toString()
+  {
+    return extension;
+  }
+}

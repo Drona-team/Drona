@@ -1,0 +1,18 @@
+package expo.modules.font;
+
+import android.content.Context;
+import java.util.Collections;
+import java.util.List;
+import org.unimodules.core.BasePackage;
+import org.unimodules.core.ExportedModule;
+
+public class FontLoaderPackage
+  extends BasePackage
+{
+  public FontLoaderPackage() {}
+  
+  public List<ExportedModule> createExportedModules(Context paramContext)
+  {
+    return Collections.singletonList(new FontLoaderModule(paramContext));
+  }
+}

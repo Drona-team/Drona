@@ -1,0 +1,143 @@
+package com.google.android.exoplayer2.extractor.configurations;
+
+import com.google.android.exoplayer2.extractor.ExtractorInput;
+import com.google.android.exoplayer2.extractor.PositionHolder;
+import com.google.android.exoplayer2.util.ParsableByteArray;
+import com.google.android.exoplayer2.util.TimestampAdjuster;
+import com.google.android.exoplayer2.util.Util;
+import java.io.IOException;
+
+final class TsDurationReader
+{
+  private static final int TIMESTAMP_SEARCH_BYTES = 112800;
+  private long durationUs = -9223372036854775807L;
+  private long firstPcrValue = -9223372036854775807L;
+  private boolean isDurationRead;
+  private boolean isFirstPcrValueRead;
+  private boolean isLastPcrValueRead;
+  private long lastPcrValue = -9223372036854775807L;
+  private final ParsableByteArray packetBuffer = new ParsableByteArray();
+  private final TimestampAdjuster pcrTimestampAdjuster = new TimestampAdjuster(0L);
+  
+  TsDurationReader() {}
+  
+  private int finishReadDuration(ExtractorInput paramExtractorInput)
+  {
+    packetBuffer.reset(Util.EMPTY_BYTE_ARRAY);
+    isDurationRead = true;
+    paramExtractorInput.resetPeekPosition();
+    return 0;
+  }
+  
+  private int readFirstPcrValue(ExtractorInput paramExtractorInput, PositionHolder paramPositionHolder, int paramInt)
+    throws IOException, InterruptedException
+  {
+    int i = (int)Math.min(112800L, paramExtractorInput.getLength());
+    long l1 = paramExtractorInput.getPosition();
+    long l2 = 0;
+    if (l1 != l2)
+    {
+      position = l2;
+      return 1;
+    }
+    packetBuffer.reset(i);
+    paramExtractorInput.resetPeekPosition();
+    paramExtractorInput.peekFully(packetBuffer.data, 0, i);
+    firstPcrValue = readFirstPcrValueFromBuffer(packetBuffer, paramInt);
+    isFirstPcrValueRead = true;
+    return 0;
+  }
+  
+  private long readFirstPcrValueFromBuffer(ParsableByteArray paramParsableByteArray, int paramInt)
+  {
+    int i = paramParsableByteArray.getPosition();
+    int j = paramParsableByteArray.limit();
+    while (i < j)
+    {
+      if (data[i] == 71)
+      {
+        long l = TsUtil.readPcrFromPacket(paramParsableByteArray, i, paramInt);
+        if (l != -9223372036854775807L) {
+          return l;
+        }
+      }
+      i += 1;
+    }
+    return -9223372036854775807L;
+  }
+  
+  private int readLastPcrValue(ExtractorInput paramExtractorInput, PositionHolder paramPositionHolder, int paramInt)
+    throws IOException, InterruptedException
+  {
+    long l = paramExtractorInput.getLength();
+    int i = (int)Math.min(112800L, l);
+    l -= i;
+    if (paramExtractorInput.getPosition() != l)
+    {
+      position = l;
+      return 1;
+    }
+    packetBuffer.reset(i);
+    paramExtractorInput.resetPeekPosition();
+    paramExtractorInput.peekFully(packetBuffer.data, 0, i);
+    lastPcrValue = readLastPcrValueFromBuffer(packetBuffer, paramInt);
+    isLastPcrValueRead = true;
+    return 0;
+  }
+  
+  private long readLastPcrValueFromBuffer(ParsableByteArray paramParsableByteArray, int paramInt)
+  {
+    int j = paramParsableByteArray.getPosition();
+    int i = paramParsableByteArray.limit() - 1;
+    while (i >= j)
+    {
+      if (data[i] == 71)
+      {
+        long l = TsUtil.readPcrFromPacket(paramParsableByteArray, i, paramInt);
+        if (l != -9223372036854775807L) {
+          return l;
+        }
+      }
+      i -= 1;
+    }
+    return -9223372036854775807L;
+  }
+  
+  public long getDurationUs()
+  {
+    return durationUs;
+  }
+  
+  public TimestampAdjuster getPcrTimestampAdjuster()
+  {
+    return pcrTimestampAdjuster;
+  }
+  
+  public boolean isDurationReadFinished()
+  {
+    return isDurationRead;
+  }
+  
+  public int readDuration(ExtractorInput paramExtractorInput, PositionHolder paramPositionHolder, int paramInt)
+    throws IOException, InterruptedException
+  {
+    if (paramInt <= 0) {
+      return finishReadDuration(paramExtractorInput);
+    }
+    if (!isLastPcrValueRead) {
+      return readLastPcrValue(paramExtractorInput, paramPositionHolder, paramInt);
+    }
+    if (lastPcrValue == -9223372036854775807L) {
+      return finishReadDuration(paramExtractorInput);
+    }
+    if (!isFirstPcrValueRead) {
+      return readFirstPcrValue(paramExtractorInput, paramPositionHolder, paramInt);
+    }
+    if (firstPcrValue == -9223372036854775807L) {
+      return finishReadDuration(paramExtractorInput);
+    }
+    long l = pcrTimestampAdjuster.adjustTsTimestamp(firstPcrValue);
+    durationUs = (pcrTimestampAdjuster.adjustTsTimestamp(lastPcrValue) - l);
+    return finishReadDuration(paramExtractorInput);
+  }
+}

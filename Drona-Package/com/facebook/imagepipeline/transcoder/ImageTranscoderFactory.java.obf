@@ -1,0 +1,10 @@
+package com.facebook.imagepipeline.transcoder;
+
+import com.facebook.imageformat.ImageFormat;
+import javax.annotation.Nullable;
+
+public abstract interface ImageTranscoderFactory
+{
+  @Nullable
+  public abstract ImageTranscoder createImageTranscoder(ImageFormat paramImageFormat, boolean paramBoolean);
+}

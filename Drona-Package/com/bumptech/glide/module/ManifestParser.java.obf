@@ -1,0 +1,131 @@
+package com.bumptech.glide.module;
+
+import android.content.Context;
+import android.content.pm.ApplicationInfo;
+import android.content.pm.PackageManager;
+import android.content.pm.PackageManager.NameNotFoundException;
+import android.os.Bundle;
+import android.util.Log;
+import java.lang.reflect.Constructor;
+import java.lang.reflect.InvocationTargetException;
+import java.util.ArrayList;
+import java.util.Iterator;
+import java.util.List;
+import java.util.Set;
+
+@Deprecated
+public final class ManifestParser
+{
+  private static final String GLIDE_MODULE_VALUE = "GlideModule";
+  private static final String TAG = "ManifestParser";
+  private final Context context;
+  
+  public ManifestParser(Context paramContext)
+  {
+    context = paramContext;
+  }
+  
+  private static GlideModule parseModule(String paramString)
+  {
+    try
+    {
+      Class localClass = Class.forName(paramString);
+      paramString = null;
+      try
+      {
+        Object localObject = localClass.getDeclaredConstructor(new Class[0]).newInstance(new Object[0]);
+        paramString = localObject;
+      }
+      catch (InvocationTargetException localInvocationTargetException)
+      {
+        throwInstantiateGlideModuleException(localClass, localInvocationTargetException);
+      }
+      catch (NoSuchMethodException localNoSuchMethodException)
+      {
+        throwInstantiateGlideModuleException(localClass, localNoSuchMethodException);
+      }
+      catch (IllegalAccessException localIllegalAccessException)
+      {
+        throwInstantiateGlideModuleException(localClass, localIllegalAccessException);
+      }
+      catch (InstantiationException localInstantiationException)
+      {
+        throwInstantiateGlideModuleException(localClass, localInstantiationException);
+      }
+      if ((paramString instanceof GlideModule)) {
+        return (GlideModule)paramString;
+      }
+      StringBuilder localStringBuilder = new StringBuilder();
+      localStringBuilder.append("Expected instanceof GlideModule, but found: ");
+      localStringBuilder.append(paramString);
+      throw new RuntimeException(localStringBuilder.toString());
+    }
+    catch (ClassNotFoundException paramString)
+    {
+      throw new IllegalArgumentException("Unable to find GlideModule implementation", paramString);
+    }
+  }
+  
+  private static void throwInstantiateGlideModuleException(Class<?> paramClass, Exception paramException)
+  {
+    StringBuilder localStringBuilder = new StringBuilder();
+    localStringBuilder.append("Unable to instantiate GlideModule implementation for ");
+    localStringBuilder.append(paramClass);
+    throw new RuntimeException(localStringBuilder.toString(), paramException);
+  }
+  
+  public List<GlideModule> parse()
+  {
+    if (Log.isLoggable("ManifestParser", 3)) {
+      Log.d("ManifestParser", "Loading Glide modules");
+    }
+    ArrayList localArrayList = new ArrayList();
+    try
+    {
+      ApplicationInfo localApplicationInfo = context.getPackageManager().getApplicationInfo(context.getPackageName(), 128);
+      if (metaData == null)
+      {
+        if (Log.isLoggable("ManifestParser", 3))
+        {
+          Log.d("ManifestParser", "Got null app info metadata");
+          return localArrayList;
+        }
+      }
+      else
+      {
+        if (Log.isLoggable("ManifestParser", 2))
+        {
+          localObject = new StringBuilder();
+          ((StringBuilder)localObject).append("Got app info metadata: ");
+          ((StringBuilder)localObject).append(metaData);
+          Log.v("ManifestParser", ((StringBuilder)localObject).toString());
+        }
+        Object localObject = metaData.keySet().iterator();
+        while (((Iterator)localObject).hasNext())
+        {
+          String str = (String)((Iterator)localObject).next();
+          if ("GlideModule".equals(metaData.get(str)))
+          {
+            localArrayList.add(parseModule(str));
+            if (Log.isLoggable("ManifestParser", 3))
+            {
+              StringBuilder localStringBuilder = new StringBuilder();
+              localStringBuilder.append("Loaded Glide module: ");
+              localStringBuilder.append(str);
+              Log.d("ManifestParser", localStringBuilder.toString());
+            }
+          }
+        }
+        if (Log.isLoggable("ManifestParser", 3)) {
+          Log.d("ManifestParser", "Finished loading Glide modules");
+        }
+        return localArrayList;
+      }
+    }
+    catch (PackageManager.NameNotFoundException localNameNotFoundException)
+    {
+      throw new RuntimeException("Unable to find metadata to parse GlideModules", localNameNotFoundException);
+    }
+    return localNameNotFoundException;
+  }
+}

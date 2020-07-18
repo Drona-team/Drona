@@ -1,0 +1,287 @@
+package com.facebook.imagepipeline.backends.okhttp3;
+
+import android.net.Uri;
+import android.os.Looper;
+import android.os.SystemClock;
+import com.facebook.imagepipeline.common.BytesRange;
+import com.facebook.imagepipeline.image.EncodedImage;
+import com.facebook.imagepipeline.producers.BaseNetworkFetcher;
+import com.facebook.imagepipeline.producers.BaseProducerContextCallbacks;
+import com.facebook.imagepipeline.producers.Consumer;
+import com.facebook.imagepipeline.producers.FetchState;
+import com.facebook.imagepipeline.producers.NetworkFetcher.Callback;
+import com.facebook.imagepipeline.producers.ProducerContext;
+import com.facebook.imagepipeline.request.ImageRequest;
+import java.io.IOException;
+import java.util.HashMap;
+import java.util.Map;
+import java.util.concurrent.Executor;
+import javax.annotation.Nullable;
+import okhttp3.CacheControl;
+import okhttp3.CacheControl.Builder;
+import okhttp3.Call;
+import okhttp3.Call.Factory;
+import okhttp3.Callback;
+import okhttp3.Dispatcher;
+import okhttp3.OkHttpClient;
+import okhttp3.Request;
+import okhttp3.Request.Builder;
+
+public class OkHttpNetworkFetcher
+  extends BaseNetworkFetcher<OkHttpNetworkFetchState>
+{
+  private static final String FETCH_TIME = "fetch_time";
+  private static final String IMAGE_SIZE = "image_size";
+  private static final String QUEUE_TIME = "queue_time";
+  private static final String TOTAL_TIME = "total_time";
+  @Nullable
+  private final CacheControl mCacheControl;
+  private final Call.Factory mCallFactory;
+  private Executor mCancellationExecutor;
+  
+  public OkHttpNetworkFetcher(Call.Factory paramFactory, Executor paramExecutor)
+  {
+    this(paramFactory, paramExecutor, true);
+  }
+  
+  public OkHttpNetworkFetcher(Call.Factory paramFactory, Executor paramExecutor, boolean paramBoolean)
+  {
+    mCallFactory = paramFactory;
+    mCancellationExecutor = paramExecutor;
+    if (paramBoolean) {
+      paramFactory = new CacheControl.Builder().noStore().build();
+    } else {
+      paramFactory = null;
+    }
+    mCacheControl = paramFactory;
+  }
+  
+  public OkHttpNetworkFetcher(OkHttpClient paramOkHttpClient)
+  {
+    this(paramOkHttpClient, paramOkHttpClient.dispatcher().executorService());
+  }
+  
+  private void handleException(Call paramCall, Exception paramException, NetworkFetcher.Callback paramCallback)
+  {
+    if (paramCall.isCanceled())
+    {
+      paramCallback.onCancellation();
+      return;
+    }
+    paramCallback.onFailure(paramException);
+  }
+  
+  public OkHttpNetworkFetchState createFetchState(Consumer<EncodedImage> paramConsumer, ProducerContext paramProducerContext)
+  {
+    return new OkHttpNetworkFetchState(paramConsumer, paramProducerContext);
+  }
+  
+  public void fetch(OkHttpNetworkFetchState paramOkHttpNetworkFetchState, NetworkFetcher.Callback paramCallback)
+  {
+    submitTime = SystemClock.elapsedRealtime();
+    Object localObject = paramOkHttpNetworkFetchState.getUri();
+    try
+    {
+      localObject = new Request.Builder().url(((Uri)localObject).toString()).get();
+      if (mCacheControl != null) {
+        ((Request.Builder)localObject).cacheControl(mCacheControl);
+      }
+      BytesRange localBytesRange = paramOkHttpNetworkFetchState.getContext().getImageRequest().getBytesRange();
+      if (localBytesRange != null) {
+        ((Request.Builder)localObject).addHeader("Range", localBytesRange.toHttpRangeHeaderValue());
+      }
+      fetchWithRequest(paramOkHttpNetworkFetchState, paramCallback, ((Request.Builder)localObject).build());
+      return;
+    }
+    catch (Exception paramOkHttpNetworkFetchState)
+    {
+      paramCallback.onFailure(paramOkHttpNetworkFetchState);
+    }
+  }
+  
+  protected void fetchWithRequest(final OkHttpNetworkFetchState paramOkHttpNetworkFetchState, final NetworkFetcher.Callback paramCallback, final Request paramRequest)
+  {
+    paramRequest = mCallFactory.newCall(paramRequest);
+    paramOkHttpNetworkFetchState.getContext().addCallbacks(new BaseProducerContextCallbacks()
+    {
+      public void onCancellationRequested()
+      {
+        if (Looper.myLooper() != Looper.getMainLooper())
+        {
+          paramRequest.cancel();
+          return;
+        }
+        mCancellationExecutor.execute(new Runnable()
+        {
+          public void run()
+          {
+            val$call.cancel();
+          }
+        });
+      }
+    });
+    paramRequest.enqueue(new Callback()
+    {
+      public void onFailure(Call paramAnonymousCall, IOException paramAnonymousIOException)
+      {
+        OkHttpNetworkFetcher.this.handleException(paramAnonymousCall, paramAnonymousIOException, paramCallback);
+      }
+      
+      /* Error */
+      public void onResponse(Call paramAnonymousCall, okhttp3.Response paramAnonymousResponse)
+        throws IOException
+      {
+        // Byte code:
+        //   0: aload_0
+        //   1: getfield 23	com/facebook/imagepipeline/backends/okhttp3/OkHttpNetworkFetcher$2:val$fetchState	Lcom/facebook/imagepipeline/backends/okhttp3/OkHttpNetworkFetcher$OkHttpNetworkFetchState;
+        //   4: invokestatic 47	android/os/SystemClock:elapsedRealtime	()J
+        //   7: putfield 53	com/facebook/imagepipeline/backends/okhttp3/OkHttpNetworkFetcher$OkHttpNetworkFetchState:responseTime	J
+        //   10: aload_2
+        //   11: invokevirtual 59	okhttp3/Response:body	()Lokhttp3/ResponseBody;
+        //   14: astore 7
+        //   16: aload_2
+        //   17: invokevirtual 63	okhttp3/Response:isSuccessful	()Z
+        //   20: ifne +61 -> 81
+        //   23: aload_0
+        //   24: getfield 21	com/facebook/imagepipeline/backends/okhttp3/OkHttpNetworkFetcher$2:this$0	Lcom/facebook/imagepipeline/backends/okhttp3/OkHttpNetworkFetcher;
+        //   27: astore 8
+        //   29: new 65	java/lang/StringBuilder
+        //   32: dup
+        //   33: invokespecial 66	java/lang/StringBuilder:<init>	()V
+        //   36: astore 9
+        //   38: aload 9
+        //   40: ldc 68
+        //   42: invokevirtual 72	java/lang/StringBuilder:append	(Ljava/lang/String;)Ljava/lang/StringBuilder;
+        //   45: pop
+        //   46: aload 9
+        //   48: aload_2
+        //   49: invokevirtual 75	java/lang/StringBuilder:append	(Ljava/lang/Object;)Ljava/lang/StringBuilder;
+        //   52: pop
+        //   53: aload 8
+        //   55: aload_1
+        //   56: new 39	java/io/IOException
+        //   59: dup
+        //   60: aload 9
+        //   62: invokevirtual 79	java/lang/StringBuilder:toString	()Ljava/lang/String;
+        //   65: invokespecial 82	java/io/IOException:<init>	(Ljava/lang/String;)V
+        //   68: aload_0
+        //   69: getfield 25	com/facebook/imagepipeline/backends/okhttp3/OkHttpNetworkFetcher$2:val$callback	Lcom/facebook/imagepipeline/producers/NetworkFetcher$Callback;
+        //   72: invokestatic 35	com/facebook/imagepipeline/backends/okhttp3/OkHttpNetworkFetcher:access$100	(Lcom/facebook/imagepipeline/backends/okhttp3/OkHttpNetworkFetcher;Lokhttp3/Call;Ljava/lang/Exception;Lcom/facebook/imagepipeline/producers/NetworkFetcher$Callback;)V
+        //   75: aload 7
+        //   77: invokevirtual 87	okhttp3/ResponseBody:close	()V
+        //   80: return
+        //   81: aload_2
+        //   82: ldc 89
+        //   84: invokevirtual 93	okhttp3/Response:header	(Ljava/lang/String;)Ljava/lang/String;
+        //   87: invokestatic 99	com/facebook/imagepipeline/common/BytesRange:fromContentRangeHeader	(Ljava/lang/String;)Lcom/facebook/imagepipeline/common/BytesRange;
+        //   90: astore_2
+        //   91: aload_2
+        //   92: ifnull +36 -> 128
+        //   95: aload_2
+        //   96: getfield 103	com/facebook/imagepipeline/common/BytesRange:from	I
+        //   99: ifne +12 -> 111
+        //   102: aload_2
+        //   103: getfield 106	com/facebook/imagepipeline/common/BytesRange:to	I
+        //   106: ldc 107
+        //   108: if_icmpeq +20 -> 128
+        //   111: aload_0
+        //   112: getfield 23	com/facebook/imagepipeline/backends/okhttp3/OkHttpNetworkFetcher$2:val$fetchState	Lcom/facebook/imagepipeline/backends/okhttp3/OkHttpNetworkFetcher$OkHttpNetworkFetchState;
+        //   115: aload_2
+        //   116: invokevirtual 111	com/facebook/imagepipeline/backends/okhttp3/OkHttpNetworkFetcher$OkHttpNetworkFetchState:setResponseBytesRange	(Lcom/facebook/imagepipeline/common/BytesRange;)V
+        //   119: aload_0
+        //   120: getfield 23	com/facebook/imagepipeline/backends/okhttp3/OkHttpNetworkFetcher$2:val$fetchState	Lcom/facebook/imagepipeline/backends/okhttp3/OkHttpNetworkFetcher$OkHttpNetworkFetchState;
+        //   123: bipush 8
+        //   125: invokevirtual 115	com/facebook/imagepipeline/backends/okhttp3/OkHttpNetworkFetcher$OkHttpNetworkFetchState:setOnNewResultStatusFlags	(I)V
+        //   128: aload 7
+        //   130: invokevirtual 118	okhttp3/ResponseBody:contentLength	()J
+        //   133: lstore 5
+        //   135: lload 5
+        //   137: lstore_3
+        //   138: lload 5
+        //   140: lconst_0
+        //   141: lcmp
+        //   142: ifge +5 -> 147
+        //   145: lconst_0
+        //   146: lstore_3
+        //   147: aload_0
+        //   148: getfield 25	com/facebook/imagepipeline/backends/okhttp3/OkHttpNetworkFetcher$2:val$callback	Lcom/facebook/imagepipeline/producers/NetworkFetcher$Callback;
+        //   151: aload 7
+        //   153: invokevirtual 122	okhttp3/ResponseBody:byteStream	()Ljava/io/InputStream;
+        //   156: lload_3
+        //   157: l2i
+        //   158: invokeinterface 127 3 0
+        //   163: goto +21 -> 184
+        //   166: astore_1
+        //   167: goto +23 -> 190
+        //   170: astore_2
+        //   171: aload_0
+        //   172: getfield 21	com/facebook/imagepipeline/backends/okhttp3/OkHttpNetworkFetcher$2:this$0	Lcom/facebook/imagepipeline/backends/okhttp3/OkHttpNetworkFetcher;
+        //   175: aload_1
+        //   176: aload_2
+        //   177: aload_0
+        //   178: getfield 25	com/facebook/imagepipeline/backends/okhttp3/OkHttpNetworkFetcher$2:val$callback	Lcom/facebook/imagepipeline/producers/NetworkFetcher$Callback;
+        //   181: invokestatic 35	com/facebook/imagepipeline/backends/okhttp3/OkHttpNetworkFetcher:access$100	(Lcom/facebook/imagepipeline/backends/okhttp3/OkHttpNetworkFetcher;Lokhttp3/Call;Ljava/lang/Exception;Lcom/facebook/imagepipeline/producers/NetworkFetcher$Callback;)V
+        //   184: aload 7
+        //   186: invokevirtual 87	okhttp3/ResponseBody:close	()V
+        //   189: return
+        //   190: aload 7
+        //   192: invokevirtual 87	okhttp3/ResponseBody:close	()V
+        //   195: aload_1
+        //   196: athrow
+        // Local variable table:
+        //   start	length	slot	name	signature
+        //   0	197	0	this	2
+        //   0	197	1	paramAnonymousCall	Call
+        //   0	197	2	paramAnonymousResponse	okhttp3.Response
+        //   137	20	3	l1	long
+        //   133	6	5	l2	long
+        //   14	177	7	localResponseBody	okhttp3.ResponseBody
+        //   27	27	8	localOkHttpNetworkFetcher	OkHttpNetworkFetcher
+        //   36	25	9	localStringBuilder	StringBuilder
+        // Exception table:
+        //   from	to	target	type
+        //   16	75	166	finally
+        //   81	91	166	finally
+        //   95	111	166	finally
+        //   111	128	166	finally
+        //   128	135	166	finally
+        //   147	163	166	finally
+        //   171	184	166	finally
+        //   16	75	170	java/lang/Exception
+        //   81	91	170	java/lang/Exception
+        //   95	111	170	java/lang/Exception
+        //   111	128	170	java/lang/Exception
+        //   128	135	170	java/lang/Exception
+        //   147	163	170	java/lang/Exception
+      }
+    });
+  }
+  
+  public Map<String, String> getExtraMap(OkHttpNetworkFetchState paramOkHttpNetworkFetchState, int paramInt)
+  {
+    HashMap localHashMap = new HashMap(4);
+    localHashMap.put("queue_time", Long.toString(responseTime - submitTime));
+    localHashMap.put("fetch_time", Long.toString(fetchCompleteTime - responseTime));
+    localHashMap.put("total_time", Long.toString(fetchCompleteTime - submitTime));
+    localHashMap.put("image_size", Integer.toString(paramInt));
+    return localHashMap;
+  }
+  
+  public void onFetchCompletion(OkHttpNetworkFetchState paramOkHttpNetworkFetchState, int paramInt)
+  {
+    fetchCompleteTime = SystemClock.elapsedRealtime();
+  }
+  
+  public static class OkHttpNetworkFetchState
+    extends FetchState
+  {
+    public long fetchCompleteTime;
+    public long responseTime;
+    public long submitTime;
+    
+    public OkHttpNetworkFetchState(Consumer<EncodedImage> paramConsumer, ProducerContext paramProducerContext)
+    {
+      super(paramProducerContext);
+    }
+  }
+}

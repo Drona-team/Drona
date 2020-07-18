@@ -1,0 +1,55 @@
+package com.facebook.react.uimanager;
+
+import java.util.Comparator;
+
+public class ViewAtIndex
+{
+  public static Comparator<ViewAtIndex> COMPARATOR = new Comparator()
+  {
+    public int compare(ViewAtIndex paramAnonymousViewAtIndex1, ViewAtIndex paramAnonymousViewAtIndex2)
+    {
+      return mIndex - mIndex;
+    }
+  };
+  public final int mIndex;
+  public final int mTag;
+  
+  public ViewAtIndex(int paramInt1, int paramInt2)
+  {
+    mTag = paramInt1;
+    mIndex = paramInt2;
+  }
+  
+  public boolean equals(Object paramObject)
+  {
+    boolean bool2 = false;
+    if (paramObject != null)
+    {
+      if (paramObject.getClass() != getClass()) {
+        return false;
+      }
+      paramObject = (ViewAtIndex)paramObject;
+      boolean bool1 = bool2;
+      if (mIndex == mIndex)
+      {
+        bool1 = bool2;
+        if (mTag == mTag) {
+          bool1 = true;
+        }
+      }
+      return bool1;
+    }
+    return false;
+  }
+  
+  public String toString()
+  {
+    StringBuilder localStringBuilder = new StringBuilder();
+    localStringBuilder.append("[");
+    localStringBuilder.append(mTag);
+    localStringBuilder.append(", ");
+    localStringBuilder.append(mIndex);
+    localStringBuilder.append("]");
+    return localStringBuilder.toString();
+  }
+}

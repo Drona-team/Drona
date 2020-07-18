@@ -1,0 +1,21 @@
+package androidx.room.util;
+
+import androidx.annotation.NonNull;
+import androidx.annotation.RestrictTo;
+
+@RestrictTo({androidx.annotation.RestrictTo.Scope.LIBRARY_GROUP_PREFIX})
+public class SneakyThrow
+{
+  private SneakyThrow() {}
+  
+  public static void reThrow(@NonNull Exception paramException)
+  {
+    sneakyThrow(paramException);
+  }
+  
+  private static <E extends Throwable> void sneakyThrow(@NonNull Throwable paramThrowable)
+    throws Throwable
+  {
+    throw paramThrowable;
+  }
+}

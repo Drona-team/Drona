@@ -1,0 +1,108 @@
+package com.google.android.exoplayer2.source.chunk;
+
+import com.google.android.exoplayer2.Format;
+import com.google.android.exoplayer2.extractor.DefaultExtractorInput;
+import com.google.android.exoplayer2.extractor.Extractor;
+import com.google.android.exoplayer2.extractor.ExtractorInput;
+import com.google.android.exoplayer2.extractor.PositionHolder;
+import com.google.android.exoplayer2.upstream.DataSource;
+import com.google.android.exoplayer2.upstream.DataSpec;
+import com.google.android.exoplayer2.upstream.StatsDataSource;
+import com.google.android.exoplayer2.util.Assertions;
+import com.google.android.exoplayer2.util.Util;
+import java.io.IOException;
+
+public class ContainerMediaChunk
+  extends BaseMediaChunk
+{
+  private static final PositionHolder DUMMY_POSITION_HOLDER = new PositionHolder();
+  private final int chunkCount;
+  private final ChunkExtractorWrapper extractorWrapper;
+  private volatile boolean loadCanceled;
+  private boolean loadCompleted;
+  private long nextLoadPosition;
+  private final long sampleOffsetUs;
+  
+  public ContainerMediaChunk(DataSource paramDataSource, DataSpec paramDataSpec, Format paramFormat, int paramInt1, Object paramObject, long paramLong1, long paramLong2, long paramLong3, long paramLong4, long paramLong5, int paramInt2, long paramLong6, ChunkExtractorWrapper paramChunkExtractorWrapper)
+  {
+    super(paramDataSource, paramDataSpec, paramFormat, paramInt1, paramObject, paramLong1, paramLong2, paramLong3, paramLong4, paramLong5);
+    chunkCount = paramInt2;
+    sampleOffsetUs = paramLong6;
+    extractorWrapper = paramChunkExtractorWrapper;
+  }
+  
+  public final void cancelLoad()
+  {
+    loadCanceled = true;
+  }
+  
+  public long getNextChunkIndex()
+  {
+    return chunkIndex + chunkCount;
+  }
+  
+  public boolean isLoadCompleted()
+  {
+    return loadCompleted;
+  }
+  
+  public final void load()
+    throws IOException, InterruptedException
+  {
+    Object localObject1 = dataSpec.subrange(nextLoadPosition);
+    for (;;)
+    {
+      try
+      {
+        localObject1 = new DefaultExtractorInput(dataSource, absoluteStreamPosition, dataSource.open((DataSpec)localObject1));
+        Object localObject3;
+        if (nextLoadPosition == 0L)
+        {
+          localObject3 = getOutput();
+          ((BaseMediaChunkOutput)localObject3).setSampleOffsetUs(sampleOffsetUs);
+          ChunkExtractorWrapper localChunkExtractorWrapper = extractorWrapper;
+          long l1 = clippedStartTimeUs;
+          long l2 = -9223372036854775807L;
+          if (l1 == -9223372036854775807L) {
+            l1 = -9223372036854775807L;
+          } else {
+            l1 = clippedStartTimeUs - sampleOffsetUs;
+          }
+          if (clippedEndTimeUs != -9223372036854775807L) {
+            l2 = clippedEndTimeUs - sampleOffsetUs;
+          }
+          localChunkExtractorWrapper.init((ChunkExtractorWrapper.TrackOutputProvider)localObject3, l1, l2);
+        }
+        int i;
+        try
+        {
+          localObject3 = extractorWrapper.extractor;
+          bool = false;
+          i = 0;
+          if ((i == 0) && (!loadCanceled))
+          {
+            i = ((Extractor)localObject3).read((ExtractorInput)localObject1, DUMMY_POSITION_HOLDER);
+            continue;
+            Assertions.checkState(bool);
+            nextLoadPosition = (((ExtractorInput)localObject1).getPosition() - dataSpec.absoluteStreamPosition);
+            Util.closeQuietly(dataSource);
+            loadCompleted = true;
+            return;
+          }
+        }
+        finally
+        {
+          nextLoadPosition = (((ExtractorInput)localObject1).getPosition() - dataSpec.absoluteStreamPosition);
+        }
+        if (i == 1) {
+          continue;
+        }
+      }
+      finally
+      {
+        Util.closeQuietly(dataSource);
+      }
+      boolean bool = true;
+    }
+  }
+}

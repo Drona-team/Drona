@@ -1,0 +1,6 @@
+package com.android.billingclient.api;
+
+public abstract interface ConsumeResponseListener
+{
+  public abstract void onConsumeResponse(BillingResult paramBillingResult, String paramString);
+}

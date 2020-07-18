@@ -1,0 +1,17 @@
+package androidx.core.os;
+
+import androidx.annotation.Nullable;
+
+public class OperationCanceledException
+  extends RuntimeException
+{
+  public OperationCanceledException()
+  {
+    this(null);
+  }
+  
+  public OperationCanceledException(@Nullable String paramString)
+  {
+    super(paramString);
+  }
+}

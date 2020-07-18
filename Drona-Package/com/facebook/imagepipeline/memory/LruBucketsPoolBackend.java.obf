@@ -1,0 +1,59 @@
+package com.facebook.imagepipeline.memory;
+
+import com.facebook.common.internal.VisibleForTesting;
+import java.util.HashSet;
+import java.util.Set;
+import javax.annotation.Nullable;
+
+public abstract class LruBucketsPoolBackend<T>
+  implements PoolBackend<T>
+{
+  private final Set<T> mCurrentItems = new HashSet();
+  private final BucketMap<T> mMap = new BucketMap();
+  
+  public LruBucketsPoolBackend() {}
+  
+  private T maybeRemoveFromCurrentItems(@Nullable T paramT)
+  {
+    if (paramT != null) {
+      try
+      {
+        mCurrentItems.remove(paramT);
+        return paramT;
+      }
+      finally {}
+    }
+    return paramT;
+  }
+  
+  @Nullable
+  public T get(int paramInt)
+  {
+    return maybeRemoveFromCurrentItems(mMap.acquire(paramInt));
+  }
+  
+  @Nullable
+  public T pop()
+  {
+    return maybeRemoveFromCurrentItems(mMap.removeFromEnd());
+  }
+  
+  public void put(T paramT)
+  {
+    try
+    {
+      boolean bool = mCurrentItems.add(paramT);
+      if (bool) {
+        mMap.release(getSize(paramT), paramT);
+      }
+      return;
+    }
+    finally {}
+  }
+  
+  @VisibleForTesting
+  int valueCount()
+  {
+    return mMap.valueCount();
+  }
+}

@@ -1,0 +1,477 @@
+package com.amplitude.api;
+
+import android.content.ContentResolver;
+import android.content.Context;
+import android.content.pm.PackageInfo;
+import android.content.pm.PackageManager;
+import android.content.pm.PackageManager.NameNotFoundException;
+import android.location.Address;
+import android.location.Geocoder;
+import android.location.Location;
+import android.location.LocationManager;
+import android.os.Build;
+import android.os.Build.VERSION;
+import android.provider.Settings.Secure;
+import android.telephony.TelephonyManager;
+import java.io.IOException;
+import java.lang.reflect.InvocationTargetException;
+import java.lang.reflect.Method;
+import java.util.ArrayList;
+import java.util.Iterator;
+import java.util.List;
+import java.util.Locale;
+import java.util.UUID;
+
+public class DeviceInfo
+{
+  public static final String OS_NAME = "android";
+  private static final String SETTING_ADVERTISING_ID = "advertising_id";
+  private static final String SETTING_LIMIT_AD_TRACKING = "limit_ad_tracking";
+  public static final String TAG = "com.amplitude.api.DeviceInfo";
+  private CachedInfo cachedInfo;
+  private Context context;
+  private boolean locationListening = true;
+  
+  public DeviceInfo(Context paramContext)
+  {
+    context = paramContext;
+  }
+  
+  public static String generateUUID()
+  {
+    return UUID.randomUUID().toString();
+  }
+  
+  private CachedInfo getCachedInfo()
+  {
+    if (cachedInfo == null) {
+      cachedInfo = new CachedInfo(null);
+    }
+    return cachedInfo;
+  }
+  
+  public String getAdvertisingId()
+  {
+    return getCachedInfoadvertisingId;
+  }
+  
+  public String getBrand()
+  {
+    return getCachedInfobrand;
+  }
+  
+  public String getCarrier()
+  {
+    return getCachedInfocarrier;
+  }
+  
+  public String getCountry()
+  {
+    return getCachedInfocountry;
+  }
+  
+  protected Geocoder getGeocoder()
+  {
+    return new Geocoder(context, Locale.ENGLISH);
+  }
+  
+  public String getLanguage()
+  {
+    return getCachedInfolanguage;
+  }
+  
+  public String getManufacturer()
+  {
+    return getCachedInfomanufacturer;
+  }
+  
+  public String getModel()
+  {
+    return getCachedInfomodel;
+  }
+  
+  public Location getMostRecentLocation()
+  {
+    boolean bool = isLocationListening();
+    Location localLocation = null;
+    if (!bool) {
+      return null;
+    }
+    Object localObject3 = (LocationManager)context.getSystemService("location");
+    if (localObject3 == null) {
+      return null;
+    }
+    Object localObject1;
+    try
+    {
+      List localList = ((LocationManager)localObject3).getProviders(true);
+    }
+    catch (SecurityException localSecurityException)
+    {
+      Diagnostics.getLogger().logError("Failed to get most recent location", localSecurityException);
+      localObject1 = null;
+    }
+    if (localObject1 == null) {
+      return null;
+    }
+    ArrayList localArrayList = new ArrayList();
+    Iterator localIterator = ((List)localObject1).iterator();
+    while (localIterator.hasNext())
+    {
+      localObject1 = (String)localIterator.next();
+      try
+      {
+        localObject1 = ((LocationManager)localObject3).getLastKnownLocation((String)localObject1);
+      }
+      catch (Exception localException)
+      {
+        AmplitudeLog.getLogger().w("com.amplitude.api.DeviceInfo", "Failed to get most recent location");
+        Diagnostics.getLogger().logError("Failed to get most recent location", localException);
+        localObject2 = null;
+      }
+      if (localObject2 != null) {
+        localArrayList.add(localObject2);
+      }
+    }
+    long l = -1L;
+    localObject3 = localArrayList.iterator();
+    Object localObject2 = localLocation;
+    while (((Iterator)localObject3).hasNext())
+    {
+      localLocation = (Location)((Iterator)localObject3).next();
+      if (localLocation.getTime() > l)
+      {
+        l = localLocation.getTime();
+        localObject2 = localLocation;
+      }
+    }
+    return localObject2;
+  }
+  
+  public String getOsName()
+  {
+    return getCachedInfoosName;
+  }
+  
+  public String getOsVersion()
+  {
+    return getCachedInfoosVersion;
+  }
+  
+  public String getVersionName()
+  {
+    return getCachedInfoversionName;
+  }
+  
+  public boolean isGooglePlayServicesEnabled()
+  {
+    return getCachedInfogpsEnabled;
+  }
+  
+  public boolean isLimitAdTrackingEnabled()
+  {
+    return getCachedInfolimitAdTrackingEnabled;
+  }
+  
+  public boolean isLocationListening()
+  {
+    return locationListening;
+  }
+  
+  public void prefetch()
+  {
+    getCachedInfo();
+  }
+  
+  public void setLocationListening(boolean paramBoolean)
+  {
+    locationListening = paramBoolean;
+  }
+  
+  private class CachedInfo
+  {
+    private String advertisingId = getAdvertisingId();
+    private String brand = getBrand();
+    private String carrier = getCarrier();
+    private String country = getCountry();
+    private boolean gpsEnabled = checkGPSEnabled();
+    private String language = getLanguage();
+    private boolean limitAdTrackingEnabled;
+    private String manufacturer = getManufacturer();
+    private String model = getModel();
+    private String osName = getOsName();
+    private String osVersion = getOsVersion();
+    private String versionName = getVersionName();
+    
+    private CachedInfo() {}
+    
+    private boolean checkGPSEnabled()
+    {
+      boolean bool2 = false;
+      try
+      {
+        Integer localInteger = (Integer)Class.forName("com.google.android.gms.common.GooglePlayServicesUtil").getMethod("isGooglePlayServicesAvailable", new Class[] { Context.class }).invoke(null, new Object[] { context });
+        boolean bool1 = bool2;
+        if (localInteger != null)
+        {
+          int i = localInteger.intValue();
+          bool1 = bool2;
+          if (i == 0) {
+            bool1 = true;
+          }
+        }
+        return bool1;
+      }
+      catch (Exception localException)
+      {
+        AmplitudeLog localAmplitudeLog = AmplitudeLog.getLogger();
+        StringBuilder localStringBuilder = new StringBuilder();
+        localStringBuilder.append("Error when checking for Google Play Services: ");
+        localStringBuilder.append(localException);
+        localAmplitudeLog.w("com.amplitude.api.DeviceInfo", localStringBuilder.toString());
+        Diagnostics.getLogger().logError("Failed to check GPS enabled", localException);
+        return false;
+      }
+      catch (IllegalAccessException localIllegalAccessException)
+      {
+        AmplitudeLog.getLogger().w("com.amplitude.api.DeviceInfo", "Google Play Services not available");
+        Diagnostics.getLogger().logError("Failed to check GPS enabled", localIllegalAccessException);
+        return false;
+      }
+      catch (InvocationTargetException localInvocationTargetException)
+      {
+        AmplitudeLog.getLogger().w("com.amplitude.api.DeviceInfo", "Google Play Services not available");
+        Diagnostics.getLogger().logError("Failed to check GPS enabled", localInvocationTargetException);
+        return false;
+      }
+      catch (NoSuchMethodException localNoSuchMethodException)
+      {
+        AmplitudeLog.getLogger().w("com.amplitude.api.DeviceInfo", "Google Play Services not available");
+        Diagnostics.getLogger().logError("Failed to check GPS enabled", localNoSuchMethodException);
+        return false;
+      }
+      catch (ClassNotFoundException localClassNotFoundException)
+      {
+        AmplitudeLog.getLogger().w("com.amplitude.api.DeviceInfo", "Google Play Services Util not found!");
+        Diagnostics.getLogger().logError("Failed to check GPS enabled", localClassNotFoundException);
+        return false;
+      }
+      catch (NoClassDefFoundError localNoClassDefFoundError)
+      {
+        AmplitudeLog.getLogger().w("com.amplitude.api.DeviceInfo", "Google Play Services Util not found!");
+        Diagnostics.getLogger().logError("Failed to check GPS enabled", localNoClassDefFoundError);
+      }
+      return false;
+    }
+    
+    private String getAdvertisingId()
+    {
+      if ("Amazon".equals(getManufacturer())) {
+        return getAndCacheAmazonAdvertisingId();
+      }
+      return getAndCacheGoogleAdvertisingId();
+    }
+    
+    private String getAndCacheAmazonAdvertisingId()
+    {
+      ContentResolver localContentResolver = context.getContentResolver();
+      boolean bool = false;
+      if (Settings.Secure.getInt(localContentResolver, "limit_ad_tracking", 0) == 1) {
+        bool = true;
+      }
+      limitAdTrackingEnabled = bool;
+      advertisingId = Settings.Secure.getString(localContentResolver, "advertising_id");
+      return advertisingId;
+    }
+    
+    private String getAndCacheGoogleAdvertisingId()
+    {
+      for (;;)
+      {
+        try
+        {
+          Object localObject = Class.forName("com.google.android.gms.ads.identifier.AdvertisingIdClient");
+          bool = true;
+          localObject = ((Class)localObject).getMethod("getAdvertisingIdInfo", new Class[] { Context.class }).invoke(null, new Object[] { context });
+          Boolean localBoolean = (Boolean)localObject.getClass().getMethod("isLimitAdTrackingEnabled", new Class[0]).invoke(localObject, new Object[0]);
+          if ((localBoolean == null) || (!localBoolean.booleanValue())) {
+            break label195;
+          }
+          limitAdTrackingEnabled = bool;
+          advertisingId = ((String)localObject.getClass().getMethod("getId", new Class[0]).invoke(localObject, new Object[0]));
+        }
+        catch (Exception localException)
+        {
+          AmplitudeLog.getLogger().e("com.amplitude.api.DeviceInfo", "Encountered an error connecting to Google Play Services", localException);
+          Diagnostics.getLogger().logError("Failed to get ADID", localException);
+        }
+        catch (InvocationTargetException localInvocationTargetException)
+        {
+          AmplitudeLog.getLogger().w("com.amplitude.api.DeviceInfo", "Google Play Services not available");
+          Diagnostics.getLogger().logError("Failed to get ADID", localInvocationTargetException);
+        }
+        catch (ClassNotFoundException localClassNotFoundException)
+        {
+          AmplitudeLog.getLogger().w("com.amplitude.api.DeviceInfo", "Google Play Services SDK not found!");
+          Diagnostics.getLogger().logError("Failed to get ADID", localClassNotFoundException);
+        }
+        return advertisingId;
+        label195:
+        boolean bool = false;
+      }
+    }
+    
+    private String getBrand()
+    {
+      return Build.BRAND;
+    }
+    
+    private String getCarrier()
+    {
+      try
+      {
+        String str = ((TelephonyManager)context.getSystemService("phone")).getNetworkOperatorName();
+        return str;
+      }
+      catch (Exception localException)
+      {
+        Diagnostics.getLogger().logError("Failed to get carrier", localException);
+      }
+      return null;
+    }
+    
+    private String getCountry()
+    {
+      String str = getCountryFromLocation();
+      if (!Utils.isEmptyString(str)) {
+        return str;
+      }
+      str = getCountryFromNetwork();
+      if (!Utils.isEmptyString(str)) {
+        return str;
+      }
+      return getCountryFromLocale();
+    }
+    
+    private String getCountryFromLocale()
+    {
+      return Locale.getDefault().getCountry();
+    }
+    
+    private String getCountryFromLocation()
+    {
+      if (!isLocationListening()) {
+        return null;
+      }
+      Object localObject = getMostRecentLocation();
+      if (localObject != null) {
+        try
+        {
+          if (Geocoder.isPresent())
+          {
+            localObject = getGeocoder().getFromLocation(((Location)localObject).getLatitude(), ((Location)localObject).getLongitude(), 1);
+            if (localObject != null)
+            {
+              localObject = ((List)localObject).iterator();
+              while (((Iterator)localObject).hasNext())
+              {
+                Address localAddress = (Address)((Iterator)localObject).next();
+                if (localAddress != null)
+                {
+                  localObject = localAddress.getCountryCode();
+                  return localObject;
+                }
+              }
+            }
+          }
+        }
+        catch (IllegalStateException localIllegalStateException)
+        {
+          Diagnostics.getLogger().logError("Failed to get country from location", localIllegalStateException);
+          return null;
+        }
+        catch (IllegalArgumentException localIllegalArgumentException)
+        {
+          Diagnostics.getLogger().logError("Failed to get country from location", localIllegalArgumentException);
+          return null;
+        }
+        catch (NoSuchMethodError localNoSuchMethodError)
+        {
+          Diagnostics.getLogger().logError("Failed to get country from location", localNoSuchMethodError);
+          return null;
+        }
+        catch (NullPointerException localNullPointerException)
+        {
+          Diagnostics.getLogger().logError("Failed to get country from location", localNullPointerException);
+          return null;
+        }
+        catch (IOException localIOException)
+        {
+          Diagnostics.getLogger().logError("Failed to get country from location", localIOException);
+        }
+      }
+      return null;
+    }
+    
+    private String getCountryFromNetwork()
+    {
+      try
+      {
+        Object localObject = (TelephonyManager)context.getSystemService("phone");
+        if (((TelephonyManager)localObject).getPhoneType() != 2)
+        {
+          localObject = ((TelephonyManager)localObject).getNetworkCountryIso();
+          if (localObject != null)
+          {
+            localObject = ((String)localObject).toUpperCase(Locale.US);
+            return localObject;
+          }
+        }
+      }
+      catch (Exception localException)
+      {
+        Diagnostics.getLogger().logError("Failed to get country from network", localException);
+      }
+      return null;
+    }
+    
+    private String getLanguage()
+    {
+      return Locale.getDefault().getLanguage();
+    }
+    
+    private String getManufacturer()
+    {
+      return Build.MANUFACTURER;
+    }
+    
+    private String getModel()
+    {
+      return Build.MODEL;
+    }
+    
+    private String getOsName()
+    {
+      return "android";
+    }
+    
+    private String getOsVersion()
+    {
+      return Build.VERSION.RELEASE;
+    }
+    
+    private String getVersionName()
+    {
+      try
+      {
+        String str = context.getPackageManager().getPackageInfo(context.getPackageName(), 0).versionName;
+        return str;
+      }
+      catch (PackageManager.NameNotFoundException localNameNotFoundException)
+      {
+        Diagnostics.getLogger().logError("Failed to get version name", localNameNotFoundException);
+      }
+      return null;
+    }
+  }
+}

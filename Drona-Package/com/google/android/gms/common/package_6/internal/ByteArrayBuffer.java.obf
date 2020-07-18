@@ -1,0 +1,76 @@
+package com.google.android.gms.common.api.internal;
+
+import android.os.DeadObjectException;
+import android.os.RemoteException;
+import androidx.annotation.NonNull;
+import androidx.annotation.Nullable;
+import com.google.android.gms.common.Feature;
+import com.google.android.gms.common.api.Api.AnyClient;
+import com.google.android.gms.common.api.Status;
+import com.google.android.gms.tasks.TaskCompletionSource;
+
+public final class zag<ResultT>
+  extends zac
+{
+  private final TaskCompletionSource<ResultT> zacn;
+  private final TaskApiCall<Api.AnyClient, ResultT> zacr;
+  private final StatusExceptionMapper zacs;
+  
+  public zag(int paramInt, TaskApiCall<Api.AnyClient, ResultT> paramTaskApiCall, TaskCompletionSource<ResultT> paramTaskCompletionSource, StatusExceptionMapper paramStatusExceptionMapper)
+  {
+    super(paramInt);
+    zacn = paramTaskCompletionSource;
+    zacr = paramTaskApiCall;
+    zacs = paramStatusExceptionMapper;
+  }
+  
+  public final void zaa(@NonNull Status paramStatus)
+  {
+    zacn.trySetException(zacs.getException(paramStatus));
+  }
+  
+  public final void zaa(GoogleApiManager.zaa<?> paramZaa)
+    throws DeadObjectException
+  {
+    try
+    {
+      zacr.doExecute(paramZaa.zaab(), zacn);
+      return;
+    }
+    catch (RuntimeException paramZaa)
+    {
+      zaa(paramZaa);
+      return;
+    }
+    catch (RemoteException paramZaa)
+    {
+      zaa(zab.zab(paramZaa));
+      return;
+    }
+    catch (DeadObjectException paramZaa)
+    {
+      throw paramZaa;
+    }
+  }
+  
+  public final void zaa(@NonNull zaab paramZaab, boolean paramBoolean)
+  {
+    paramZaab.zaa(zacn, paramBoolean);
+  }
+  
+  public final void zaa(@NonNull RuntimeException paramRuntimeException)
+  {
+    zacn.trySetException(paramRuntimeException);
+  }
+  
+  @Nullable
+  public final Feature[] zab(GoogleApiManager.zaa<?> paramZaa)
+  {
+    return zacr.zabt();
+  }
+  
+  public final boolean zac(GoogleApiManager.zaa<?> paramZaa)
+  {
+    return zacr.shouldAutoResolveMissingFeatures();
+  }
+}

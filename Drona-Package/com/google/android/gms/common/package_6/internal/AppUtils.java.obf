@@ -1,0 +1,65 @@
+package com.google.android.gms.common.api.internal;
+
+import android.os.Bundle;
+import androidx.annotation.NonNull;
+import androidx.annotation.Nullable;
+import com.google.android.gms.common.ConnectionResult;
+import java.util.concurrent.locks.Lock;
+
+final class zau
+  implements zabt
+{
+  private zau(zas paramZas) {}
+  
+  public final void zab(int paramInt, boolean paramBoolean)
+  {
+    zas.zaa(zaeq).lock();
+    try
+    {
+      if ((!zas.zac(zaeq)) && (zas.zad(zaeq) != null) && (zas.zad(zaeq).isSuccess()))
+      {
+        zas.zaa(zaeq, true);
+        zas.zae(zaeq).onConnectionSuspended(paramInt);
+        return;
+      }
+      zas.zaa(zaeq, false);
+      zas.zaa(zaeq, paramInt, paramBoolean);
+      return;
+    }
+    finally
+    {
+      zas.zaa(zaeq).unlock();
+    }
+  }
+  
+  public final void zab(@Nullable Bundle paramBundle)
+  {
+    zas.zaa(zaeq).lock();
+    try
+    {
+      zas.zaa(zaeq, paramBundle);
+      zas.zaa(zaeq, ConnectionResult.RESULT_SUCCESS);
+      zas.zab(zaeq);
+      return;
+    }
+    finally
+    {
+      zas.zaa(zaeq).unlock();
+    }
+  }
+  
+  public final void zac(@NonNull ConnectionResult paramConnectionResult)
+  {
+    zas.zaa(zaeq).lock();
+    try
+    {
+      zas.zaa(zaeq, paramConnectionResult);
+      zas.zab(zaeq);
+      return;
+    }
+    finally
+    {
+      zas.zaa(zaeq).unlock();
+    }
+  }
+}

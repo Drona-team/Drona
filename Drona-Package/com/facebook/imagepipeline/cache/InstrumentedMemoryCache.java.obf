@@ -1,0 +1,50 @@
+package com.facebook.imagepipeline.cache;
+
+import com.facebook.common.internal.Predicate;
+import com.facebook.common.references.CloseableReference;
+
+public class InstrumentedMemoryCache<K, V>
+  implements MemoryCache<K, V>
+{
+  private final MemoryCache<K, V> mDelegate;
+  private final MemoryCacheTracker mTracker;
+  
+  public InstrumentedMemoryCache(MemoryCache<K, V> paramMemoryCache, MemoryCacheTracker paramMemoryCacheTracker)
+  {
+    mDelegate = paramMemoryCache;
+    mTracker = paramMemoryCacheTracker;
+  }
+  
+  public CloseableReference<V> cache(K paramK, CloseableReference<V> paramCloseableReference)
+  {
+    mTracker.onCachePut();
+    return mDelegate.cache(paramK, paramCloseableReference);
+  }
+  
+  public boolean contains(Predicate<K> paramPredicate)
+  {
+    return mDelegate.contains(paramPredicate);
+  }
+  
+  public boolean contains(K paramK)
+  {
+    return mDelegate.contains(paramK);
+  }
+  
+  public CloseableReference<V> get(K paramK)
+  {
+    CloseableReference localCloseableReference = mDelegate.get(paramK);
+    if (localCloseableReference == null)
+    {
+      mTracker.onCacheMiss();
+      return localCloseableReference;
+    }
+    mTracker.onCacheHit(paramK);
+    return localCloseableReference;
+  }
+  
+  public int removeAll(Predicate<K> paramPredicate)
+  {
+    return mDelegate.removeAll(paramPredicate);
+  }
+}

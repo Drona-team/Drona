@@ -1,0 +1,14 @@
+package com.facebook.react.turbomodule.core.interfaces;
+
+import androidx.annotation.Nullable;
+import java.util.Collection;
+
+public abstract interface TurboModuleRegistry
+{
+  @Nullable
+  public abstract TurboModule getModule(String paramString);
+  
+  public abstract Collection<TurboModule> getModules();
+  
+  public abstract boolean hasModule(String paramString);
+}

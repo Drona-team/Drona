@@ -1,0 +1,163 @@
+package com.bumptech.glide.manager;
+
+import android.util.Log;
+import androidx.annotation.NonNull;
+import androidx.annotation.Nullable;
+import androidx.annotation.VisibleForTesting;
+import com.bumptech.glide.request.Request;
+import com.bumptech.glide.util.Util;
+import java.util.ArrayList;
+import java.util.Collections;
+import java.util.Iterator;
+import java.util.List;
+import java.util.Set;
+import java.util.WeakHashMap;
+
+public class RequestTracker
+{
+  private static final String TAG = "RequestTracker";
+  private boolean isPaused;
+  private final List<Request> pendingRequests = new ArrayList();
+  private final Set<Request> requests = Collections.newSetFromMap(new WeakHashMap());
+  
+  public RequestTracker() {}
+  
+  private boolean clearRemoveAndMaybeRecycle(@Nullable Request paramRequest, boolean paramBoolean)
+  {
+    boolean bool2 = true;
+    if (paramRequest == null) {
+      return true;
+    }
+    boolean bool3 = requests.remove(paramRequest);
+    boolean bool1 = bool2;
+    if (!pendingRequests.remove(paramRequest)) {
+      if (bool3) {
+        bool1 = bool2;
+      } else {
+        bool1 = false;
+      }
+    }
+    if (bool1)
+    {
+      paramRequest.clear();
+      if (paramBoolean) {
+        paramRequest.recycle();
+      }
+    }
+    return bool1;
+  }
+  
+  @VisibleForTesting
+  void addRequest(Request paramRequest)
+  {
+    requests.add(paramRequest);
+  }
+  
+  public boolean clearRemoveAndRecycle(@Nullable Request paramRequest)
+  {
+    return clearRemoveAndMaybeRecycle(paramRequest, true);
+  }
+  
+  public void clearRequests()
+  {
+    Iterator localIterator = Util.getSnapshot(requests).iterator();
+    while (localIterator.hasNext()) {
+      clearRemoveAndMaybeRecycle((Request)localIterator.next(), false);
+    }
+    pendingRequests.clear();
+  }
+  
+  public boolean isPaused()
+  {
+    return isPaused;
+  }
+  
+  public void pauseAllRequests()
+  {
+    isPaused = true;
+    Iterator localIterator = Util.getSnapshot(requests).iterator();
+    while (localIterator.hasNext())
+    {
+      Request localRequest = (Request)localIterator.next();
+      if ((localRequest.isRunning()) || (localRequest.isComplete()))
+      {
+        localRequest.clear();
+        pendingRequests.add(localRequest);
+      }
+    }
+  }
+  
+  public void pauseRequests()
+  {
+    isPaused = true;
+    Iterator localIterator = Util.getSnapshot(requests).iterator();
+    while (localIterator.hasNext())
+    {
+      Request localRequest = (Request)localIterator.next();
+      if (localRequest.isRunning())
+      {
+        localRequest.clear();
+        pendingRequests.add(localRequest);
+      }
+    }
+  }
+  
+  public void restartRequests()
+  {
+    Iterator localIterator = Util.getSnapshot(requests).iterator();
+    while (localIterator.hasNext())
+    {
+      Request localRequest = (Request)localIterator.next();
+      if ((!localRequest.isComplete()) && (!localRequest.isCleared()))
+      {
+        localRequest.clear();
+        if (!isPaused) {
+          localRequest.begin();
+        } else {
+          pendingRequests.add(localRequest);
+        }
+      }
+    }
+  }
+  
+  public void resumeRequests()
+  {
+    isPaused = false;
+    Iterator localIterator = Util.getSnapshot(requests).iterator();
+    while (localIterator.hasNext())
+    {
+      Request localRequest = (Request)localIterator.next();
+      if ((!localRequest.isComplete()) && (!localRequest.isRunning())) {
+        localRequest.begin();
+      }
+    }
+    pendingRequests.clear();
+  }
+  
+  public void runRequest(@NonNull Request paramRequest)
+  {
+    requests.add(paramRequest);
+    if (!isPaused)
+    {
+      paramRequest.begin();
+      return;
+    }
+    paramRequest.clear();
+    if (Log.isLoggable("RequestTracker", 2)) {
+      Log.v("RequestTracker", "Paused, delaying request");
+    }
+    pendingRequests.add(paramRequest);
+  }
+  
+  public String toString()
+  {
+    StringBuilder localStringBuilder = new StringBuilder();
+    localStringBuilder.append(super.toString());
+    localStringBuilder.append("{numRequests=");
+    localStringBuilder.append(requests.size());
+    localStringBuilder.append(", isPaused=");
+    localStringBuilder.append(isPaused);
+    localStringBuilder.append("}");
+    return localStringBuilder.toString();
+  }
+}

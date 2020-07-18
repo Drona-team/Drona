@@ -1,0 +1,215 @@
+package com.google.android.exoplayer2.extractor.configurations;
+
+import com.google.android.exoplayer2.ParserException;
+import com.google.android.exoplayer2.extractor.ExtractorOutput;
+import com.google.android.exoplayer2.util.Log;
+import com.google.android.exoplayer2.util.ParsableBitArray;
+import com.google.android.exoplayer2.util.ParsableByteArray;
+import com.google.android.exoplayer2.util.TimestampAdjuster;
+
+public final class PesReader
+  implements TsPayloadReader
+{
+  private static final int HEADER_SIZE = 9;
+  private static final int MAX_HEADER_EXTENSION_SIZE = 10;
+  private static final String PAGE_KEY = "PesReader";
+  private static final int PES_SCRATCH_SIZE = 10;
+  private static final int STATE_FINDING_HEADER = 0;
+  private static final int STATE_READING_BODY = 3;
+  private static final int STATE_READING_HEADER = 1;
+  private static final int STATE_READING_HEADER_EXTENSION = 2;
+  private int bytesRead;
+  private boolean dataAlignmentIndicator;
+  private boolean dtsFlag;
+  private int extendedHeaderLength;
+  private int payloadSize;
+  private final ParsableBitArray pesScratch;
+  private boolean ptsFlag;
+  private final ElementaryStreamReader reader;
+  private boolean seenFirstDts;
+  private int state;
+  private long timeUs;
+  private TimestampAdjuster timestampAdjuster;
+  
+  public PesReader(ElementaryStreamReader paramElementaryStreamReader)
+  {
+    reader = paramElementaryStreamReader;
+    pesScratch = new ParsableBitArray(new byte[10]);
+    state = 0;
+  }
+  
+  private boolean continueRead(ParsableByteArray paramParsableByteArray, byte[] paramArrayOfByte, int paramInt)
+  {
+    int i = Math.min(paramParsableByteArray.bytesLeft(), paramInt - bytesRead);
+    if (i <= 0) {
+      return true;
+    }
+    if (paramArrayOfByte == null) {
+      paramParsableByteArray.skipBytes(i);
+    } else {
+      paramParsableByteArray.readBytes(paramArrayOfByte, bytesRead, i);
+    }
+    bytesRead += i;
+    return bytesRead == paramInt;
+  }
+  
+  private boolean parseHeader()
+  {
+    pesScratch.setPosition(0);
+    int i = pesScratch.readBits(24);
+    if (i != 1)
+    {
+      StringBuilder localStringBuilder = new StringBuilder();
+      localStringBuilder.append("Unexpected start code prefix: ");
+      localStringBuilder.append(i);
+      Log.w("PesReader", localStringBuilder.toString());
+      payloadSize = -1;
+      return false;
+    }
+    pesScratch.skipBits(8);
+    i = pesScratch.readBits(16);
+    pesScratch.skipBits(5);
+    dataAlignmentIndicator = pesScratch.readBit();
+    pesScratch.skipBits(2);
+    ptsFlag = pesScratch.readBit();
+    dtsFlag = pesScratch.readBit();
+    pesScratch.skipBits(6);
+    extendedHeaderLength = pesScratch.readBits(8);
+    if (i == 0)
+    {
+      payloadSize = -1;
+      return true;
+    }
+    payloadSize = (i + 6 - 9 - extendedHeaderLength);
+    return true;
+  }
+  
+  private void parseHeaderExtension()
+  {
+    pesScratch.setPosition(0);
+    timeUs = -9223372036854775807L;
+    if (ptsFlag)
+    {
+      pesScratch.skipBits(4);
+      long l1 = pesScratch.readBits(3);
+      pesScratch.skipBits(1);
+      long l2 = pesScratch.readBits(15) << 15;
+      pesScratch.skipBits(1);
+      long l3 = pesScratch.readBits(15);
+      pesScratch.skipBits(1);
+      if ((!seenFirstDts) && (dtsFlag))
+      {
+        pesScratch.skipBits(4);
+        long l4 = pesScratch.readBits(3);
+        pesScratch.skipBits(1);
+        long l5 = pesScratch.readBits(15) << 15;
+        pesScratch.skipBits(1);
+        long l6 = pesScratch.readBits(15);
+        pesScratch.skipBits(1);
+        timestampAdjuster.adjustTsTimestamp(l4 << 30 | l5 | l6);
+        seenFirstDts = true;
+      }
+      timeUs = timestampAdjuster.adjustTsTimestamp(l1 << 30 | l2 | l3);
+    }
+  }
+  
+  private void setState(int paramInt)
+  {
+    state = paramInt;
+    bytesRead = 0;
+  }
+  
+  public final void consume(ParsableByteArray paramParsableByteArray, boolean paramBoolean)
+    throws ParserException
+  {
+    if (paramBoolean)
+    {
+      switch (state)
+      {
+      default: 
+        throw new IllegalStateException();
+      case 3: 
+        if (payloadSize != -1)
+        {
+          StringBuilder localStringBuilder = new StringBuilder();
+          localStringBuilder.append("Unexpected start indicator: expected ");
+          localStringBuilder.append(payloadSize);
+          localStringBuilder.append(" more bytes");
+          Log.w("PesReader", localStringBuilder.toString());
+        }
+        reader.packetFinished();
+        break;
+      case 2: 
+        Log.w("PesReader", "Unexpected start indicator reading extended header");
+      }
+      setState(1);
+    }
+    while (paramParsableByteArray.bytesLeft() > 0)
+    {
+      int k = state;
+      int i = 0;
+      int j = 0;
+      switch (k)
+      {
+      default: 
+        throw new IllegalStateException();
+      case 3: 
+        k = paramParsableByteArray.bytesLeft();
+        i = k;
+        if (payloadSize != -1) {
+          j = k - payloadSize;
+        }
+        if (j > 0)
+        {
+          i = k - j;
+          paramParsableByteArray.setLimit(paramParsableByteArray.getPosition() + i);
+        }
+        reader.consume(paramParsableByteArray);
+        if (payloadSize != -1)
+        {
+          payloadSize -= i;
+          if (payloadSize == 0)
+          {
+            reader.packetFinished();
+            setState(1);
+          }
+        }
+        break;
+      case 2: 
+        i = Math.min(10, extendedHeaderLength);
+        if ((continueRead(paramParsableByteArray, pesScratch.data, i)) && (continueRead(paramParsableByteArray, null, extendedHeaderLength)))
+        {
+          parseHeaderExtension();
+          reader.packetStarted(timeUs, dataAlignmentIndicator);
+          setState(3);
+        }
+        break;
+      case 1: 
+        if (continueRead(paramParsableByteArray, pesScratch.data, 9))
+        {
+          if (parseHeader()) {
+            i = 2;
+          }
+          setState(i);
+        }
+        break;
+      case 0: 
+        paramParsableByteArray.skipBytes(paramParsableByteArray.bytesLeft());
+      }
+    }
+  }
+  
+  public void init(TimestampAdjuster paramTimestampAdjuster, ExtractorOutput paramExtractorOutput, TsPayloadReader.TrackIdGenerator paramTrackIdGenerator)
+  {
+    timestampAdjuster = paramTimestampAdjuster;
+    reader.createTracks(paramExtractorOutput, paramTrackIdGenerator);
+  }
+  
+  public final void seek()
+  {
+    state = 0;
+    bytesRead = 0;
+    seenFirstDts = false;
+    reader.seek();
+  }
+}

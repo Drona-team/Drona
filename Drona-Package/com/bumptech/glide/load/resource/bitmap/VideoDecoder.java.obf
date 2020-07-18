@@ -1,0 +1,308 @@
+package com.bumptech.glide.load.resource.bitmap;
+
+import android.annotation.TargetApi;
+import android.content.res.AssetFileDescriptor;
+import android.graphics.Bitmap;
+import android.media.MediaMetadataRetriever;
+import android.os.Build.VERSION;
+import android.os.ParcelFileDescriptor;
+import android.util.Log;
+import androidx.annotation.NonNull;
+import androidx.annotation.Nullable;
+import androidx.annotation.VisibleForTesting;
+import com.bumptech.glide.load.Option;
+import com.bumptech.glide.load.Option.CacheKeyUpdater;
+import com.bumptech.glide.load.Options;
+import com.bumptech.glide.load.ResourceDecoder;
+import com.bumptech.glide.load.engine.bitmap_recycle.BitmapPool;
+import java.nio.ByteBuffer;
+import java.security.MessageDigest;
+
+public class VideoDecoder<T>
+  implements ResourceDecoder<T, Bitmap>
+{
+  private static final MediaMetadataRetrieverFactory DEFAULT_FACTORY = new MediaMetadataRetrieverFactory();
+  public static final long DEFAULT_FRAME = -1L;
+  @VisibleForTesting
+  static final int DEFAULT_FRAME_OPTION = 2;
+  public static final Option<Integer> FRAME_OPTION;
+  private static final String TAG = "VideoDecoder";
+  public static final Option<Long> TARGET_FRAME = Option.disk("com.bumptech.glide.load.resource.bitmap.VideoBitmapDecode.TargetFrame", Long.valueOf(-1L), new Option.CacheKeyUpdater()
+  {
+    private final ByteBuffer buffer = ByteBuffer.allocate(8);
+    
+    public void update(@NonNull byte[] arg1, @NonNull Long paramAnonymousLong, @NonNull MessageDigest paramAnonymousMessageDigest)
+    {
+      paramAnonymousMessageDigest.update(???);
+      synchronized (buffer)
+      {
+        buffer.position(0);
+        paramAnonymousMessageDigest.update(buffer.putLong(paramAnonymousLong.longValue()).array());
+        return;
+      }
+    }
+  });
+  private final BitmapPool bitmapPool;
+  private final MediaMetadataRetrieverFactory factory;
+  private final MediaMetadataRetrieverInitializer<T> initializer;
+  
+  static
+  {
+    FRAME_OPTION = Option.disk("com.bumptech.glide.load.resource.bitmap.VideoBitmapDecode.FrameOption", Integer.valueOf(2), new Option.CacheKeyUpdater()
+    {
+      private final ByteBuffer buffer = ByteBuffer.allocate(4);
+      
+      public void update(@NonNull byte[] arg1, @NonNull Integer paramAnonymousInteger, @NonNull MessageDigest paramAnonymousMessageDigest)
+      {
+        if (paramAnonymousInteger == null) {
+          return;
+        }
+        paramAnonymousMessageDigest.update(???);
+        synchronized (buffer)
+        {
+          buffer.position(0);
+          paramAnonymousMessageDigest.update(buffer.putInt(paramAnonymousInteger.intValue()).array());
+          return;
+        }
+      }
+    });
+  }
+  
+  VideoDecoder(BitmapPool paramBitmapPool, MediaMetadataRetrieverInitializer<T> paramMediaMetadataRetrieverInitializer)
+  {
+    this(paramBitmapPool, paramMediaMetadataRetrieverInitializer, DEFAULT_FACTORY);
+  }
+  
+  @VisibleForTesting
+  VideoDecoder(BitmapPool paramBitmapPool, MediaMetadataRetrieverInitializer<T> paramMediaMetadataRetrieverInitializer, MediaMetadataRetrieverFactory paramMediaMetadataRetrieverFactory)
+  {
+    bitmapPool = paramBitmapPool;
+    initializer = paramMediaMetadataRetrieverInitializer;
+    factory = paramMediaMetadataRetrieverFactory;
+  }
+  
+  public static ResourceDecoder<AssetFileDescriptor, Bitmap> asset(BitmapPool paramBitmapPool)
+  {
+    return new VideoDecoder(paramBitmapPool, new AssetFileDescriptorInitializer(null));
+  }
+  
+  @Nullable
+  private static Bitmap decodeFrame(MediaMetadataRetriever paramMediaMetadataRetriever, long paramLong, int paramInt1, int paramInt2, int paramInt3, DownsampleStrategy paramDownsampleStrategy)
+  {
+    if ((Build.VERSION.SDK_INT >= 27) && (paramInt2 != Integer.MIN_VALUE) && (paramInt3 != Integer.MIN_VALUE) && (paramDownsampleStrategy != DownsampleStrategy.NONE)) {
+      paramDownsampleStrategy = decodeScaledFrame(paramMediaMetadataRetriever, paramLong, paramInt1, paramInt2, paramInt3, paramDownsampleStrategy);
+    } else {
+      paramDownsampleStrategy = null;
+    }
+    Object localObject = paramDownsampleStrategy;
+    if (paramDownsampleStrategy == null) {
+      localObject = decodeOriginalFrame(paramMediaMetadataRetriever, paramLong, paramInt1);
+    }
+    return localObject;
+  }
+  
+  private static Bitmap decodeOriginalFrame(MediaMetadataRetriever paramMediaMetadataRetriever, long paramLong, int paramInt)
+  {
+    return paramMediaMetadataRetriever.getFrameAtTime(paramLong, paramInt);
+  }
+  
+  @TargetApi(27)
+  private static Bitmap decodeScaledFrame(MediaMetadataRetriever paramMediaMetadataRetriever, long paramLong, int paramInt1, int paramInt2, int paramInt3, DownsampleStrategy paramDownsampleStrategy)
+  {
+    for (;;)
+    {
+      int k;
+      int i;
+      try
+      {
+        k = Integer.parseInt(paramMediaMetadataRetriever.extractMetadata(18));
+        i = Integer.parseInt(paramMediaMetadataRetriever.extractMetadata(19));
+        int n = Integer.parseInt(paramMediaMetadataRetriever.extractMetadata(24));
+        if (n != 90)
+        {
+          j = k;
+          m = i;
+          if (n != 270)
+          {
+            float f = paramDownsampleStrategy.getScaleFactor(j, m, paramInt2, paramInt3);
+            paramMediaMetadataRetriever = paramMediaMetadataRetriever.getScaledFrameAtTime(paramLong, paramInt1, Math.round(j * f), Math.round(f * m));
+            return paramMediaMetadataRetriever;
+          }
+        }
+      }
+      catch (Throwable paramMediaMetadataRetriever)
+      {
+        if (Log.isLoggable("VideoDecoder", 3)) {
+          Log.d("VideoDecoder", "Exception trying to decode frame on oreo+", paramMediaMetadataRetriever);
+        }
+        return null;
+      }
+      int j = i;
+      int m = k;
+    }
+  }
+  
+  public static ResourceDecoder<ParcelFileDescriptor, Bitmap> parcel(BitmapPool paramBitmapPool)
+  {
+    return new VideoDecoder(paramBitmapPool, new ParcelFileDescriptorInitializer());
+  }
+  
+  /* Error */
+  public com.bumptech.glide.load.engine.Resource<Bitmap> decode(@NonNull T paramT, int paramInt1, int paramInt2, @NonNull Options paramOptions)
+    throws java.io.IOException
+  {
+    // Byte code:
+    //   0: aload 4
+    //   2: getstatic 69	com/bumptech/glide/load/resource/bitmap/VideoDecoder:TARGET_FRAME	Lcom/bumptech/glide/load/Option;
+    //   5: invokevirtual 189	com/bumptech/glide/load/Options:get	(Lcom/bumptech/glide/load/Option;)Ljava/lang/Object;
+    //   8: checkcast 54	java/lang/Long
+    //   11: invokevirtual 193	java/lang/Long:longValue	()J
+    //   14: lstore 5
+    //   16: lload 5
+    //   18: lconst_0
+    //   19: lcmp
+    //   20: ifge +49 -> 69
+    //   23: lload 5
+    //   25: ldc2_w 28
+    //   28: lcmp
+    //   29: ifne +6 -> 35
+    //   32: goto +37 -> 69
+    //   35: new 195	java/lang/StringBuilder
+    //   38: dup
+    //   39: invokespecial 196	java/lang/StringBuilder:<init>	()V
+    //   42: astore_1
+    //   43: aload_1
+    //   44: ldc -58
+    //   46: invokevirtual 202	java/lang/StringBuilder:append	(Ljava/lang/String;)Ljava/lang/StringBuilder;
+    //   49: pop
+    //   50: aload_1
+    //   51: lload 5
+    //   53: invokevirtual 205	java/lang/StringBuilder:append	(J)Ljava/lang/StringBuilder;
+    //   56: pop
+    //   57: new 207	java/lang/IllegalArgumentException
+    //   60: dup
+    //   61: aload_1
+    //   62: invokevirtual 211	java/lang/StringBuilder:toString	()Ljava/lang/String;
+    //   65: invokespecial 214	java/lang/IllegalArgumentException:<init>	(Ljava/lang/String;)V
+    //   68: athrow
+    //   69: aload 4
+    //   71: getstatic 79	com/bumptech/glide/load/resource/bitmap/VideoDecoder:FRAME_OPTION	Lcom/bumptech/glide/load/Option;
+    //   74: invokevirtual 189	com/bumptech/glide/load/Options:get	(Lcom/bumptech/glide/load/Option;)Ljava/lang/Object;
+    //   77: checkcast 73	java/lang/Integer
+    //   80: astore 8
+    //   82: aload 8
+    //   84: astore 7
+    //   86: aload 8
+    //   88: ifnonnull +9 -> 97
+    //   91: iconst_2
+    //   92: invokestatic 76	java/lang/Integer:valueOf	(I)Ljava/lang/Integer;
+    //   95: astore 7
+    //   97: aload 4
+    //   99: getstatic 217	com/bumptech/glide/load/resource/bitmap/DownsampleStrategy:OPTION	Lcom/bumptech/glide/load/Option;
+    //   102: invokevirtual 189	com/bumptech/glide/load/Options:get	(Lcom/bumptech/glide/load/Option;)Ljava/lang/Object;
+    //   105: checkcast 117	com/bumptech/glide/load/resource/bitmap/DownsampleStrategy
+    //   108: astore 8
+    //   110: aload 8
+    //   112: astore 4
+    //   114: aload 8
+    //   116: ifnonnull +8 -> 124
+    //   119: getstatic 220	com/bumptech/glide/load/resource/bitmap/DownsampleStrategy:DEFAULT	Lcom/bumptech/glide/load/resource/bitmap/DownsampleStrategy;
+    //   122: astore 4
+    //   124: aload_0
+    //   125: getfield 96	com/bumptech/glide/load/resource/bitmap/VideoDecoder:factory	Lcom/bumptech/glide/load/resource/bitmap/VideoDecoder$MediaMetadataRetrieverFactory;
+    //   128: invokevirtual 224	com/bumptech/glide/load/resource/bitmap/VideoDecoder$MediaMetadataRetrieverFactory:build	()Landroid/media/MediaMetadataRetriever;
+    //   131: astore 8
+    //   133: aload_0
+    //   134: getfield 94	com/bumptech/glide/load/resource/bitmap/VideoDecoder:initializer	Lcom/bumptech/glide/load/resource/bitmap/VideoDecoder$MediaMetadataRetrieverInitializer;
+    //   137: aload 8
+    //   139: aload_1
+    //   140: invokeinterface 228 3 0
+    //   145: aload 8
+    //   147: lload 5
+    //   149: aload 7
+    //   151: invokevirtual 232	java/lang/Integer:intValue	()I
+    //   154: iload_2
+    //   155: iload_3
+    //   156: aload 4
+    //   158: invokestatic 234	com/bumptech/glide/load/resource/bitmap/VideoDecoder:decodeFrame	(Landroid/media/MediaMetadataRetriever;JIIILcom/bumptech/glide/load/resource/bitmap/DownsampleStrategy;)Landroid/graphics/Bitmap;
+    //   161: astore_1
+    //   162: aload 8
+    //   164: invokevirtual 237	android/media/MediaMetadataRetriever:release	()V
+    //   167: aload_1
+    //   168: aload_0
+    //   169: getfield 92	com/bumptech/glide/load/resource/bitmap/VideoDecoder:bitmapPool	Lcom/bumptech/glide/load/engine/bitmap_recycle/BitmapPool;
+    //   172: invokestatic 243	com/bumptech/glide/load/resource/bitmap/BitmapResource:obtain	(Landroid/graphics/Bitmap;Lcom/bumptech/glide/load/engine/bitmap_recycle/BitmapPool;)Lcom/bumptech/glide/load/resource/bitmap/BitmapResource;
+    //   175: areturn
+    //   176: astore_1
+    //   177: goto +13 -> 190
+    //   180: astore_1
+    //   181: new 180	java/io/IOException
+    //   184: dup
+    //   185: aload_1
+    //   186: invokespecial 246	java/io/IOException:<init>	(Ljava/lang/Throwable;)V
+    //   189: athrow
+    //   190: aload 8
+    //   192: invokevirtual 237	android/media/MediaMetadataRetriever:release	()V
+    //   195: aload_1
+    //   196: athrow
+    // Local variable table:
+    //   start	length	slot	name	signature
+    //   0	197	0	this	VideoDecoder
+    //   0	197	1	paramT	T
+    //   0	197	2	paramInt1	int
+    //   0	197	3	paramInt2	int
+    //   0	197	4	paramOptions	Options
+    //   14	134	5	l	long
+    //   84	66	7	localObject1	Object
+    //   80	111	8	localObject2	Object
+    // Exception table:
+    //   from	to	target	type
+    //   133	162	176	finally
+    //   181	190	176	finally
+    //   133	162	180	java/lang/RuntimeException
+  }
+  
+  public boolean handles(@NonNull T paramT, @NonNull Options paramOptions)
+  {
+    return true;
+  }
+  
+  private static final class AssetFileDescriptorInitializer
+    implements VideoDecoder.MediaMetadataRetrieverInitializer<AssetFileDescriptor>
+  {
+    private AssetFileDescriptorInitializer() {}
+    
+    public void initialize(MediaMetadataRetriever paramMediaMetadataRetriever, AssetFileDescriptor paramAssetFileDescriptor)
+    {
+      paramMediaMetadataRetriever.setDataSource(paramAssetFileDescriptor.getFileDescriptor(), paramAssetFileDescriptor.getStartOffset(), paramAssetFileDescriptor.getLength());
+    }
+  }
+  
+  @VisibleForTesting
+  static class MediaMetadataRetrieverFactory
+  {
+    MediaMetadataRetrieverFactory() {}
+    
+    public MediaMetadataRetriever build()
+    {
+      return new MediaMetadataRetriever();
+    }
+  }
+  
+  @VisibleForTesting
+  static abstract interface MediaMetadataRetrieverInitializer<T>
+  {
+    public abstract void initialize(MediaMetadataRetriever paramMediaMetadataRetriever, T paramT);
+  }
+  
+  static final class ParcelFileDescriptorInitializer
+    implements VideoDecoder.MediaMetadataRetrieverInitializer<ParcelFileDescriptor>
+  {
+    ParcelFileDescriptorInitializer() {}
+    
+    public void initialize(MediaMetadataRetriever paramMediaMetadataRetriever, ParcelFileDescriptor paramParcelFileDescriptor)
+    {
+      paramMediaMetadataRetriever.setDataSource(paramParcelFileDescriptor.getFileDescriptor());
+    }
+  }
+}

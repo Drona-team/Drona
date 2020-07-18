@@ -1,0 +1,190 @@
+package com.facebook.drawee.backends.pipeline.info;
+
+import com.facebook.imagepipeline.image.ImageInfo;
+import com.facebook.imagepipeline.request.ImageRequest;
+import javax.annotation.Nullable;
+
+public class ImagePerfState
+{
+  @Nullable
+  private Object mCallerContext;
+  @Nullable
+  private String mComponentTag;
+  private long mControllerCancelTimeMs = -1L;
+  private long mControllerFailureTimeMs = -1L;
+  private long mControllerFinalImageSetTimeMs = -1L;
+  @Nullable
+  private String mControllerId;
+  private long mControllerIntermediateImageSetTimeMs = -1L;
+  private long mControllerSubmitTimeMs = -1L;
+  @Nullable
+  private ImageInfo mImageInfo;
+  private int mImageLoadStatus = -1;
+  private int mImageOrigin = -1;
+  @Nullable
+  private ImageRequest mImageRequest;
+  private long mImageRequestEndTimeMs = -1L;
+  private long mImageRequestStartTimeMs = -1L;
+  private long mInvisibilityEventTimeMs = -1L;
+  private boolean mIsPrefetch;
+  private int mOnScreenHeightPx = -1;
+  private int mOnScreenWidthPx = -1;
+  @Nullable
+  private String mRequestId;
+  @Nullable
+  private String mUltimateProducerName;
+  private long mVisibilityEventTimeMs = -1L;
+  private int mVisibilityState = -1;
+  
+  public ImagePerfState() {}
+  
+  public int getImageLoadStatus()
+  {
+    return mImageLoadStatus;
+  }
+  
+  public void reset()
+  {
+    mRequestId = null;
+    mImageRequest = null;
+    mCallerContext = null;
+    mImageInfo = null;
+    mControllerSubmitTimeMs = -1L;
+    mControllerFinalImageSetTimeMs = -1L;
+    mControllerFailureTimeMs = -1L;
+    mControllerCancelTimeMs = -1L;
+    mImageRequestStartTimeMs = -1L;
+    mImageRequestEndTimeMs = -1L;
+    mImageOrigin = 1;
+    mUltimateProducerName = null;
+    mIsPrefetch = false;
+    mOnScreenWidthPx = -1;
+    mOnScreenHeightPx = -1;
+    mImageLoadStatus = -1;
+    mVisibilityState = -1;
+    mVisibilityEventTimeMs = -1L;
+    mInvisibilityEventTimeMs = -1L;
+    mComponentTag = null;
+  }
+  
+  public void setCallerContext(Object paramObject)
+  {
+    mCallerContext = paramObject;
+  }
+  
+  public void setComponentTag(String paramString)
+  {
+    mComponentTag = paramString;
+  }
+  
+  public void setControllerCancelTimeMs(long paramLong)
+  {
+    mControllerCancelTimeMs = paramLong;
+  }
+  
+  public void setControllerFailureTimeMs(long paramLong)
+  {
+    mControllerFailureTimeMs = paramLong;
+  }
+  
+  public void setControllerFinalImageSetTimeMs(long paramLong)
+  {
+    mControllerFinalImageSetTimeMs = paramLong;
+  }
+  
+  public void setControllerId(String paramString)
+  {
+    mControllerId = paramString;
+  }
+  
+  public void setControllerIntermediateImageSetTimeMs(long paramLong)
+  {
+    mControllerIntermediateImageSetTimeMs = paramLong;
+  }
+  
+  public void setControllerSubmitTimeMs(long paramLong)
+  {
+    mControllerSubmitTimeMs = paramLong;
+  }
+  
+  public void setImageInfo(ImageInfo paramImageInfo)
+  {
+    mImageInfo = paramImageInfo;
+  }
+  
+  public void setImageLoadStatus(int paramInt)
+  {
+    mImageLoadStatus = paramInt;
+  }
+  
+  public void setImageOrigin(int paramInt)
+  {
+    mImageOrigin = paramInt;
+  }
+  
+  public void setImageRequest(ImageRequest paramImageRequest)
+  {
+    mImageRequest = paramImageRequest;
+  }
+  
+  public void setImageRequestEndTimeMs(long paramLong)
+  {
+    mImageRequestEndTimeMs = paramLong;
+  }
+  
+  public void setImageRequestStartTimeMs(long paramLong)
+  {
+    mImageRequestStartTimeMs = paramLong;
+  }
+  
+  public void setInvisibilityEventTimeMs(long paramLong)
+  {
+    mInvisibilityEventTimeMs = paramLong;
+  }
+  
+  public void setOnScreenHeight(int paramInt)
+  {
+    mOnScreenHeightPx = paramInt;
+  }
+  
+  public void setOnScreenWidth(int paramInt)
+  {
+    mOnScreenWidthPx = paramInt;
+  }
+  
+  public void setPrefetch(boolean paramBoolean)
+  {
+    mIsPrefetch = paramBoolean;
+  }
+  
+  public void setRequestId(String paramString)
+  {
+    mRequestId = paramString;
+  }
+  
+  public void setUltimateProducerName(String paramString)
+  {
+    mUltimateProducerName = paramString;
+  }
+  
+  public void setVisibilityEventTimeMs(long paramLong)
+  {
+    mVisibilityEventTimeMs = paramLong;
+  }
+  
+  public void setVisible(boolean paramBoolean)
+  {
+    int i;
+    if (paramBoolean) {
+      i = 1;
+    } else {
+      i = 2;
+    }
+    mVisibilityState = i;
+  }
+  
+  public ImagePerfData snapshot()
+  {
+    return new ImagePerfData(mControllerId, mRequestId, mImageRequest, mCallerContext, mImageInfo, mControllerSubmitTimeMs, mControllerIntermediateImageSetTimeMs, mControllerFinalImageSetTimeMs, mControllerFailureTimeMs, mControllerCancelTimeMs, mImageRequestStartTimeMs, mImageRequestEndTimeMs, mImageOrigin, mUltimateProducerName, mIsPrefetch, mOnScreenWidthPx, mOnScreenHeightPx, mVisibilityState, mVisibilityEventTimeMs, mInvisibilityEventTimeMs, mComponentTag);
+  }
+}

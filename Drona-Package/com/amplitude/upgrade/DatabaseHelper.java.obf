@@ -1,0 +1,2823 @@
+package com.amplitude.api;
+
+import android.content.ContentValues;
+import android.content.Context;
+import android.database.Cursor;
+import android.database.sqlite.SQLiteDatabase;
+import android.database.sqlite.SQLiteException;
+import android.database.sqlite.SQLiteOpenHelper;
+import java.io.File;
+import java.util.HashMap;
+import java.util.List;
+import java.util.Map;
+import org.json.JSONException;
+import org.json.JSONObject;
+
+class DatabaseHelper
+  extends SQLiteOpenHelper
+{
+  private static final String CREATE_EVENTS_TABLE = "CREATE TABLE IF NOT EXISTS events (id INTEGER PRIMARY KEY AUTOINCREMENT, event TEXT);";
+  private static final String CREATE_IDENTIFYS_TABLE = "CREATE TABLE IF NOT EXISTS identifys (id INTEGER PRIMARY KEY AUTOINCREMENT, event TEXT);";
+  private static final String CREATE_LONG_STORE_TABLE = "CREATE TABLE IF NOT EXISTS long_store (key TEXT PRIMARY KEY NOT NULL, value INTEGER);";
+  private static final String CREATE_STORE_TABLE = "CREATE TABLE IF NOT EXISTS store (key TEXT PRIMARY KEY NOT NULL, value TEXT);";
+  private static final String EVENT_FIELD = "event";
+  protected static final String EVENT_TABLE_NAME = "events";
+  protected static final String IDENTIFY_TABLE_NAME = "identifys";
+  private static final String ID_FIELD = "id";
+  private static final String KEY_FIELD = "key";
+  protected static final String LONG_STORE_TABLE_NAME = "long_store";
+  protected static final String STORE_TABLE_NAME = "store";
+  private static final String TAG = "com.amplitude.api.DatabaseHelper";
+  private static final String VALUE_FIELD = "value";
+  static final Map<String, DatabaseHelper> instances = new HashMap();
+  private static final AmplitudeLog logger = AmplitudeLog.getLogger();
+  private boolean callResetListenerOnDatabaseReset = true;
+  private DatabaseResetListener databaseResetListener;
+  File file;
+  private String instanceName;
+  
+  protected DatabaseHelper(Context paramContext)
+  {
+    this(paramContext, null);
+  }
+  
+  protected DatabaseHelper(Context paramContext, String paramString)
+  {
+    super(paramContext, getDatabaseName(paramString), null, 3);
+    file = paramContext.getDatabasePath(getDatabaseName(paramString));
+    instanceName = Utils.normalizeInstanceName(paramString);
+  }
+  
+  /* Error */
+  private long addEventToTable(String paramString1, String paramString2)
+  {
+    // Byte code:
+    //   0: aload_0
+    //   1: monitorenter
+    //   2: aload_0
+    //   3: invokevirtual 112	com/amplitude/api/DatabaseHelper:getWritableDatabase	()Landroid/database/sqlite/SQLiteDatabase;
+    //   6: astore 7
+    //   8: new 114	android/content/ContentValues
+    //   11: dup
+    //   12: invokespecial 115	android/content/ContentValues:<init>	()V
+    //   15: astore 8
+    //   17: aload 8
+    //   19: ldc 20
+    //   21: aload_2
+    //   22: invokevirtual 119	android/content/ContentValues:put	(Ljava/lang/String;Ljava/lang/String;)V
+    //   25: aload_0
+    //   26: aload 7
+    //   28: aload_1
+    //   29: aload 8
+    //   31: invokevirtual 123	com/amplitude/api/DatabaseHelper:insertEventContentValuesIntoTable	(Landroid/database/sqlite/SQLiteDatabase;Ljava/lang/String;Landroid/content/ContentValues;)J
+    //   34: lstore_3
+    //   35: lload_3
+    //   36: lstore 5
+    //   38: lload_3
+    //   39: ldc2_w 124
+    //   42: lcmp
+    //   43: ifne +41 -> 84
+    //   46: getstatic 73	com/amplitude/api/DatabaseHelper:logger	Lcom/amplitude/api/AmplitudeLog;
+    //   49: ldc 41
+    //   51: ldc 127
+    //   53: iconst_1
+    //   54: anewarray 129	java/lang/Object
+    //   57: dup
+    //   58: iconst_0
+    //   59: aload_1
+    //   60: aastore
+    //   61: invokestatic 135	java/lang/String:format	(Ljava/lang/String;[Ljava/lang/Object;)Ljava/lang/String;
+    //   64: invokevirtual 139	com/amplitude/api/AmplitudeLog:w	(Ljava/lang/String;Ljava/lang/String;)I
+    //   67: pop
+    //   68: lload_3
+    //   69: lstore 5
+    //   71: goto +13 -> 84
+    //   74: astore 7
+    //   76: goto +25 -> 101
+    //   79: astore 7
+    //   81: goto +76 -> 157
+    //   84: aload_0
+    //   85: invokevirtual 142	com/amplitude/api/DatabaseHelper:close	()V
+    //   88: goto +125 -> 213
+    //   91: astore_1
+    //   92: goto +126 -> 218
+    //   95: astore 7
+    //   97: ldc2_w 124
+    //   100: lstore_3
+    //   101: getstatic 73	com/amplitude/api/DatabaseHelper:logger	Lcom/amplitude/api/AmplitudeLog;
+    //   104: ldc 41
+    //   106: ldc -112
+    //   108: iconst_1
+    //   109: anewarray 129	java/lang/Object
+    //   112: dup
+    //   113: iconst_0
+    //   114: aload_1
+    //   115: aastore
+    //   116: invokestatic 135	java/lang/String:format	(Ljava/lang/String;[Ljava/lang/Object;)Ljava/lang/String;
+    //   119: aload 7
+    //   121: invokevirtual 148	com/amplitude/api/AmplitudeLog:e	(Ljava/lang/String;Ljava/lang/String;Ljava/lang/Throwable;)I
+    //   124: pop
+    //   125: invokestatic 153	com/amplitude/api/Diagnostics:getLogger	()Lcom/amplitude/api/Diagnostics;
+    //   128: ldc -101
+    //   130: iconst_1
+    //   131: anewarray 129	java/lang/Object
+    //   134: dup
+    //   135: iconst_0
+    //   136: aload_2
+    //   137: aastore
+    //   138: invokestatic 135	java/lang/String:format	(Ljava/lang/String;[Ljava/lang/Object;)Ljava/lang/String;
+    //   141: aload 7
+    //   143: invokevirtual 159	com/amplitude/api/Diagnostics:logError	(Ljava/lang/String;Ljava/lang/Throwable;)Lcom/amplitude/api/Diagnostics;
+    //   146: pop
+    //   147: aload_0
+    //   148: invokespecial 162	com/amplitude/api/DatabaseHelper:delete	()V
+    //   151: lload_3
+    //   152: lstore 5
+    //   154: goto -70 -> 84
+    //   157: getstatic 73	com/amplitude/api/DatabaseHelper:logger	Lcom/amplitude/api/AmplitudeLog;
+    //   160: ldc 41
+    //   162: ldc -112
+    //   164: iconst_1
+    //   165: anewarray 129	java/lang/Object
+    //   168: dup
+    //   169: iconst_0
+    //   170: aload_1
+    //   171: aastore
+    //   172: invokestatic 135	java/lang/String:format	(Ljava/lang/String;[Ljava/lang/Object;)Ljava/lang/String;
+    //   175: aload 7
+    //   177: invokevirtual 148	com/amplitude/api/AmplitudeLog:e	(Ljava/lang/String;Ljava/lang/String;Ljava/lang/Throwable;)I
+    //   180: pop
+    //   181: invokestatic 153	com/amplitude/api/Diagnostics:getLogger	()Lcom/amplitude/api/Diagnostics;
+    //   184: ldc -101
+    //   186: iconst_1
+    //   187: anewarray 129	java/lang/Object
+    //   190: dup
+    //   191: iconst_0
+    //   192: aload_2
+    //   193: aastore
+    //   194: invokestatic 135	java/lang/String:format	(Ljava/lang/String;[Ljava/lang/Object;)Ljava/lang/String;
+    //   197: aload 7
+    //   199: invokevirtual 159	com/amplitude/api/Diagnostics:logError	(Ljava/lang/String;Ljava/lang/Throwable;)Lcom/amplitude/api/Diagnostics;
+    //   202: pop
+    //   203: aload_0
+    //   204: invokespecial 162	com/amplitude/api/DatabaseHelper:delete	()V
+    //   207: lload_3
+    //   208: lstore 5
+    //   210: goto -126 -> 84
+    //   213: aload_0
+    //   214: monitorexit
+    //   215: lload 5
+    //   217: lreturn
+    //   218: aload_0
+    //   219: invokevirtual 142	com/amplitude/api/DatabaseHelper:close	()V
+    //   222: aload_1
+    //   223: athrow
+    //   224: astore_1
+    //   225: aload_0
+    //   226: monitorexit
+    //   227: aload_1
+    //   228: athrow
+    //   229: astore 7
+    //   231: ldc2_w 124
+    //   234: lstore_3
+    //   235: goto -78 -> 157
+    // Local variable table:
+    //   start	length	slot	name	signature
+    //   0	238	0	this	DatabaseHelper
+    //   0	238	1	paramString1	String
+    //   0	238	2	paramString2	String
+    //   34	201	3	l1	long
+    //   36	180	5	l2	long
+    //   6	21	7	localSQLiteDatabase	SQLiteDatabase
+    //   74	1	7	localStackOverflowError1	StackOverflowError
+    //   79	1	7	localSQLiteException1	SQLiteException
+    //   95	103	7	localStackOverflowError2	StackOverflowError
+    //   229	1	7	localSQLiteException2	SQLiteException
+    //   15	15	8	localContentValues	ContentValues
+    // Exception table:
+    //   from	to	target	type
+    //   46	68	74	java/lang/StackOverflowError
+    //   46	68	79	android/database/sqlite/SQLiteException
+    //   2	35	91	finally
+    //   46	68	91	finally
+    //   101	151	91	finally
+    //   157	207	91	finally
+    //   2	35	95	java/lang/StackOverflowError
+    //   84	88	224	finally
+    //   218	224	224	finally
+    //   2	35	229	android/database/sqlite/SQLiteException
+  }
+  
+  private static void convertIfCursorWindowException(RuntimeException paramRuntimeException)
+  {
+    String str = paramRuntimeException.getMessage();
+    if ((!Utils.isEmptyString(str)) && (str.startsWith("Cursor window allocation of"))) {
+      throw new CursorWindowAllocationException(str);
+    }
+    throw paramRuntimeException;
+  }
+  
+  /* Error */
+  private void delete()
+  {
+    // Byte code:
+    //   0: aload_0
+    //   1: invokevirtual 142	com/amplitude/api/DatabaseHelper:close	()V
+    //   4: aload_0
+    //   5: getfield 95	com/amplitude/api/DatabaseHelper:file	Ljava/io/File;
+    //   8: invokevirtual 191	java/io/File:delete	()Z
+    //   11: pop
+    //   12: aload_0
+    //   13: getfield 193	com/amplitude/api/DatabaseHelper:databaseResetListener	Lcom/amplitude/api/DatabaseResetListener;
+    //   16: ifnull +331 -> 347
+    //   19: aload_0
+    //   20: getfield 87	com/amplitude/api/DatabaseHelper:callResetListenerOnDatabaseReset	Z
+    //   23: ifeq +324 -> 347
+    //   26: aload_0
+    //   27: iconst_0
+    //   28: putfield 87	com/amplitude/api/DatabaseHelper:callResetListenerOnDatabaseReset	Z
+    //   31: aload_0
+    //   32: invokevirtual 112	com/amplitude/api/DatabaseHelper:getWritableDatabase	()Landroid/database/sqlite/SQLiteDatabase;
+    //   35: astore_2
+    //   36: aload_2
+    //   37: astore_1
+    //   38: aload_0
+    //   39: getfield 193	com/amplitude/api/DatabaseHelper:databaseResetListener	Lcom/amplitude/api/DatabaseResetListener;
+    //   42: aload_2
+    //   43: invokeinterface 199 2 0
+    //   48: aload_0
+    //   49: iconst_1
+    //   50: putfield 87	com/amplitude/api/DatabaseHelper:callResetListenerOnDatabaseReset	Z
+    //   53: aload_2
+    //   54: ifnull +293 -> 347
+    //   57: aload_2
+    //   58: invokevirtual 204	android/database/sqlite/SQLiteDatabase:isOpen	()Z
+    //   61: ifeq +286 -> 347
+    //   64: aload_0
+    //   65: invokevirtual 142	com/amplitude/api/DatabaseHelper:close	()V
+    //   68: return
+    //   69: astore_2
+    //   70: goto +75 -> 145
+    //   73: astore_3
+    //   74: goto +12 -> 86
+    //   77: astore_2
+    //   78: aconst_null
+    //   79: astore_1
+    //   80: goto +65 -> 145
+    //   83: astore_3
+    //   84: aconst_null
+    //   85: astore_2
+    //   86: aload_2
+    //   87: astore_1
+    //   88: getstatic 73	com/amplitude/api/DatabaseHelper:logger	Lcom/amplitude/api/AmplitudeLog;
+    //   91: ldc 41
+    //   93: ldc -50
+    //   95: iconst_0
+    //   96: anewarray 129	java/lang/Object
+    //   99: invokestatic 135	java/lang/String:format	(Ljava/lang/String;[Ljava/lang/Object;)Ljava/lang/String;
+    //   102: aload_3
+    //   103: invokevirtual 148	com/amplitude/api/AmplitudeLog:e	(Ljava/lang/String;Ljava/lang/String;Ljava/lang/Throwable;)I
+    //   106: pop
+    //   107: aload_2
+    //   108: astore_1
+    //   109: invokestatic 153	com/amplitude/api/Diagnostics:getLogger	()Lcom/amplitude/api/Diagnostics;
+    //   112: ldc -48
+    //   114: iconst_0
+    //   115: anewarray 129	java/lang/Object
+    //   118: invokestatic 135	java/lang/String:format	(Ljava/lang/String;[Ljava/lang/Object;)Ljava/lang/String;
+    //   121: aload_3
+    //   122: invokevirtual 159	com/amplitude/api/Diagnostics:logError	(Ljava/lang/String;Ljava/lang/Throwable;)Lcom/amplitude/api/Diagnostics;
+    //   125: pop
+    //   126: aload_0
+    //   127: iconst_1
+    //   128: putfield 87	com/amplitude/api/DatabaseHelper:callResetListenerOnDatabaseReset	Z
+    //   131: aload_2
+    //   132: ifnull +215 -> 347
+    //   135: aload_2
+    //   136: invokevirtual 204	android/database/sqlite/SQLiteDatabase:isOpen	()Z
+    //   139: ifeq +208 -> 347
+    //   142: goto -78 -> 64
+    //   145: aload_0
+    //   146: iconst_1
+    //   147: putfield 87	com/amplitude/api/DatabaseHelper:callResetListenerOnDatabaseReset	Z
+    //   150: aload_1
+    //   151: ifnull +14 -> 165
+    //   154: aload_1
+    //   155: invokevirtual 204	android/database/sqlite/SQLiteDatabase:isOpen	()Z
+    //   158: ifeq +7 -> 165
+    //   161: aload_0
+    //   162: invokevirtual 142	com/amplitude/api/DatabaseHelper:close	()V
+    //   165: aload_2
+    //   166: athrow
+    //   167: astore 4
+    //   169: goto +179 -> 348
+    //   172: astore_1
+    //   173: getstatic 73	com/amplitude/api/DatabaseHelper:logger	Lcom/amplitude/api/AmplitudeLog;
+    //   176: ldc 41
+    //   178: ldc -46
+    //   180: aload_1
+    //   181: invokevirtual 148	com/amplitude/api/AmplitudeLog:e	(Ljava/lang/String;Ljava/lang/String;Ljava/lang/Throwable;)I
+    //   184: pop
+    //   185: invokestatic 153	com/amplitude/api/Diagnostics:getLogger	()Lcom/amplitude/api/Diagnostics;
+    //   188: ldc -44
+    //   190: invokevirtual 215	com/amplitude/api/Diagnostics:logError	(Ljava/lang/String;)Lcom/amplitude/api/Diagnostics;
+    //   193: pop
+    //   194: aload_0
+    //   195: getfield 193	com/amplitude/api/DatabaseHelper:databaseResetListener	Lcom/amplitude/api/DatabaseResetListener;
+    //   198: ifnull +149 -> 347
+    //   201: aload_0
+    //   202: getfield 87	com/amplitude/api/DatabaseHelper:callResetListenerOnDatabaseReset	Z
+    //   205: ifeq +142 -> 347
+    //   208: aload_0
+    //   209: iconst_0
+    //   210: putfield 87	com/amplitude/api/DatabaseHelper:callResetListenerOnDatabaseReset	Z
+    //   213: aload_0
+    //   214: invokevirtual 112	com/amplitude/api/DatabaseHelper:getWritableDatabase	()Landroid/database/sqlite/SQLiteDatabase;
+    //   217: astore_2
+    //   218: aload_2
+    //   219: astore_1
+    //   220: aload_0
+    //   221: getfield 193	com/amplitude/api/DatabaseHelper:databaseResetListener	Lcom/amplitude/api/DatabaseResetListener;
+    //   224: aload_2
+    //   225: invokeinterface 199 2 0
+    //   230: aload_0
+    //   231: iconst_1
+    //   232: putfield 87	com/amplitude/api/DatabaseHelper:callResetListenerOnDatabaseReset	Z
+    //   235: aload_2
+    //   236: ifnull +111 -> 347
+    //   239: aload_2
+    //   240: invokevirtual 204	android/database/sqlite/SQLiteDatabase:isOpen	()Z
+    //   243: ifeq +104 -> 347
+    //   246: goto -182 -> 64
+    //   249: astore_2
+    //   250: goto +75 -> 325
+    //   253: astore_3
+    //   254: goto +12 -> 266
+    //   257: astore_2
+    //   258: aconst_null
+    //   259: astore_1
+    //   260: goto +65 -> 325
+    //   263: astore_3
+    //   264: aconst_null
+    //   265: astore_2
+    //   266: aload_2
+    //   267: astore_1
+    //   268: getstatic 73	com/amplitude/api/DatabaseHelper:logger	Lcom/amplitude/api/AmplitudeLog;
+    //   271: ldc 41
+    //   273: ldc -50
+    //   275: iconst_0
+    //   276: anewarray 129	java/lang/Object
+    //   279: invokestatic 135	java/lang/String:format	(Ljava/lang/String;[Ljava/lang/Object;)Ljava/lang/String;
+    //   282: aload_3
+    //   283: invokevirtual 148	com/amplitude/api/AmplitudeLog:e	(Ljava/lang/String;Ljava/lang/String;Ljava/lang/Throwable;)I
+    //   286: pop
+    //   287: aload_2
+    //   288: astore_1
+    //   289: invokestatic 153	com/amplitude/api/Diagnostics:getLogger	()Lcom/amplitude/api/Diagnostics;
+    //   292: ldc -48
+    //   294: iconst_0
+    //   295: anewarray 129	java/lang/Object
+    //   298: invokestatic 135	java/lang/String:format	(Ljava/lang/String;[Ljava/lang/Object;)Ljava/lang/String;
+    //   301: aload_3
+    //   302: invokevirtual 159	com/amplitude/api/Diagnostics:logError	(Ljava/lang/String;Ljava/lang/Throwable;)Lcom/amplitude/api/Diagnostics;
+    //   305: pop
+    //   306: aload_0
+    //   307: iconst_1
+    //   308: putfield 87	com/amplitude/api/DatabaseHelper:callResetListenerOnDatabaseReset	Z
+    //   311: aload_2
+    //   312: ifnull +35 -> 347
+    //   315: aload_2
+    //   316: invokevirtual 204	android/database/sqlite/SQLiteDatabase:isOpen	()Z
+    //   319: ifeq +28 -> 347
+    //   322: goto -258 -> 64
+    //   325: aload_0
+    //   326: iconst_1
+    //   327: putfield 87	com/amplitude/api/DatabaseHelper:callResetListenerOnDatabaseReset	Z
+    //   330: aload_1
+    //   331: ifnull +14 -> 345
+    //   334: aload_1
+    //   335: invokevirtual 204	android/database/sqlite/SQLiteDatabase:isOpen	()Z
+    //   338: ifeq +7 -> 345
+    //   341: aload_0
+    //   342: invokevirtual 142	com/amplitude/api/DatabaseHelper:close	()V
+    //   345: aload_2
+    //   346: athrow
+    //   347: return
+    //   348: aload_0
+    //   349: getfield 193	com/amplitude/api/DatabaseHelper:databaseResetListener	Lcom/amplitude/api/DatabaseResetListener;
+    //   352: ifnull +153 -> 505
+    //   355: aload_0
+    //   356: getfield 87	com/amplitude/api/DatabaseHelper:callResetListenerOnDatabaseReset	Z
+    //   359: ifeq +146 -> 505
+    //   362: aload_0
+    //   363: iconst_0
+    //   364: putfield 87	com/amplitude/api/DatabaseHelper:callResetListenerOnDatabaseReset	Z
+    //   367: aload_0
+    //   368: invokevirtual 112	com/amplitude/api/DatabaseHelper:getWritableDatabase	()Landroid/database/sqlite/SQLiteDatabase;
+    //   371: astore_2
+    //   372: aload_2
+    //   373: astore_1
+    //   374: aload_0
+    //   375: getfield 193	com/amplitude/api/DatabaseHelper:databaseResetListener	Lcom/amplitude/api/DatabaseResetListener;
+    //   378: aload_2
+    //   379: invokeinterface 199 2 0
+    //   384: aload_0
+    //   385: iconst_1
+    //   386: putfield 87	com/amplitude/api/DatabaseHelper:callResetListenerOnDatabaseReset	Z
+    //   389: aload_2
+    //   390: ifnull +115 -> 505
+    //   393: aload_2
+    //   394: invokevirtual 204	android/database/sqlite/SQLiteDatabase:isOpen	()Z
+    //   397: ifeq +108 -> 505
+    //   400: aload_0
+    //   401: invokevirtual 142	com/amplitude/api/DatabaseHelper:close	()V
+    //   404: goto +101 -> 505
+    //   407: astore_2
+    //   408: goto +75 -> 483
+    //   411: astore_3
+    //   412: goto +12 -> 424
+    //   415: astore_2
+    //   416: aconst_null
+    //   417: astore_1
+    //   418: goto +65 -> 483
+    //   421: astore_3
+    //   422: aconst_null
+    //   423: astore_2
+    //   424: aload_2
+    //   425: astore_1
+    //   426: getstatic 73	com/amplitude/api/DatabaseHelper:logger	Lcom/amplitude/api/AmplitudeLog;
+    //   429: ldc 41
+    //   431: ldc -50
+    //   433: iconst_0
+    //   434: anewarray 129	java/lang/Object
+    //   437: invokestatic 135	java/lang/String:format	(Ljava/lang/String;[Ljava/lang/Object;)Ljava/lang/String;
+    //   440: aload_3
+    //   441: invokevirtual 148	com/amplitude/api/AmplitudeLog:e	(Ljava/lang/String;Ljava/lang/String;Ljava/lang/Throwable;)I
+    //   444: pop
+    //   445: aload_2
+    //   446: astore_1
+    //   447: invokestatic 153	com/amplitude/api/Diagnostics:getLogger	()Lcom/amplitude/api/Diagnostics;
+    //   450: ldc -48
+    //   452: iconst_0
+    //   453: anewarray 129	java/lang/Object
+    //   456: invokestatic 135	java/lang/String:format	(Ljava/lang/String;[Ljava/lang/Object;)Ljava/lang/String;
+    //   459: aload_3
+    //   460: invokevirtual 159	com/amplitude/api/Diagnostics:logError	(Ljava/lang/String;Ljava/lang/Throwable;)Lcom/amplitude/api/Diagnostics;
+    //   463: pop
+    //   464: aload_0
+    //   465: iconst_1
+    //   466: putfield 87	com/amplitude/api/DatabaseHelper:callResetListenerOnDatabaseReset	Z
+    //   469: aload_2
+    //   470: ifnull +35 -> 505
+    //   473: aload_2
+    //   474: invokevirtual 204	android/database/sqlite/SQLiteDatabase:isOpen	()Z
+    //   477: ifeq +28 -> 505
+    //   480: goto -80 -> 400
+    //   483: aload_0
+    //   484: iconst_1
+    //   485: putfield 87	com/amplitude/api/DatabaseHelper:callResetListenerOnDatabaseReset	Z
+    //   488: aload_1
+    //   489: ifnull +14 -> 503
+    //   492: aload_1
+    //   493: invokevirtual 204	android/database/sqlite/SQLiteDatabase:isOpen	()Z
+    //   496: ifeq +7 -> 503
+    //   499: aload_0
+    //   500: invokevirtual 142	com/amplitude/api/DatabaseHelper:close	()V
+    //   503: aload_2
+    //   504: athrow
+    //   505: aload 4
+    //   507: athrow
+    // Local variable table:
+    //   start	length	slot	name	signature
+    //   0	508	0	this	DatabaseHelper
+    //   37	118	1	localSQLiteDatabase1	SQLiteDatabase
+    //   172	9	1	localSecurityException	SecurityException
+    //   219	274	1	localObject1	Object
+    //   35	23	2	localSQLiteDatabase2	SQLiteDatabase
+    //   69	1	2	localObject2	Object
+    //   77	1	2	localObject3	Object
+    //   85	155	2	localSQLiteDatabase3	SQLiteDatabase
+    //   249	1	2	localObject4	Object
+    //   257	1	2	localObject5	Object
+    //   265	129	2	localSQLiteDatabase4	SQLiteDatabase
+    //   407	1	2	localObject6	Object
+    //   415	1	2	localObject7	Object
+    //   423	81	2	localObject8	Object
+    //   73	1	3	localSQLiteException1	SQLiteException
+    //   83	39	3	localSQLiteException2	SQLiteException
+    //   253	1	3	localSQLiteException3	SQLiteException
+    //   263	39	3	localSQLiteException4	SQLiteException
+    //   411	1	3	localSQLiteException5	SQLiteException
+    //   421	39	3	localSQLiteException6	SQLiteException
+    //   167	339	4	localObject9	Object
+    // Exception table:
+    //   from	to	target	type
+    //   38	48	69	finally
+    //   88	107	69	finally
+    //   109	126	69	finally
+    //   38	48	73	android/database/sqlite/SQLiteException
+    //   31	36	77	finally
+    //   31	36	83	android/database/sqlite/SQLiteException
+    //   0	12	167	finally
+    //   173	194	167	finally
+    //   0	12	172	java/lang/SecurityException
+    //   220	230	249	finally
+    //   268	287	249	finally
+    //   289	306	249	finally
+    //   220	230	253	android/database/sqlite/SQLiteException
+    //   213	218	257	finally
+    //   213	218	263	android/database/sqlite/SQLiteException
+    //   374	384	407	finally
+    //   426	445	407	finally
+    //   447	464	407	finally
+    //   374	384	411	android/database/sqlite/SQLiteException
+    //   367	372	415	finally
+    //   367	372	421	android/database/sqlite/SQLiteException
+  }
+  
+  @Deprecated
+  static DatabaseHelper getDatabaseHelper(Context paramContext)
+  {
+    return getDatabaseHelper(paramContext, null);
+  }
+  
+  static DatabaseHelper getDatabaseHelper(Context paramContext, String paramString)
+  {
+    try
+    {
+      String str = Utils.normalizeInstanceName(paramString);
+      DatabaseHelper localDatabaseHelper = (DatabaseHelper)instances.get(str);
+      paramString = localDatabaseHelper;
+      if (localDatabaseHelper == null)
+      {
+        paramString = new DatabaseHelper(paramContext.getApplicationContext(), str);
+        instances.put(str, paramString);
+      }
+      return paramString;
+    }
+    finally {}
+  }
+  
+  private static String getDatabaseName(String paramString)
+  {
+    if ((!Utils.isEmptyString(paramString)) && (!paramString.equals("$default_instance")))
+    {
+      StringBuilder localStringBuilder = new StringBuilder();
+      localStringBuilder.append("com.amplitude.api_");
+      localStringBuilder.append(paramString);
+      return localStringBuilder.toString();
+    }
+    return "com.amplitude.api";
+  }
+  
+  /* Error */
+  private long getEventCountFromTable(String paramString)
+  {
+    // Byte code:
+    //   0: aload_0
+    //   1: monitorenter
+    //   2: lconst_0
+    //   3: lstore_2
+    //   4: aconst_null
+    //   5: astore 9
+    //   7: aconst_null
+    //   8: astore 10
+    //   10: aconst_null
+    //   11: astore 7
+    //   13: aload 7
+    //   15: astore 6
+    //   17: aload_0
+    //   18: invokevirtual 260	com/amplitude/api/DatabaseHelper:getReadableDatabase	()Landroid/database/sqlite/SQLiteDatabase;
+    //   21: astore 8
+    //   23: aload 7
+    //   25: astore 6
+    //   27: new 243	java/lang/StringBuilder
+    //   30: dup
+    //   31: invokespecial 244	java/lang/StringBuilder:<init>	()V
+    //   34: astore 11
+    //   36: aload 7
+    //   38: astore 6
+    //   40: aload 11
+    //   42: ldc_w 262
+    //   45: invokevirtual 250	java/lang/StringBuilder:append	(Ljava/lang/String;)Ljava/lang/StringBuilder;
+    //   48: pop
+    //   49: aload 7
+    //   51: astore 6
+    //   53: aload 11
+    //   55: aload_1
+    //   56: invokevirtual 250	java/lang/StringBuilder:append	(Ljava/lang/String;)Ljava/lang/StringBuilder;
+    //   59: pop
+    //   60: aload 7
+    //   62: astore 6
+    //   64: aload 8
+    //   66: aload 11
+    //   68: invokevirtual 253	java/lang/StringBuilder:toString	()Ljava/lang/String;
+    //   71: invokevirtual 266	android/database/sqlite/SQLiteDatabase:compileStatement	(Ljava/lang/String;)Landroid/database/sqlite/SQLiteStatement;
+    //   74: astore 7
+    //   76: aload 7
+    //   78: invokevirtual 272	android/database/sqlite/SQLiteStatement:simpleQueryForLong	()J
+    //   81: lstore 4
+    //   83: aload 7
+    //   85: ifnull +8 -> 93
+    //   88: aload 7
+    //   90: invokevirtual 273	android/database/sqlite/SQLiteStatement:close	()V
+    //   93: aload_0
+    //   94: invokevirtual 142	com/amplitude/api/DatabaseHelper:close	()V
+    //   97: lload 4
+    //   99: lstore_2
+    //   100: goto +203 -> 303
+    //   103: astore_1
+    //   104: aload 7
+    //   106: astore 6
+    //   108: goto +199 -> 307
+    //   111: astore 6
+    //   113: aload 6
+    //   115: astore 8
+    //   117: goto +22 -> 139
+    //   120: astore 6
+    //   122: aload 6
+    //   124: astore 8
+    //   126: goto +100 -> 226
+    //   129: astore_1
+    //   130: goto +177 -> 307
+    //   133: astore 8
+    //   135: aload 9
+    //   137: astore 7
+    //   139: aload 7
+    //   141: astore 6
+    //   143: getstatic 73	com/amplitude/api/DatabaseHelper:logger	Lcom/amplitude/api/AmplitudeLog;
+    //   146: ldc 41
+    //   148: ldc_w 275
+    //   151: iconst_1
+    //   152: anewarray 129	java/lang/Object
+    //   155: dup
+    //   156: iconst_0
+    //   157: aload_1
+    //   158: aastore
+    //   159: invokestatic 135	java/lang/String:format	(Ljava/lang/String;[Ljava/lang/Object;)Ljava/lang/String;
+    //   162: aload 8
+    //   164: invokevirtual 148	com/amplitude/api/AmplitudeLog:e	(Ljava/lang/String;Ljava/lang/String;Ljava/lang/Throwable;)I
+    //   167: pop
+    //   168: aload 7
+    //   170: astore 6
+    //   172: invokestatic 153	com/amplitude/api/Diagnostics:getLogger	()Lcom/amplitude/api/Diagnostics;
+    //   175: ldc_w 277
+    //   178: iconst_1
+    //   179: anewarray 129	java/lang/Object
+    //   182: dup
+    //   183: iconst_0
+    //   184: aload_1
+    //   185: aastore
+    //   186: invokestatic 135	java/lang/String:format	(Ljava/lang/String;[Ljava/lang/Object;)Ljava/lang/String;
+    //   189: aload 8
+    //   191: invokevirtual 159	com/amplitude/api/Diagnostics:logError	(Ljava/lang/String;Ljava/lang/Throwable;)Lcom/amplitude/api/Diagnostics;
+    //   194: pop
+    //   195: aload 7
+    //   197: astore 6
+    //   199: aload_0
+    //   200: invokespecial 162	com/amplitude/api/DatabaseHelper:delete	()V
+    //   203: aload 7
+    //   205: ifnull +8 -> 213
+    //   208: aload 7
+    //   210: invokevirtual 273	android/database/sqlite/SQLiteStatement:close	()V
+    //   213: aload_0
+    //   214: invokevirtual 142	com/amplitude/api/DatabaseHelper:close	()V
+    //   217: goto +86 -> 303
+    //   220: astore 8
+    //   222: aload 10
+    //   224: astore 7
+    //   226: aload 7
+    //   228: astore 6
+    //   230: getstatic 73	com/amplitude/api/DatabaseHelper:logger	Lcom/amplitude/api/AmplitudeLog;
+    //   233: ldc 41
+    //   235: ldc_w 275
+    //   238: iconst_1
+    //   239: anewarray 129	java/lang/Object
+    //   242: dup
+    //   243: iconst_0
+    //   244: aload_1
+    //   245: aastore
+    //   246: invokestatic 135	java/lang/String:format	(Ljava/lang/String;[Ljava/lang/Object;)Ljava/lang/String;
+    //   249: aload 8
+    //   251: invokevirtual 148	com/amplitude/api/AmplitudeLog:e	(Ljava/lang/String;Ljava/lang/String;Ljava/lang/Throwable;)I
+    //   254: pop
+    //   255: aload 7
+    //   257: astore 6
+    //   259: invokestatic 153	com/amplitude/api/Diagnostics:getLogger	()Lcom/amplitude/api/Diagnostics;
+    //   262: ldc_w 277
+    //   265: iconst_1
+    //   266: anewarray 129	java/lang/Object
+    //   269: dup
+    //   270: iconst_0
+    //   271: aload_1
+    //   272: aastore
+    //   273: invokestatic 135	java/lang/String:format	(Ljava/lang/String;[Ljava/lang/Object;)Ljava/lang/String;
+    //   276: aload 8
+    //   278: invokevirtual 159	com/amplitude/api/Diagnostics:logError	(Ljava/lang/String;Ljava/lang/Throwable;)Lcom/amplitude/api/Diagnostics;
+    //   281: pop
+    //   282: aload 7
+    //   284: astore 6
+    //   286: aload_0
+    //   287: invokespecial 162	com/amplitude/api/DatabaseHelper:delete	()V
+    //   290: aload 7
+    //   292: ifnull -79 -> 213
+    //   295: aload 7
+    //   297: invokevirtual 273	android/database/sqlite/SQLiteStatement:close	()V
+    //   300: goto -87 -> 213
+    //   303: aload_0
+    //   304: monitorexit
+    //   305: lload_2
+    //   306: lreturn
+    //   307: aload 6
+    //   309: ifnull +11 -> 320
+    //   312: aload 6
+    //   314: invokevirtual 273	android/database/sqlite/SQLiteStatement:close	()V
+    //   317: goto +3 -> 320
+    //   320: aload_0
+    //   321: invokevirtual 142	com/amplitude/api/DatabaseHelper:close	()V
+    //   324: aload_1
+    //   325: athrow
+    //   326: aload_0
+    //   327: monitorexit
+    //   328: aload_1
+    //   329: athrow
+    //   330: astore_1
+    //   331: goto -5 -> 326
+    // Local variable table:
+    //   start	length	slot	name	signature
+    //   0	334	0	this	DatabaseHelper
+    //   0	334	1	paramString	String
+    //   3	303	2	l1	long
+    //   81	17	4	l2	long
+    //   15	92	6	localObject1	Object
+    //   111	3	6	localStackOverflowError1	StackOverflowError
+    //   120	3	6	localSQLiteException1	SQLiteException
+    //   141	172	6	localObject2	Object
+    //   11	285	7	localObject3	Object
+    //   21	104	8	localObject4	Object
+    //   133	57	8	localStackOverflowError2	StackOverflowError
+    //   220	57	8	localSQLiteException2	SQLiteException
+    //   5	131	9	localObject5	Object
+    //   8	215	10	localObject6	Object
+    //   34	33	11	localStringBuilder	StringBuilder
+    // Exception table:
+    //   from	to	target	type
+    //   76	83	103	finally
+    //   76	83	111	java/lang/StackOverflowError
+    //   76	83	120	android/database/sqlite/SQLiteException
+    //   17	23	129	finally
+    //   27	36	129	finally
+    //   40	49	129	finally
+    //   53	60	129	finally
+    //   64	76	129	finally
+    //   143	168	129	finally
+    //   172	195	129	finally
+    //   199	203	129	finally
+    //   230	255	129	finally
+    //   259	282	129	finally
+    //   286	290	129	finally
+    //   17	23	133	java/lang/StackOverflowError
+    //   27	36	133	java/lang/StackOverflowError
+    //   40	49	133	java/lang/StackOverflowError
+    //   53	60	133	java/lang/StackOverflowError
+    //   64	76	133	java/lang/StackOverflowError
+    //   17	23	220	android/database/sqlite/SQLiteException
+    //   27	36	220	android/database/sqlite/SQLiteException
+    //   40	49	220	android/database/sqlite/SQLiteException
+    //   53	60	220	android/database/sqlite/SQLiteException
+    //   64	76	220	android/database/sqlite/SQLiteException
+    //   88	93	330	finally
+    //   93	97	330	finally
+    //   208	213	330	finally
+    //   213	217	330	finally
+    //   295	300	330	finally
+    //   312	317	330	finally
+    //   320	326	330	finally
+  }
+  
+  /* Error */
+  private long getNthEventIdFromTable(String paramString, long paramLong)
+  {
+    // Byte code:
+    //   0: aload_0
+    //   1: monitorenter
+    //   2: aconst_null
+    //   3: astore 11
+    //   5: aconst_null
+    //   6: astore 12
+    //   8: aconst_null
+    //   9: astore 9
+    //   11: ldc2_w 124
+    //   14: lstore 4
+    //   16: aload 9
+    //   18: astore 8
+    //   20: aload_0
+    //   21: invokevirtual 260	com/amplitude/api/DatabaseHelper:getReadableDatabase	()Landroid/database/sqlite/SQLiteDatabase;
+    //   24: astore 10
+    //   26: aload 9
+    //   28: astore 8
+    //   30: new 243	java/lang/StringBuilder
+    //   33: dup
+    //   34: invokespecial 244	java/lang/StringBuilder:<init>	()V
+    //   37: astore 13
+    //   39: aload 9
+    //   41: astore 8
+    //   43: aload 13
+    //   45: ldc_w 283
+    //   48: invokevirtual 250	java/lang/StringBuilder:append	(Ljava/lang/String;)Ljava/lang/StringBuilder;
+    //   51: pop
+    //   52: aload 9
+    //   54: astore 8
+    //   56: aload 13
+    //   58: aload_1
+    //   59: invokevirtual 250	java/lang/StringBuilder:append	(Ljava/lang/String;)Ljava/lang/StringBuilder;
+    //   62: pop
+    //   63: aload 9
+    //   65: astore 8
+    //   67: aload 13
+    //   69: ldc_w 285
+    //   72: invokevirtual 250	java/lang/StringBuilder:append	(Ljava/lang/String;)Ljava/lang/StringBuilder;
+    //   75: pop
+    //   76: aload 9
+    //   78: astore 8
+    //   80: aload 13
+    //   82: lload_2
+    //   83: lconst_1
+    //   84: lsub
+    //   85: invokevirtual 288	java/lang/StringBuilder:append	(J)Ljava/lang/StringBuilder;
+    //   88: pop
+    //   89: aload 9
+    //   91: astore 8
+    //   93: aload 10
+    //   95: aload 13
+    //   97: invokevirtual 253	java/lang/StringBuilder:toString	()Ljava/lang/String;
+    //   100: invokevirtual 266	android/database/sqlite/SQLiteDatabase:compileStatement	(Ljava/lang/String;)Landroid/database/sqlite/SQLiteStatement;
+    //   103: astore 9
+    //   105: aload 9
+    //   107: invokevirtual 272	android/database/sqlite/SQLiteStatement:simpleQueryForLong	()J
+    //   110: lstore_2
+    //   111: goto +37 -> 148
+    //   114: astore_1
+    //   115: aload 9
+    //   117: astore 8
+    //   119: goto +243 -> 362
+    //   122: astore 10
+    //   124: goto +57 -> 181
+    //   127: astore 10
+    //   129: goto +143 -> 272
+    //   132: astore 8
+    //   134: getstatic 73	com/amplitude/api/DatabaseHelper:logger	Lcom/amplitude/api/AmplitudeLog;
+    //   137: ldc 41
+    //   139: aload 8
+    //   141: invokevirtual 291	com/amplitude/api/AmplitudeLog:w	(Ljava/lang/String;Ljava/lang/Throwable;)I
+    //   144: pop
+    //   145: lload 4
+    //   147: lstore_2
+    //   148: lload_2
+    //   149: lstore 6
+    //   151: aload 9
+    //   153: ifnull +11 -> 164
+    //   156: aload 9
+    //   158: invokevirtual 273	android/database/sqlite/SQLiteStatement:close	()V
+    //   161: lload_2
+    //   162: lstore 6
+    //   164: aload_0
+    //   165: invokevirtual 142	com/amplitude/api/DatabaseHelper:close	()V
+    //   168: goto +189 -> 357
+    //   171: astore_1
+    //   172: goto +190 -> 362
+    //   175: astore 10
+    //   177: aload 11
+    //   179: astore 9
+    //   181: aload 9
+    //   183: astore 8
+    //   185: getstatic 73	com/amplitude/api/DatabaseHelper:logger	Lcom/amplitude/api/AmplitudeLog;
+    //   188: ldc 41
+    //   190: ldc_w 293
+    //   193: iconst_1
+    //   194: anewarray 129	java/lang/Object
+    //   197: dup
+    //   198: iconst_0
+    //   199: aload_1
+    //   200: aastore
+    //   201: invokestatic 135	java/lang/String:format	(Ljava/lang/String;[Ljava/lang/Object;)Ljava/lang/String;
+    //   204: aload 10
+    //   206: invokevirtual 148	com/amplitude/api/AmplitudeLog:e	(Ljava/lang/String;Ljava/lang/String;Ljava/lang/Throwable;)I
+    //   209: pop
+    //   210: aload 9
+    //   212: astore 8
+    //   214: invokestatic 153	com/amplitude/api/Diagnostics:getLogger	()Lcom/amplitude/api/Diagnostics;
+    //   217: ldc_w 295
+    //   220: iconst_1
+    //   221: anewarray 129	java/lang/Object
+    //   224: dup
+    //   225: iconst_0
+    //   226: aload_1
+    //   227: aastore
+    //   228: invokestatic 135	java/lang/String:format	(Ljava/lang/String;[Ljava/lang/Object;)Ljava/lang/String;
+    //   231: aload 10
+    //   233: invokevirtual 159	com/amplitude/api/Diagnostics:logError	(Ljava/lang/String;Ljava/lang/Throwable;)Lcom/amplitude/api/Diagnostics;
+    //   236: pop
+    //   237: aload 9
+    //   239: astore 8
+    //   241: aload_0
+    //   242: invokespecial 162	com/amplitude/api/DatabaseHelper:delete	()V
+    //   245: lload 4
+    //   247: lstore 6
+    //   249: aload 9
+    //   251: ifnull -87 -> 164
+    //   254: aload 9
+    //   256: invokevirtual 273	android/database/sqlite/SQLiteStatement:close	()V
+    //   259: lload 4
+    //   261: lstore 6
+    //   263: goto -99 -> 164
+    //   266: astore 10
+    //   268: aload 12
+    //   270: astore 9
+    //   272: aload 9
+    //   274: astore 8
+    //   276: getstatic 73	com/amplitude/api/DatabaseHelper:logger	Lcom/amplitude/api/AmplitudeLog;
+    //   279: ldc 41
+    //   281: ldc_w 293
+    //   284: iconst_1
+    //   285: anewarray 129	java/lang/Object
+    //   288: dup
+    //   289: iconst_0
+    //   290: aload_1
+    //   291: aastore
+    //   292: invokestatic 135	java/lang/String:format	(Ljava/lang/String;[Ljava/lang/Object;)Ljava/lang/String;
+    //   295: aload 10
+    //   297: invokevirtual 148	com/amplitude/api/AmplitudeLog:e	(Ljava/lang/String;Ljava/lang/String;Ljava/lang/Throwable;)I
+    //   300: pop
+    //   301: aload 9
+    //   303: astore 8
+    //   305: invokestatic 153	com/amplitude/api/Diagnostics:getLogger	()Lcom/amplitude/api/Diagnostics;
+    //   308: ldc_w 295
+    //   311: iconst_1
+    //   312: anewarray 129	java/lang/Object
+    //   315: dup
+    //   316: iconst_0
+    //   317: aload_1
+    //   318: aastore
+    //   319: invokestatic 135	java/lang/String:format	(Ljava/lang/String;[Ljava/lang/Object;)Ljava/lang/String;
+    //   322: aload 10
+    //   324: invokevirtual 159	com/amplitude/api/Diagnostics:logError	(Ljava/lang/String;Ljava/lang/Throwable;)Lcom/amplitude/api/Diagnostics;
+    //   327: pop
+    //   328: aload 9
+    //   330: astore 8
+    //   332: aload_0
+    //   333: invokespecial 162	com/amplitude/api/DatabaseHelper:delete	()V
+    //   336: lload 4
+    //   338: lstore 6
+    //   340: aload 9
+    //   342: ifnull -178 -> 164
+    //   345: aload 9
+    //   347: invokevirtual 273	android/database/sqlite/SQLiteStatement:close	()V
+    //   350: lload 4
+    //   352: lstore 6
+    //   354: goto -190 -> 164
+    //   357: aload_0
+    //   358: monitorexit
+    //   359: lload 6
+    //   361: lreturn
+    //   362: aload 8
+    //   364: ifnull +11 -> 375
+    //   367: aload 8
+    //   369: invokevirtual 273	android/database/sqlite/SQLiteStatement:close	()V
+    //   372: goto +3 -> 375
+    //   375: aload_0
+    //   376: invokevirtual 142	com/amplitude/api/DatabaseHelper:close	()V
+    //   379: aload_1
+    //   380: athrow
+    //   381: aload_0
+    //   382: monitorexit
+    //   383: aload_1
+    //   384: athrow
+    //   385: astore_1
+    //   386: goto -5 -> 381
+    // Local variable table:
+    //   start	length	slot	name	signature
+    //   0	389	0	this	DatabaseHelper
+    //   0	389	1	paramString	String
+    //   0	389	2	paramLong	long
+    //   14	337	4	l1	long
+    //   149	211	6	l2	long
+    //   18	100	8	localObject1	Object
+    //   132	8	8	localSQLiteDoneException	android.database.sqlite.SQLiteDoneException
+    //   183	185	8	localObject2	Object
+    //   9	337	9	localObject3	Object
+    //   24	70	10	localSQLiteDatabase	SQLiteDatabase
+    //   122	1	10	localStackOverflowError1	StackOverflowError
+    //   127	1	10	localSQLiteException1	SQLiteException
+    //   175	57	10	localStackOverflowError2	StackOverflowError
+    //   266	57	10	localSQLiteException2	SQLiteException
+    //   3	175	11	localObject4	Object
+    //   6	263	12	localObject5	Object
+    //   37	59	13	localStringBuilder	StringBuilder
+    // Exception table:
+    //   from	to	target	type
+    //   105	111	114	finally
+    //   134	145	114	finally
+    //   105	111	122	java/lang/StackOverflowError
+    //   134	145	122	java/lang/StackOverflowError
+    //   105	111	127	android/database/sqlite/SQLiteException
+    //   134	145	127	android/database/sqlite/SQLiteException
+    //   105	111	132	android/database/sqlite/SQLiteDoneException
+    //   20	26	171	finally
+    //   30	39	171	finally
+    //   43	52	171	finally
+    //   56	63	171	finally
+    //   67	76	171	finally
+    //   80	89	171	finally
+    //   93	105	171	finally
+    //   185	210	171	finally
+    //   214	237	171	finally
+    //   241	245	171	finally
+    //   276	301	171	finally
+    //   305	328	171	finally
+    //   332	336	171	finally
+    //   20	26	175	java/lang/StackOverflowError
+    //   30	39	175	java/lang/StackOverflowError
+    //   43	52	175	java/lang/StackOverflowError
+    //   56	63	175	java/lang/StackOverflowError
+    //   67	76	175	java/lang/StackOverflowError
+    //   80	89	175	java/lang/StackOverflowError
+    //   93	105	175	java/lang/StackOverflowError
+    //   20	26	266	android/database/sqlite/SQLiteException
+    //   30	39	266	android/database/sqlite/SQLiteException
+    //   43	52	266	android/database/sqlite/SQLiteException
+    //   56	63	266	android/database/sqlite/SQLiteException
+    //   67	76	266	android/database/sqlite/SQLiteException
+    //   80	89	266	android/database/sqlite/SQLiteException
+    //   93	105	266	android/database/sqlite/SQLiteException
+    //   156	161	385	finally
+    //   164	168	385	finally
+    //   254	259	385	finally
+    //   345	350	385	finally
+    //   367	372	385	finally
+    //   375	381	385	finally
+  }
+  
+  private void handleIfCursorRowTooLargeException(IllegalStateException paramIllegalStateException)
+  {
+    String str = paramIllegalStateException.getMessage();
+    if ((!Utils.isEmptyString(str)) && (str.contains("Couldn't read")) && (str.contains("CursorWindow")))
+    {
+      delete();
+      return;
+    }
+    throw paramIllegalStateException;
+  }
+  
+  /* Error */
+  private void removeEventFromTable(String paramString, long paramLong)
+  {
+    // Byte code:
+    //   0: aload_0
+    //   1: monitorenter
+    //   2: aload_0
+    //   3: invokevirtual 112	com/amplitude/api/DatabaseHelper:getWritableDatabase	()Landroid/database/sqlite/SQLiteDatabase;
+    //   6: astore 4
+    //   8: new 243	java/lang/StringBuilder
+    //   11: dup
+    //   12: invokespecial 244	java/lang/StringBuilder:<init>	()V
+    //   15: astore 5
+    //   17: aload 5
+    //   19: ldc_w 312
+    //   22: invokevirtual 250	java/lang/StringBuilder:append	(Ljava/lang/String;)Ljava/lang/StringBuilder;
+    //   25: pop
+    //   26: aload 5
+    //   28: lload_2
+    //   29: invokevirtual 288	java/lang/StringBuilder:append	(J)Ljava/lang/StringBuilder;
+    //   32: pop
+    //   33: aload 4
+    //   35: aload_1
+    //   36: aload 5
+    //   38: invokevirtual 253	java/lang/StringBuilder:toString	()Ljava/lang/String;
+    //   41: aconst_null
+    //   42: invokevirtual 315	android/database/sqlite/SQLiteDatabase:delete	(Ljava/lang/String;Ljava/lang/String;[Ljava/lang/String;)I
+    //   45: pop
+    //   46: aload_0
+    //   47: invokevirtual 142	com/amplitude/api/DatabaseHelper:close	()V
+    //   50: goto +121 -> 171
+    //   53: astore_1
+    //   54: goto +120 -> 174
+    //   57: astore 4
+    //   59: getstatic 73	com/amplitude/api/DatabaseHelper:logger	Lcom/amplitude/api/AmplitudeLog;
+    //   62: ldc 41
+    //   64: ldc_w 317
+    //   67: iconst_1
+    //   68: anewarray 129	java/lang/Object
+    //   71: dup
+    //   72: iconst_0
+    //   73: aload_1
+    //   74: aastore
+    //   75: invokestatic 135	java/lang/String:format	(Ljava/lang/String;[Ljava/lang/Object;)Ljava/lang/String;
+    //   78: aload 4
+    //   80: invokevirtual 148	com/amplitude/api/AmplitudeLog:e	(Ljava/lang/String;Ljava/lang/String;Ljava/lang/Throwable;)I
+    //   83: pop
+    //   84: invokestatic 153	com/amplitude/api/Diagnostics:getLogger	()Lcom/amplitude/api/Diagnostics;
+    //   87: ldc_w 319
+    //   90: iconst_1
+    //   91: anewarray 129	java/lang/Object
+    //   94: dup
+    //   95: iconst_0
+    //   96: aload_1
+    //   97: aastore
+    //   98: invokestatic 135	java/lang/String:format	(Ljava/lang/String;[Ljava/lang/Object;)Ljava/lang/String;
+    //   101: aload 4
+    //   103: invokevirtual 159	com/amplitude/api/Diagnostics:logError	(Ljava/lang/String;Ljava/lang/Throwable;)Lcom/amplitude/api/Diagnostics;
+    //   106: pop
+    //   107: aload_0
+    //   108: invokespecial 162	com/amplitude/api/DatabaseHelper:delete	()V
+    //   111: goto -65 -> 46
+    //   114: astore 4
+    //   116: getstatic 73	com/amplitude/api/DatabaseHelper:logger	Lcom/amplitude/api/AmplitudeLog;
+    //   119: ldc 41
+    //   121: ldc_w 317
+    //   124: iconst_1
+    //   125: anewarray 129	java/lang/Object
+    //   128: dup
+    //   129: iconst_0
+    //   130: aload_1
+    //   131: aastore
+    //   132: invokestatic 135	java/lang/String:format	(Ljava/lang/String;[Ljava/lang/Object;)Ljava/lang/String;
+    //   135: aload 4
+    //   137: invokevirtual 148	com/amplitude/api/AmplitudeLog:e	(Ljava/lang/String;Ljava/lang/String;Ljava/lang/Throwable;)I
+    //   140: pop
+    //   141: invokestatic 153	com/amplitude/api/Diagnostics:getLogger	()Lcom/amplitude/api/Diagnostics;
+    //   144: ldc_w 319
+    //   147: iconst_1
+    //   148: anewarray 129	java/lang/Object
+    //   151: dup
+    //   152: iconst_0
+    //   153: aload_1
+    //   154: aastore
+    //   155: invokestatic 135	java/lang/String:format	(Ljava/lang/String;[Ljava/lang/Object;)Ljava/lang/String;
+    //   158: aload 4
+    //   160: invokevirtual 159	com/amplitude/api/Diagnostics:logError	(Ljava/lang/String;Ljava/lang/Throwable;)Lcom/amplitude/api/Diagnostics;
+    //   163: pop
+    //   164: aload_0
+    //   165: invokespecial 162	com/amplitude/api/DatabaseHelper:delete	()V
+    //   168: goto -122 -> 46
+    //   171: aload_0
+    //   172: monitorexit
+    //   173: return
+    //   174: aload_0
+    //   175: invokevirtual 142	com/amplitude/api/DatabaseHelper:close	()V
+    //   178: aload_1
+    //   179: athrow
+    //   180: astore_1
+    //   181: aload_0
+    //   182: monitorexit
+    //   183: aload_1
+    //   184: athrow
+    // Local variable table:
+    //   start	length	slot	name	signature
+    //   0	185	0	this	DatabaseHelper
+    //   0	185	1	paramString	String
+    //   0	185	2	paramLong	long
+    //   6	28	4	localSQLiteDatabase	SQLiteDatabase
+    //   57	45	4	localStackOverflowError	StackOverflowError
+    //   114	45	4	localSQLiteException	SQLiteException
+    //   15	22	5	localStringBuilder	StringBuilder
+    // Exception table:
+    //   from	to	target	type
+    //   2	46	53	finally
+    //   59	111	53	finally
+    //   116	168	53	finally
+    //   2	46	57	java/lang/StackOverflowError
+    //   2	46	114	android/database/sqlite/SQLiteException
+    //   46	50	180	finally
+    //   174	180	180	finally
+  }
+  
+  /* Error */
+  private void removeEventsFromTable(String paramString, long paramLong)
+  {
+    // Byte code:
+    //   0: aload_0
+    //   1: monitorenter
+    //   2: aload_0
+    //   3: invokevirtual 112	com/amplitude/api/DatabaseHelper:getWritableDatabase	()Landroid/database/sqlite/SQLiteDatabase;
+    //   6: astore 4
+    //   8: new 243	java/lang/StringBuilder
+    //   11: dup
+    //   12: invokespecial 244	java/lang/StringBuilder:<init>	()V
+    //   15: astore 5
+    //   17: aload 5
+    //   19: ldc_w 322
+    //   22: invokevirtual 250	java/lang/StringBuilder:append	(Ljava/lang/String;)Ljava/lang/StringBuilder;
+    //   25: pop
+    //   26: aload 5
+    //   28: lload_2
+    //   29: invokevirtual 288	java/lang/StringBuilder:append	(J)Ljava/lang/StringBuilder;
+    //   32: pop
+    //   33: aload 4
+    //   35: aload_1
+    //   36: aload 5
+    //   38: invokevirtual 253	java/lang/StringBuilder:toString	()Ljava/lang/String;
+    //   41: aconst_null
+    //   42: invokevirtual 315	android/database/sqlite/SQLiteDatabase:delete	(Ljava/lang/String;Ljava/lang/String;[Ljava/lang/String;)I
+    //   45: pop
+    //   46: aload_0
+    //   47: invokevirtual 142	com/amplitude/api/DatabaseHelper:close	()V
+    //   50: goto +121 -> 171
+    //   53: astore_1
+    //   54: goto +120 -> 174
+    //   57: astore 4
+    //   59: getstatic 73	com/amplitude/api/DatabaseHelper:logger	Lcom/amplitude/api/AmplitudeLog;
+    //   62: ldc 41
+    //   64: ldc_w 324
+    //   67: iconst_1
+    //   68: anewarray 129	java/lang/Object
+    //   71: dup
+    //   72: iconst_0
+    //   73: aload_1
+    //   74: aastore
+    //   75: invokestatic 135	java/lang/String:format	(Ljava/lang/String;[Ljava/lang/Object;)Ljava/lang/String;
+    //   78: aload 4
+    //   80: invokevirtual 148	com/amplitude/api/AmplitudeLog:e	(Ljava/lang/String;Ljava/lang/String;Ljava/lang/Throwable;)I
+    //   83: pop
+    //   84: invokestatic 153	com/amplitude/api/Diagnostics:getLogger	()Lcom/amplitude/api/Diagnostics;
+    //   87: ldc_w 326
+    //   90: iconst_1
+    //   91: anewarray 129	java/lang/Object
+    //   94: dup
+    //   95: iconst_0
+    //   96: aload_1
+    //   97: aastore
+    //   98: invokestatic 135	java/lang/String:format	(Ljava/lang/String;[Ljava/lang/Object;)Ljava/lang/String;
+    //   101: aload 4
+    //   103: invokevirtual 159	com/amplitude/api/Diagnostics:logError	(Ljava/lang/String;Ljava/lang/Throwable;)Lcom/amplitude/api/Diagnostics;
+    //   106: pop
+    //   107: aload_0
+    //   108: invokespecial 162	com/amplitude/api/DatabaseHelper:delete	()V
+    //   111: goto -65 -> 46
+    //   114: astore 4
+    //   116: getstatic 73	com/amplitude/api/DatabaseHelper:logger	Lcom/amplitude/api/AmplitudeLog;
+    //   119: ldc 41
+    //   121: ldc_w 324
+    //   124: iconst_1
+    //   125: anewarray 129	java/lang/Object
+    //   128: dup
+    //   129: iconst_0
+    //   130: aload_1
+    //   131: aastore
+    //   132: invokestatic 135	java/lang/String:format	(Ljava/lang/String;[Ljava/lang/Object;)Ljava/lang/String;
+    //   135: aload 4
+    //   137: invokevirtual 148	com/amplitude/api/AmplitudeLog:e	(Ljava/lang/String;Ljava/lang/String;Ljava/lang/Throwable;)I
+    //   140: pop
+    //   141: invokestatic 153	com/amplitude/api/Diagnostics:getLogger	()Lcom/amplitude/api/Diagnostics;
+    //   144: ldc_w 326
+    //   147: iconst_1
+    //   148: anewarray 129	java/lang/Object
+    //   151: dup
+    //   152: iconst_0
+    //   153: aload_1
+    //   154: aastore
+    //   155: invokestatic 135	java/lang/String:format	(Ljava/lang/String;[Ljava/lang/Object;)Ljava/lang/String;
+    //   158: aload 4
+    //   160: invokevirtual 159	com/amplitude/api/Diagnostics:logError	(Ljava/lang/String;Ljava/lang/Throwable;)Lcom/amplitude/api/Diagnostics;
+    //   163: pop
+    //   164: aload_0
+    //   165: invokespecial 162	com/amplitude/api/DatabaseHelper:delete	()V
+    //   168: goto -122 -> 46
+    //   171: aload_0
+    //   172: monitorexit
+    //   173: return
+    //   174: aload_0
+    //   175: invokevirtual 142	com/amplitude/api/DatabaseHelper:close	()V
+    //   178: aload_1
+    //   179: athrow
+    //   180: astore_1
+    //   181: aload_0
+    //   182: monitorexit
+    //   183: aload_1
+    //   184: athrow
+    // Local variable table:
+    //   start	length	slot	name	signature
+    //   0	185	0	this	DatabaseHelper
+    //   0	185	1	paramString	String
+    //   0	185	2	paramLong	long
+    //   6	28	4	localSQLiteDatabase	SQLiteDatabase
+    //   57	45	4	localStackOverflowError	StackOverflowError
+    //   114	45	4	localSQLiteException	SQLiteException
+    //   15	22	5	localStringBuilder	StringBuilder
+    // Exception table:
+    //   from	to	target	type
+    //   2	46	53	finally
+    //   59	111	53	finally
+    //   116	168	53	finally
+    //   2	46	57	java/lang/StackOverflowError
+    //   2	46	114	android/database/sqlite/SQLiteException
+    //   46	50	180	finally
+    //   174	180	180	finally
+  }
+  
+  private void resetDatabase(SQLiteDatabase paramSQLiteDatabase)
+  {
+    paramSQLiteDatabase.execSQL("DROP TABLE IF EXISTS store");
+    paramSQLiteDatabase.execSQL("DROP TABLE IF EXISTS long_store");
+    paramSQLiteDatabase.execSQL("DROP TABLE IF EXISTS events");
+    paramSQLiteDatabase.execSQL("DROP TABLE IF EXISTS identifys");
+    onCreate(paramSQLiteDatabase);
+  }
+  
+  long addEvent(String paramString)
+  {
+    try
+    {
+      long l = addEventToTable("events", paramString);
+      return l;
+    }
+    finally
+    {
+      paramString = finally;
+      throw paramString;
+    }
+  }
+  
+  long addIdentify(String paramString)
+  {
+    try
+    {
+      long l = addEventToTable("identifys", paramString);
+      return l;
+    }
+    finally
+    {
+      paramString = finally;
+      throw paramString;
+    }
+  }
+  
+  boolean dbFileExists()
+  {
+    return file.exists();
+  }
+  
+  /* Error */
+  long deleteKeyFromTable(String paramString1, String paramString2)
+  {
+    // Byte code:
+    //   0: aload_0
+    //   1: monitorenter
+    //   2: ldc2_w 124
+    //   5: lstore 4
+    //   7: aload_0
+    //   8: invokevirtual 112	com/amplitude/api/DatabaseHelper:getWritableDatabase	()Landroid/database/sqlite/SQLiteDatabase;
+    //   11: aload_1
+    //   12: ldc_w 352
+    //   15: iconst_1
+    //   16: anewarray 131	java/lang/String
+    //   19: dup
+    //   20: iconst_0
+    //   21: aload_2
+    //   22: aastore
+    //   23: invokevirtual 315	android/database/sqlite/SQLiteDatabase:delete	(Ljava/lang/String;Ljava/lang/String;[Ljava/lang/String;)I
+    //   26: istore_3
+    //   27: iload_3
+    //   28: i2l
+    //   29: lstore 4
+    //   31: aload_0
+    //   32: invokevirtual 142	com/amplitude/api/DatabaseHelper:close	()V
+    //   35: goto +125 -> 160
+    //   38: astore_1
+    //   39: goto +126 -> 165
+    //   42: astore 6
+    //   44: getstatic 73	com/amplitude/api/DatabaseHelper:logger	Lcom/amplitude/api/AmplitudeLog;
+    //   47: ldc 41
+    //   49: ldc_w 354
+    //   52: iconst_1
+    //   53: anewarray 129	java/lang/Object
+    //   56: dup
+    //   57: iconst_0
+    //   58: aload_1
+    //   59: aastore
+    //   60: invokestatic 135	java/lang/String:format	(Ljava/lang/String;[Ljava/lang/Object;)Ljava/lang/String;
+    //   63: aload 6
+    //   65: invokevirtual 148	com/amplitude/api/AmplitudeLog:e	(Ljava/lang/String;Ljava/lang/String;Ljava/lang/Throwable;)I
+    //   68: pop
+    //   69: invokestatic 153	com/amplitude/api/Diagnostics:getLogger	()Lcom/amplitude/api/Diagnostics;
+    //   72: ldc_w 356
+    //   75: iconst_1
+    //   76: anewarray 129	java/lang/Object
+    //   79: dup
+    //   80: iconst_0
+    //   81: aload_2
+    //   82: aastore
+    //   83: invokestatic 135	java/lang/String:format	(Ljava/lang/String;[Ljava/lang/Object;)Ljava/lang/String;
+    //   86: aload 6
+    //   88: invokevirtual 159	com/amplitude/api/Diagnostics:logError	(Ljava/lang/String;Ljava/lang/Throwable;)Lcom/amplitude/api/Diagnostics;
+    //   91: pop
+    //   92: aload_0
+    //   93: invokespecial 162	com/amplitude/api/DatabaseHelper:delete	()V
+    //   96: aload_0
+    //   97: invokevirtual 142	com/amplitude/api/DatabaseHelper:close	()V
+    //   100: goto +60 -> 160
+    //   103: astore 6
+    //   105: getstatic 73	com/amplitude/api/DatabaseHelper:logger	Lcom/amplitude/api/AmplitudeLog;
+    //   108: ldc 41
+    //   110: ldc_w 354
+    //   113: iconst_1
+    //   114: anewarray 129	java/lang/Object
+    //   117: dup
+    //   118: iconst_0
+    //   119: aload_1
+    //   120: aastore
+    //   121: invokestatic 135	java/lang/String:format	(Ljava/lang/String;[Ljava/lang/Object;)Ljava/lang/String;
+    //   124: aload 6
+    //   126: invokevirtual 148	com/amplitude/api/AmplitudeLog:e	(Ljava/lang/String;Ljava/lang/String;Ljava/lang/Throwable;)I
+    //   129: pop
+    //   130: invokestatic 153	com/amplitude/api/Diagnostics:getLogger	()Lcom/amplitude/api/Diagnostics;
+    //   133: ldc_w 356
+    //   136: iconst_1
+    //   137: anewarray 129	java/lang/Object
+    //   140: dup
+    //   141: iconst_0
+    //   142: aload_2
+    //   143: aastore
+    //   144: invokestatic 135	java/lang/String:format	(Ljava/lang/String;[Ljava/lang/Object;)Ljava/lang/String;
+    //   147: aload 6
+    //   149: invokevirtual 159	com/amplitude/api/Diagnostics:logError	(Ljava/lang/String;Ljava/lang/Throwable;)Lcom/amplitude/api/Diagnostics;
+    //   152: pop
+    //   153: aload_0
+    //   154: invokespecial 162	com/amplitude/api/DatabaseHelper:delete	()V
+    //   157: goto -61 -> 96
+    //   160: aload_0
+    //   161: monitorexit
+    //   162: lload 4
+    //   164: lreturn
+    //   165: aload_0
+    //   166: invokevirtual 142	com/amplitude/api/DatabaseHelper:close	()V
+    //   169: aload_1
+    //   170: athrow
+    //   171: astore_1
+    //   172: aload_0
+    //   173: monitorexit
+    //   174: aload_1
+    //   175: athrow
+    // Local variable table:
+    //   start	length	slot	name	signature
+    //   0	176	0	this	DatabaseHelper
+    //   0	176	1	paramString1	String
+    //   0	176	2	paramString2	String
+    //   26	2	3	i	int
+    //   5	158	4	l	long
+    //   42	45	6	localStackOverflowError	StackOverflowError
+    //   103	45	6	localSQLiteException	SQLiteException
+    // Exception table:
+    //   from	to	target	type
+    //   7	27	38	finally
+    //   44	96	38	finally
+    //   105	157	38	finally
+    //   7	27	42	java/lang/StackOverflowError
+    //   7	27	103	android/database/sqlite/SQLiteException
+    //   31	35	171	finally
+    //   96	100	171	finally
+    //   165	171	171	finally
+  }
+  
+  long getEventCount()
+  {
+    try
+    {
+      long l = getEventCountFromTable("events");
+      return l;
+    }
+    finally
+    {
+      localObject = finally;
+      throw localObject;
+    }
+  }
+  
+  List<JSONObject> getEvents(long paramLong1, long paramLong2)
+    throws JSONException
+  {
+    try
+    {
+      List localList = getEventsFromTable("events", paramLong1, paramLong2);
+      return localList;
+    }
+    finally
+    {
+      localObject = finally;
+      throw localObject;
+    }
+  }
+  
+  /* Error */
+  protected List<JSONObject> getEventsFromTable(String paramString, long paramLong1, long paramLong2)
+    throws JSONException
+  {
+    // Byte code:
+    //   0: aload_0
+    //   1: monitorenter
+    //   2: new 372	java/util/LinkedList
+    //   5: dup
+    //   6: invokespecial 373	java/util/LinkedList:<init>	()V
+    //   9: astore 9
+    //   11: aload_0
+    //   12: invokevirtual 260	com/amplitude/api/DatabaseHelper:getReadableDatabase	()Landroid/database/sqlite/SQLiteDatabase;
+    //   15: astore 8
+    //   17: lload_2
+    //   18: lconst_0
+    //   19: lcmp
+    //   20: iflt +70 -> 90
+    //   23: new 243	java/lang/StringBuilder
+    //   26: dup
+    //   27: invokespecial 244	java/lang/StringBuilder:<init>	()V
+    //   30: astore 6
+    //   32: aload 6
+    //   34: ldc_w 322
+    //   37: invokevirtual 250	java/lang/StringBuilder:append	(Ljava/lang/String;)Ljava/lang/StringBuilder;
+    //   40: pop
+    //   41: aload 6
+    //   43: lload_2
+    //   44: invokevirtual 288	java/lang/StringBuilder:append	(J)Ljava/lang/StringBuilder;
+    //   47: pop
+    //   48: aload 6
+    //   50: invokevirtual 253	java/lang/StringBuilder:toString	()Ljava/lang/String;
+    //   53: astore 6
+    //   55: goto +38 -> 93
+    //   58: astore 8
+    //   60: aconst_null
+    //   61: astore 7
+    //   63: goto +282 -> 345
+    //   66: astore 8
+    //   68: aconst_null
+    //   69: astore 7
+    //   71: goto +330 -> 401
+    //   74: astore 8
+    //   76: aconst_null
+    //   77: astore 7
+    //   79: goto +379 -> 458
+    //   82: astore 8
+    //   84: aconst_null
+    //   85: astore 7
+    //   87: goto +455 -> 542
+    //   90: aconst_null
+    //   91: astore 6
+    //   93: lload 4
+    //   95: lconst_0
+    //   96: lcmp
+    //   97: iflt +39 -> 136
+    //   100: new 243	java/lang/StringBuilder
+    //   103: dup
+    //   104: invokespecial 244	java/lang/StringBuilder:<init>	()V
+    //   107: astore 7
+    //   109: aload 7
+    //   111: ldc_w 375
+    //   114: invokevirtual 250	java/lang/StringBuilder:append	(Ljava/lang/String;)Ljava/lang/StringBuilder;
+    //   117: pop
+    //   118: aload 7
+    //   120: lload 4
+    //   122: invokevirtual 288	java/lang/StringBuilder:append	(J)Ljava/lang/StringBuilder;
+    //   125: pop
+    //   126: aload 7
+    //   128: invokevirtual 253	java/lang/StringBuilder:toString	()Ljava/lang/String;
+    //   131: astore 7
+    //   133: goto +6 -> 139
+    //   136: aconst_null
+    //   137: astore 7
+    //   139: aload_0
+    //   140: aload 8
+    //   142: aload_1
+    //   143: iconst_2
+    //   144: anewarray 131	java/lang/String
+    //   147: dup
+    //   148: iconst_0
+    //   149: ldc 29
+    //   151: aastore
+    //   152: dup
+    //   153: iconst_1
+    //   154: ldc 20
+    //   156: aastore
+    //   157: aload 6
+    //   159: aconst_null
+    //   160: aconst_null
+    //   161: aconst_null
+    //   162: ldc_w 377
+    //   165: aload 7
+    //   167: invokevirtual 381	com/amplitude/api/DatabaseHelper:queryDb	(Landroid/database/sqlite/SQLiteDatabase;Ljava/lang/String;[Ljava/lang/String;Ljava/lang/String;[Ljava/lang/String;Ljava/lang/String;Ljava/lang/String;Ljava/lang/String;Ljava/lang/String;)Landroid/database/Cursor;
+    //   170: astore 7
+    //   172: aload 7
+    //   174: astore 6
+    //   176: aload 7
+    //   178: invokeinterface 386 1 0
+    //   183: ifeq +91 -> 274
+    //   186: aload 7
+    //   188: astore 6
+    //   190: aload 7
+    //   192: iconst_0
+    //   193: invokeinterface 390 2 0
+    //   198: lstore_2
+    //   199: aload 7
+    //   201: astore 6
+    //   203: aload 7
+    //   205: iconst_1
+    //   206: invokeinterface 394 2 0
+    //   211: astore 8
+    //   213: aload 7
+    //   215: astore 6
+    //   217: aload 8
+    //   219: invokestatic 174	com/amplitude/api/Utils:isEmptyString	(Ljava/lang/String;)Z
+    //   222: ifeq +6 -> 228
+    //   225: goto -53 -> 172
+    //   228: aload 7
+    //   230: astore 6
+    //   232: new 396	org/json/JSONObject
+    //   235: dup
+    //   236: aload 8
+    //   238: invokespecial 397	org/json/JSONObject:<init>	(Ljava/lang/String;)V
+    //   241: astore 8
+    //   243: aload 7
+    //   245: astore 6
+    //   247: aload 8
+    //   249: ldc_w 399
+    //   252: lload_2
+    //   253: invokevirtual 402	org/json/JSONObject:put	(Ljava/lang/String;J)Lorg/json/JSONObject;
+    //   256: pop
+    //   257: aload 7
+    //   259: astore 6
+    //   261: aload 9
+    //   263: aload 8
+    //   265: invokeinterface 407 2 0
+    //   270: pop
+    //   271: goto -99 -> 172
+    //   274: aload 7
+    //   276: ifnull +10 -> 286
+    //   279: aload 7
+    //   281: invokeinterface 408 1 0
+    //   286: aload_0
+    //   287: invokevirtual 142	com/amplitude/api/DatabaseHelper:close	()V
+    //   290: goto +331 -> 621
+    //   293: astore 8
+    //   295: goto +50 -> 345
+    //   298: astore 8
+    //   300: goto +101 -> 401
+    //   303: astore 8
+    //   305: goto +153 -> 458
+    //   308: astore 8
+    //   310: goto +232 -> 542
+    //   313: astore 8
+    //   315: goto +27 -> 342
+    //   318: astore 8
+    //   320: goto +78 -> 398
+    //   323: astore 8
+    //   325: goto +130 -> 455
+    //   328: astore 8
+    //   330: goto +209 -> 539
+    //   333: astore_1
+    //   334: aconst_null
+    //   335: astore 6
+    //   337: goto +290 -> 627
+    //   340: astore 8
+    //   342: aconst_null
+    //   343: astore 7
+    //   345: aload 7
+    //   347: astore 6
+    //   349: invokestatic 153	com/amplitude/api/Diagnostics:getLogger	()Lcom/amplitude/api/Diagnostics;
+    //   352: ldc_w 410
+    //   355: iconst_1
+    //   356: anewarray 129	java/lang/Object
+    //   359: dup
+    //   360: iconst_0
+    //   361: aload_1
+    //   362: aastore
+    //   363: invokestatic 135	java/lang/String:format	(Ljava/lang/String;[Ljava/lang/Object;)Ljava/lang/String;
+    //   366: aload 8
+    //   368: invokevirtual 159	com/amplitude/api/Diagnostics:logError	(Ljava/lang/String;Ljava/lang/Throwable;)Lcom/amplitude/api/Diagnostics;
+    //   371: pop
+    //   372: aload 7
+    //   374: astore 6
+    //   376: aload 8
+    //   378: invokestatic 412	com/amplitude/api/DatabaseHelper:convertIfCursorWindowException	(Ljava/lang/RuntimeException;)V
+    //   381: aload 7
+    //   383: ifnull -97 -> 286
+    //   386: aload 7
+    //   388: invokeinterface 408 1 0
+    //   393: goto -107 -> 286
+    //   396: astore 8
+    //   398: aconst_null
+    //   399: astore 7
+    //   401: aload 7
+    //   403: astore 6
+    //   405: invokestatic 153	com/amplitude/api/Diagnostics:getLogger	()Lcom/amplitude/api/Diagnostics;
+    //   408: ldc_w 410
+    //   411: iconst_1
+    //   412: anewarray 129	java/lang/Object
+    //   415: dup
+    //   416: iconst_0
+    //   417: aload_1
+    //   418: aastore
+    //   419: invokestatic 135	java/lang/String:format	(Ljava/lang/String;[Ljava/lang/Object;)Ljava/lang/String;
+    //   422: aload 8
+    //   424: invokevirtual 159	com/amplitude/api/Diagnostics:logError	(Ljava/lang/String;Ljava/lang/Throwable;)Lcom/amplitude/api/Diagnostics;
+    //   427: pop
+    //   428: aload 7
+    //   430: astore 6
+    //   432: aload_0
+    //   433: aload 8
+    //   435: invokespecial 414	com/amplitude/api/DatabaseHelper:handleIfCursorRowTooLargeException	(Ljava/lang/IllegalStateException;)V
+    //   438: aload 7
+    //   440: ifnull -154 -> 286
+    //   443: aload 7
+    //   445: invokeinterface 408 1 0
+    //   450: goto -164 -> 286
+    //   453: astore 8
+    //   455: aconst_null
+    //   456: astore 7
+    //   458: aload 7
+    //   460: astore 6
+    //   462: getstatic 73	com/amplitude/api/DatabaseHelper:logger	Lcom/amplitude/api/AmplitudeLog;
+    //   465: ldc 41
+    //   467: ldc_w 416
+    //   470: iconst_1
+    //   471: anewarray 129	java/lang/Object
+    //   474: dup
+    //   475: iconst_0
+    //   476: aload_1
+    //   477: aastore
+    //   478: invokestatic 135	java/lang/String:format	(Ljava/lang/String;[Ljava/lang/Object;)Ljava/lang/String;
+    //   481: aload 8
+    //   483: invokevirtual 148	com/amplitude/api/AmplitudeLog:e	(Ljava/lang/String;Ljava/lang/String;Ljava/lang/Throwable;)I
+    //   486: pop
+    //   487: aload 7
+    //   489: astore 6
+    //   491: invokestatic 153	com/amplitude/api/Diagnostics:getLogger	()Lcom/amplitude/api/Diagnostics;
+    //   494: ldc_w 410
+    //   497: iconst_1
+    //   498: anewarray 129	java/lang/Object
+    //   501: dup
+    //   502: iconst_0
+    //   503: aload_1
+    //   504: aastore
+    //   505: invokestatic 135	java/lang/String:format	(Ljava/lang/String;[Ljava/lang/Object;)Ljava/lang/String;
+    //   508: aload 8
+    //   510: invokevirtual 159	com/amplitude/api/Diagnostics:logError	(Ljava/lang/String;Ljava/lang/Throwable;)Lcom/amplitude/api/Diagnostics;
+    //   513: pop
+    //   514: aload 7
+    //   516: astore 6
+    //   518: aload_0
+    //   519: invokespecial 162	com/amplitude/api/DatabaseHelper:delete	()V
+    //   522: aload 7
+    //   524: ifnull -238 -> 286
+    //   527: aload 7
+    //   529: invokeinterface 408 1 0
+    //   534: goto -248 -> 286
+    //   537: astore 8
+    //   539: aconst_null
+    //   540: astore 7
+    //   542: aload 7
+    //   544: astore 6
+    //   546: getstatic 73	com/amplitude/api/DatabaseHelper:logger	Lcom/amplitude/api/AmplitudeLog;
+    //   549: ldc 41
+    //   551: ldc_w 416
+    //   554: iconst_1
+    //   555: anewarray 129	java/lang/Object
+    //   558: dup
+    //   559: iconst_0
+    //   560: aload_1
+    //   561: aastore
+    //   562: invokestatic 135	java/lang/String:format	(Ljava/lang/String;[Ljava/lang/Object;)Ljava/lang/String;
+    //   565: aload 8
+    //   567: invokevirtual 148	com/amplitude/api/AmplitudeLog:e	(Ljava/lang/String;Ljava/lang/String;Ljava/lang/Throwable;)I
+    //   570: pop
+    //   571: aload 7
+    //   573: astore 6
+    //   575: invokestatic 153	com/amplitude/api/Diagnostics:getLogger	()Lcom/amplitude/api/Diagnostics;
+    //   578: ldc_w 410
+    //   581: iconst_1
+    //   582: anewarray 129	java/lang/Object
+    //   585: dup
+    //   586: iconst_0
+    //   587: aload_1
+    //   588: aastore
+    //   589: invokestatic 135	java/lang/String:format	(Ljava/lang/String;[Ljava/lang/Object;)Ljava/lang/String;
+    //   592: aload 8
+    //   594: invokevirtual 159	com/amplitude/api/Diagnostics:logError	(Ljava/lang/String;Ljava/lang/Throwable;)Lcom/amplitude/api/Diagnostics;
+    //   597: pop
+    //   598: aload 7
+    //   600: astore 6
+    //   602: aload_0
+    //   603: invokespecial 162	com/amplitude/api/DatabaseHelper:delete	()V
+    //   606: aload 7
+    //   608: ifnull -322 -> 286
+    //   611: aload 7
+    //   613: invokeinterface 408 1 0
+    //   618: goto -332 -> 286
+    //   621: aload_0
+    //   622: monitorexit
+    //   623: aload 9
+    //   625: areturn
+    //   626: astore_1
+    //   627: aload 6
+    //   629: ifnull +10 -> 639
+    //   632: aload 6
+    //   634: invokeinterface 408 1 0
+    //   639: aload_0
+    //   640: invokevirtual 142	com/amplitude/api/DatabaseHelper:close	()V
+    //   643: aload_1
+    //   644: athrow
+    //   645: astore_1
+    //   646: aload_0
+    //   647: monitorexit
+    //   648: aload_1
+    //   649: athrow
+    // Local variable table:
+    //   start	length	slot	name	signature
+    //   0	650	0	this	DatabaseHelper
+    //   0	650	1	paramString	String
+    //   0	650	2	paramLong1	long
+    //   0	650	4	paramLong2	long
+    //   30	603	6	localObject1	Object
+    //   61	551	7	localObject2	Object
+    //   15	1	8	localSQLiteDatabase	SQLiteDatabase
+    //   58	1	8	localRuntimeException1	RuntimeException
+    //   66	1	8	localIllegalStateException1	IllegalStateException
+    //   74	1	8	localStackOverflowError1	StackOverflowError
+    //   82	59	8	localSQLiteException1	SQLiteException
+    //   211	53	8	localObject3	Object
+    //   293	1	8	localRuntimeException2	RuntimeException
+    //   298	1	8	localIllegalStateException2	IllegalStateException
+    //   303	1	8	localStackOverflowError2	StackOverflowError
+    //   308	1	8	localSQLiteException2	SQLiteException
+    //   313	1	8	localRuntimeException3	RuntimeException
+    //   318	1	8	localIllegalStateException3	IllegalStateException
+    //   323	1	8	localStackOverflowError3	StackOverflowError
+    //   328	1	8	localSQLiteException3	SQLiteException
+    //   340	37	8	localRuntimeException4	RuntimeException
+    //   396	38	8	localIllegalStateException4	IllegalStateException
+    //   453	56	8	localStackOverflowError4	StackOverflowError
+    //   537	56	8	localSQLiteException4	SQLiteException
+    //   9	615	9	localLinkedList	java.util.LinkedList
+    // Exception table:
+    //   from	to	target	type
+    //   23	55	58	java/lang/RuntimeException
+    //   100	133	58	java/lang/RuntimeException
+    //   23	55	66	java/lang/IllegalStateException
+    //   100	133	66	java/lang/IllegalStateException
+    //   23	55	74	java/lang/StackOverflowError
+    //   100	133	74	java/lang/StackOverflowError
+    //   23	55	82	android/database/sqlite/SQLiteException
+    //   100	133	82	android/database/sqlite/SQLiteException
+    //   176	186	293	java/lang/RuntimeException
+    //   190	199	293	java/lang/RuntimeException
+    //   203	213	293	java/lang/RuntimeException
+    //   217	225	293	java/lang/RuntimeException
+    //   232	243	293	java/lang/RuntimeException
+    //   247	257	293	java/lang/RuntimeException
+    //   261	271	293	java/lang/RuntimeException
+    //   176	186	298	java/lang/IllegalStateException
+    //   190	199	298	java/lang/IllegalStateException
+    //   203	213	298	java/lang/IllegalStateException
+    //   217	225	298	java/lang/IllegalStateException
+    //   232	243	298	java/lang/IllegalStateException
+    //   247	257	298	java/lang/IllegalStateException
+    //   261	271	298	java/lang/IllegalStateException
+    //   176	186	303	java/lang/StackOverflowError
+    //   190	199	303	java/lang/StackOverflowError
+    //   203	213	303	java/lang/StackOverflowError
+    //   217	225	303	java/lang/StackOverflowError
+    //   232	243	303	java/lang/StackOverflowError
+    //   247	257	303	java/lang/StackOverflowError
+    //   261	271	303	java/lang/StackOverflowError
+    //   176	186	308	android/database/sqlite/SQLiteException
+    //   190	199	308	android/database/sqlite/SQLiteException
+    //   203	213	308	android/database/sqlite/SQLiteException
+    //   217	225	308	android/database/sqlite/SQLiteException
+    //   232	243	308	android/database/sqlite/SQLiteException
+    //   247	257	308	android/database/sqlite/SQLiteException
+    //   261	271	308	android/database/sqlite/SQLiteException
+    //   139	172	313	java/lang/RuntimeException
+    //   139	172	318	java/lang/IllegalStateException
+    //   139	172	323	java/lang/StackOverflowError
+    //   139	172	328	android/database/sqlite/SQLiteException
+    //   11	17	333	finally
+    //   23	55	333	finally
+    //   100	133	333	finally
+    //   139	172	333	finally
+    //   11	17	340	java/lang/RuntimeException
+    //   11	17	396	java/lang/IllegalStateException
+    //   11	17	453	java/lang/StackOverflowError
+    //   11	17	537	android/database/sqlite/SQLiteException
+    //   176	186	626	finally
+    //   190	199	626	finally
+    //   203	213	626	finally
+    //   217	225	626	finally
+    //   232	243	626	finally
+    //   247	257	626	finally
+    //   261	271	626	finally
+    //   349	372	626	finally
+    //   376	381	626	finally
+    //   405	428	626	finally
+    //   432	438	626	finally
+    //   462	487	626	finally
+    //   491	514	626	finally
+    //   518	522	626	finally
+    //   546	571	626	finally
+    //   575	598	626	finally
+    //   602	606	626	finally
+    //   2	11	645	finally
+    //   279	286	645	finally
+    //   286	290	645	finally
+    //   386	393	645	finally
+    //   443	450	645	finally
+    //   527	534	645	finally
+    //   611	618	645	finally
+    //   632	639	645	finally
+    //   639	645	645	finally
+  }
+  
+  long getIdentifyCount()
+  {
+    try
+    {
+      long l = getEventCountFromTable("identifys");
+      return l;
+    }
+    finally
+    {
+      localObject = finally;
+      throw localObject;
+    }
+  }
+  
+  List<JSONObject> getIdentifys(long paramLong1, long paramLong2)
+    throws JSONException
+  {
+    try
+    {
+      List localList = getEventsFromTable("identifys", paramLong1, paramLong2);
+      return localList;
+    }
+    finally
+    {
+      localObject = finally;
+      throw localObject;
+    }
+  }
+  
+  Long getLongValue(String paramString)
+  {
+    try
+    {
+      paramString = (Long)getValueFromTable("long_store", paramString);
+      return paramString;
+    }
+    finally
+    {
+      paramString = finally;
+      throw paramString;
+    }
+  }
+  
+  long getNthEventId(long paramLong)
+  {
+    try
+    {
+      paramLong = getNthEventIdFromTable("events", paramLong);
+      return paramLong;
+    }
+    finally
+    {
+      localObject = finally;
+      throw localObject;
+    }
+  }
+  
+  long getNthIdentifyId(long paramLong)
+  {
+    try
+    {
+      paramLong = getNthEventIdFromTable("identifys", paramLong);
+      return paramLong;
+    }
+    finally
+    {
+      localObject = finally;
+      throw localObject;
+    }
+  }
+  
+  long getTotalEventCount()
+  {
+    try
+    {
+      long l1 = getEventCount();
+      long l2 = getIdentifyCount();
+      return l1 + l2;
+    }
+    finally
+    {
+      localObject = finally;
+      throw localObject;
+    }
+  }
+  
+  String getValue(String paramString)
+  {
+    try
+    {
+      paramString = (String)getValueFromTable("store", paramString);
+      return paramString;
+    }
+    finally
+    {
+      paramString = finally;
+      throw paramString;
+    }
+  }
+  
+  /* Error */
+  protected Object getValueFromTable(String paramString1, String paramString2)
+  {
+    // Byte code:
+    //   0: aload_0
+    //   1: monitorenter
+    //   2: aconst_null
+    //   3: astore 6
+    //   5: aconst_null
+    //   6: astore 5
+    //   8: aload_0
+    //   9: aload_0
+    //   10: invokevirtual 260	com/amplitude/api/DatabaseHelper:getReadableDatabase	()Landroid/database/sqlite/SQLiteDatabase;
+    //   13: aload_1
+    //   14: iconst_2
+    //   15: anewarray 131	java/lang/String
+    //   18: dup
+    //   19: iconst_0
+    //   20: ldc 32
+    //   22: aastore
+    //   23: dup
+    //   24: iconst_1
+    //   25: ldc 44
+    //   27: aastore
+    //   28: ldc_w 440
+    //   31: iconst_1
+    //   32: anewarray 131	java/lang/String
+    //   35: dup
+    //   36: iconst_0
+    //   37: aload_2
+    //   38: aastore
+    //   39: aconst_null
+    //   40: aconst_null
+    //   41: aconst_null
+    //   42: aconst_null
+    //   43: invokevirtual 381	com/amplitude/api/DatabaseHelper:queryDb	(Landroid/database/sqlite/SQLiteDatabase;Ljava/lang/String;[Ljava/lang/String;Ljava/lang/String;[Ljava/lang/String;Ljava/lang/String;Ljava/lang/String;Ljava/lang/String;Ljava/lang/String;)Landroid/database/Cursor;
+    //   46: astore 4
+    //   48: aload 4
+    //   50: astore_3
+    //   51: aload 4
+    //   53: invokeinterface 443 1 0
+    //   58: ifeq +56 -> 114
+    //   61: aload 4
+    //   63: astore_3
+    //   64: aload_1
+    //   65: ldc 38
+    //   67: invokevirtual 241	java/lang/String:equals	(Ljava/lang/Object;)Z
+    //   70: ifeq +22 -> 92
+    //   73: aload 4
+    //   75: astore_3
+    //   76: aload 4
+    //   78: iconst_1
+    //   79: invokeinterface 394 2 0
+    //   84: astore 5
+    //   86: aload 5
+    //   88: astore_1
+    //   89: goto +391 -> 480
+    //   92: aload 4
+    //   94: astore_3
+    //   95: aload 4
+    //   97: iconst_1
+    //   98: invokeinterface 390 2 0
+    //   103: invokestatic 447	java/lang/Long:valueOf	(J)Ljava/lang/Long;
+    //   106: astore 5
+    //   108: aload 5
+    //   110: astore_1
+    //   111: goto +369 -> 480
+    //   114: aload 5
+    //   116: astore_1
+    //   117: aload 4
+    //   119: ifnull +13 -> 132
+    //   122: aload 4
+    //   124: invokeinterface 408 1 0
+    //   129: aload 5
+    //   131: astore_1
+    //   132: aload_0
+    //   133: invokevirtual 142	com/amplitude/api/DatabaseHelper:close	()V
+    //   136: goto +316 -> 452
+    //   139: astore_1
+    //   140: goto +27 -> 167
+    //   143: astore_1
+    //   144: goto +80 -> 224
+    //   147: astore 5
+    //   149: goto +134 -> 283
+    //   152: astore 5
+    //   154: goto +216 -> 370
+    //   157: astore_1
+    //   158: aconst_null
+    //   159: astore_3
+    //   160: goto +297 -> 457
+    //   163: astore_1
+    //   164: aconst_null
+    //   165: astore 4
+    //   167: aload 4
+    //   169: astore_3
+    //   170: invokestatic 153	com/amplitude/api/Diagnostics:getLogger	()Lcom/amplitude/api/Diagnostics;
+    //   173: ldc_w 449
+    //   176: iconst_1
+    //   177: anewarray 129	java/lang/Object
+    //   180: dup
+    //   181: iconst_0
+    //   182: aload_2
+    //   183: aastore
+    //   184: invokestatic 135	java/lang/String:format	(Ljava/lang/String;[Ljava/lang/Object;)Ljava/lang/String;
+    //   187: aload_1
+    //   188: invokevirtual 159	com/amplitude/api/Diagnostics:logError	(Ljava/lang/String;Ljava/lang/Throwable;)Lcom/amplitude/api/Diagnostics;
+    //   191: pop
+    //   192: aload 4
+    //   194: astore_3
+    //   195: aload_1
+    //   196: invokestatic 412	com/amplitude/api/DatabaseHelper:convertIfCursorWindowException	(Ljava/lang/RuntimeException;)V
+    //   199: aload 6
+    //   201: astore_1
+    //   202: aload 4
+    //   204: ifnull -72 -> 132
+    //   207: aload 4
+    //   209: invokeinterface 408 1 0
+    //   214: aload 6
+    //   216: astore_1
+    //   217: goto -85 -> 132
+    //   220: astore_1
+    //   221: aconst_null
+    //   222: astore 4
+    //   224: aload 4
+    //   226: astore_3
+    //   227: invokestatic 153	com/amplitude/api/Diagnostics:getLogger	()Lcom/amplitude/api/Diagnostics;
+    //   230: ldc_w 449
+    //   233: iconst_1
+    //   234: anewarray 129	java/lang/Object
+    //   237: dup
+    //   238: iconst_0
+    //   239: aload_2
+    //   240: aastore
+    //   241: invokestatic 135	java/lang/String:format	(Ljava/lang/String;[Ljava/lang/Object;)Ljava/lang/String;
+    //   244: aload_1
+    //   245: invokevirtual 159	com/amplitude/api/Diagnostics:logError	(Ljava/lang/String;Ljava/lang/Throwable;)Lcom/amplitude/api/Diagnostics;
+    //   248: pop
+    //   249: aload 4
+    //   251: astore_3
+    //   252: aload_0
+    //   253: aload_1
+    //   254: invokespecial 414	com/amplitude/api/DatabaseHelper:handleIfCursorRowTooLargeException	(Ljava/lang/IllegalStateException;)V
+    //   257: aload 6
+    //   259: astore_1
+    //   260: aload 4
+    //   262: ifnull -130 -> 132
+    //   265: aload 4
+    //   267: invokeinterface 408 1 0
+    //   272: aload 6
+    //   274: astore_1
+    //   275: goto -143 -> 132
+    //   278: astore 5
+    //   280: aconst_null
+    //   281: astore 4
+    //   283: aload 4
+    //   285: astore_3
+    //   286: getstatic 73	com/amplitude/api/DatabaseHelper:logger	Lcom/amplitude/api/AmplitudeLog;
+    //   289: ldc 41
+    //   291: ldc_w 451
+    //   294: iconst_1
+    //   295: anewarray 129	java/lang/Object
+    //   298: dup
+    //   299: iconst_0
+    //   300: aload_1
+    //   301: aastore
+    //   302: invokestatic 135	java/lang/String:format	(Ljava/lang/String;[Ljava/lang/Object;)Ljava/lang/String;
+    //   305: aload 5
+    //   307: invokevirtual 148	com/amplitude/api/AmplitudeLog:e	(Ljava/lang/String;Ljava/lang/String;Ljava/lang/Throwable;)I
+    //   310: pop
+    //   311: aload 4
+    //   313: astore_3
+    //   314: invokestatic 153	com/amplitude/api/Diagnostics:getLogger	()Lcom/amplitude/api/Diagnostics;
+    //   317: ldc_w 449
+    //   320: iconst_1
+    //   321: anewarray 129	java/lang/Object
+    //   324: dup
+    //   325: iconst_0
+    //   326: aload_2
+    //   327: aastore
+    //   328: invokestatic 135	java/lang/String:format	(Ljava/lang/String;[Ljava/lang/Object;)Ljava/lang/String;
+    //   331: aload 5
+    //   333: invokevirtual 159	com/amplitude/api/Diagnostics:logError	(Ljava/lang/String;Ljava/lang/Throwable;)Lcom/amplitude/api/Diagnostics;
+    //   336: pop
+    //   337: aload 4
+    //   339: astore_3
+    //   340: aload_0
+    //   341: invokespecial 162	com/amplitude/api/DatabaseHelper:delete	()V
+    //   344: aload 6
+    //   346: astore_1
+    //   347: aload 4
+    //   349: ifnull -217 -> 132
+    //   352: aload 4
+    //   354: invokeinterface 408 1 0
+    //   359: aload 6
+    //   361: astore_1
+    //   362: goto -230 -> 132
+    //   365: astore 5
+    //   367: aconst_null
+    //   368: astore 4
+    //   370: aload 4
+    //   372: astore_3
+    //   373: getstatic 73	com/amplitude/api/DatabaseHelper:logger	Lcom/amplitude/api/AmplitudeLog;
+    //   376: ldc 41
+    //   378: ldc_w 451
+    //   381: iconst_1
+    //   382: anewarray 129	java/lang/Object
+    //   385: dup
+    //   386: iconst_0
+    //   387: aload_1
+    //   388: aastore
+    //   389: invokestatic 135	java/lang/String:format	(Ljava/lang/String;[Ljava/lang/Object;)Ljava/lang/String;
+    //   392: aload 5
+    //   394: invokevirtual 148	com/amplitude/api/AmplitudeLog:e	(Ljava/lang/String;Ljava/lang/String;Ljava/lang/Throwable;)I
+    //   397: pop
+    //   398: aload 4
+    //   400: astore_3
+    //   401: invokestatic 153	com/amplitude/api/Diagnostics:getLogger	()Lcom/amplitude/api/Diagnostics;
+    //   404: ldc_w 449
+    //   407: iconst_1
+    //   408: anewarray 129	java/lang/Object
+    //   411: dup
+    //   412: iconst_0
+    //   413: aload_2
+    //   414: aastore
+    //   415: invokestatic 135	java/lang/String:format	(Ljava/lang/String;[Ljava/lang/Object;)Ljava/lang/String;
+    //   418: aload 5
+    //   420: invokevirtual 159	com/amplitude/api/Diagnostics:logError	(Ljava/lang/String;Ljava/lang/Throwable;)Lcom/amplitude/api/Diagnostics;
+    //   423: pop
+    //   424: aload 4
+    //   426: astore_3
+    //   427: aload_0
+    //   428: invokespecial 162	com/amplitude/api/DatabaseHelper:delete	()V
+    //   431: aload 6
+    //   433: astore_1
+    //   434: aload 4
+    //   436: ifnull -304 -> 132
+    //   439: aload 4
+    //   441: invokeinterface 408 1 0
+    //   446: aload 6
+    //   448: astore_1
+    //   449: goto -317 -> 132
+    //   452: aload_0
+    //   453: monitorexit
+    //   454: aload_1
+    //   455: areturn
+    //   456: astore_1
+    //   457: aload_3
+    //   458: ifnull +12 -> 470
+    //   461: aload_3
+    //   462: invokeinterface 408 1 0
+    //   467: goto +3 -> 470
+    //   470: aload_0
+    //   471: invokevirtual 142	com/amplitude/api/DatabaseHelper:close	()V
+    //   474: aload_1
+    //   475: athrow
+    //   476: aload_0
+    //   477: monitorexit
+    //   478: aload_1
+    //   479: athrow
+    //   480: aload_1
+    //   481: astore 5
+    //   483: goto -369 -> 114
+    //   486: astore_1
+    //   487: goto -11 -> 476
+    // Local variable table:
+    //   start	length	slot	name	signature
+    //   0	490	0	this	DatabaseHelper
+    //   0	490	1	paramString1	String
+    //   0	490	2	paramString2	String
+    //   50	412	3	localCursor1	Cursor
+    //   46	394	4	localCursor2	Cursor
+    //   6	124	5	localObject1	Object
+    //   147	1	5	localStackOverflowError1	StackOverflowError
+    //   152	1	5	localSQLiteException1	SQLiteException
+    //   278	54	5	localStackOverflowError2	StackOverflowError
+    //   365	54	5	localSQLiteException2	SQLiteException
+    //   481	1	5	str	String
+    //   3	444	6	localObject2	Object
+    // Exception table:
+    //   from	to	target	type
+    //   51	61	139	java/lang/RuntimeException
+    //   64	73	139	java/lang/RuntimeException
+    //   76	86	139	java/lang/RuntimeException
+    //   95	108	139	java/lang/RuntimeException
+    //   51	61	143	java/lang/IllegalStateException
+    //   64	73	143	java/lang/IllegalStateException
+    //   76	86	143	java/lang/IllegalStateException
+    //   95	108	143	java/lang/IllegalStateException
+    //   51	61	147	java/lang/StackOverflowError
+    //   64	73	147	java/lang/StackOverflowError
+    //   76	86	147	java/lang/StackOverflowError
+    //   95	108	147	java/lang/StackOverflowError
+    //   51	61	152	android/database/sqlite/SQLiteException
+    //   64	73	152	android/database/sqlite/SQLiteException
+    //   76	86	152	android/database/sqlite/SQLiteException
+    //   95	108	152	android/database/sqlite/SQLiteException
+    //   8	48	157	finally
+    //   8	48	163	java/lang/RuntimeException
+    //   8	48	220	java/lang/IllegalStateException
+    //   8	48	278	java/lang/StackOverflowError
+    //   8	48	365	android/database/sqlite/SQLiteException
+    //   51	61	456	finally
+    //   64	73	456	finally
+    //   76	86	456	finally
+    //   95	108	456	finally
+    //   170	192	456	finally
+    //   195	199	456	finally
+    //   227	249	456	finally
+    //   252	257	456	finally
+    //   286	311	456	finally
+    //   314	337	456	finally
+    //   340	344	456	finally
+    //   373	398	456	finally
+    //   401	424	456	finally
+    //   427	431	456	finally
+    //   122	129	486	finally
+    //   132	136	486	finally
+    //   207	214	486	finally
+    //   265	272	486	finally
+    //   352	359	486	finally
+    //   439	446	486	finally
+    //   461	467	486	finally
+    //   470	476	486	finally
+  }
+  
+  long insertEventContentValuesIntoTable(SQLiteDatabase paramSQLiteDatabase, String paramString, ContentValues paramContentValues)
+    throws SQLiteException, StackOverflowError
+  {
+    try
+    {
+      long l = paramSQLiteDatabase.insert(paramString, null, paramContentValues);
+      return l;
+    }
+    finally
+    {
+      paramSQLiteDatabase = finally;
+      throw paramSQLiteDatabase;
+    }
+  }
+  
+  long insertKeyValueContentValuesIntoTable(SQLiteDatabase paramSQLiteDatabase, String paramString, ContentValues paramContentValues)
+    throws SQLiteException, StackOverflowError
+  {
+    try
+    {
+      long l = paramSQLiteDatabase.insertWithOnConflict(paramString, null, paramContentValues, 5);
+      return l;
+    }
+    finally
+    {
+      paramSQLiteDatabase = finally;
+      throw paramSQLiteDatabase;
+    }
+  }
+  
+  long insertOrReplaceKeyLongValue(String paramString, Long paramLong)
+  {
+    if (paramLong == null) {}
+    try
+    {
+      long l = deleteKeyFromTable("long_store", paramString);
+      break label26;
+      l = insertOrReplaceKeyValueToTable("long_store", paramString, paramLong);
+      label26:
+      return l;
+    }
+    finally
+    {
+      for (;;) {}
+    }
+    throw paramString;
+  }
+  
+  long insertOrReplaceKeyValue(String paramString1, String paramString2)
+  {
+    if (paramString2 == null) {}
+    try
+    {
+      long l = deleteKeyFromTable("store", paramString1);
+      break label26;
+      l = insertOrReplaceKeyValueToTable("store", paramString1, paramString2);
+      label26:
+      return l;
+    }
+    finally
+    {
+      for (;;) {}
+    }
+    throw paramString1;
+  }
+  
+  long insertOrReplaceKeyValueToTable(SQLiteDatabase paramSQLiteDatabase, String paramString1, String paramString2, Object paramObject)
+    throws SQLiteException, StackOverflowError
+  {
+    try
+    {
+      ContentValues localContentValues = new ContentValues();
+      localContentValues.put("key", paramString2);
+      if ((paramObject instanceof Long)) {
+        localContentValues.put("value", (Long)paramObject);
+      } else {
+        localContentValues.put("value", (String)paramObject);
+      }
+      long l = insertKeyValueContentValuesIntoTable(paramSQLiteDatabase, paramString1, localContentValues);
+      if (l == -1L) {
+        logger.w("com.amplitude.api.DatabaseHelper", "Insert failed");
+      }
+      return l;
+    }
+    finally {}
+  }
+  
+  /* Error */
+  long insertOrReplaceKeyValueToTable(String paramString1, String paramString2, Object paramObject)
+  {
+    // Byte code:
+    //   0: aload_0
+    //   1: monitorenter
+    //   2: ldc2_w 124
+    //   5: lstore 6
+    //   7: aconst_null
+    //   8: astore 11
+    //   10: aconst_null
+    //   11: astore 12
+    //   13: aconst_null
+    //   14: astore 9
+    //   16: aload_0
+    //   17: invokevirtual 112	com/amplitude/api/DatabaseHelper:getWritableDatabase	()Landroid/database/sqlite/SQLiteDatabase;
+    //   20: astore 10
+    //   22: aload_0
+    //   23: aload 10
+    //   25: aload_1
+    //   26: aload_2
+    //   27: aload_3
+    //   28: invokevirtual 479	com/amplitude/api/DatabaseHelper:insertOrReplaceKeyValueToTable	(Landroid/database/sqlite/SQLiteDatabase;Ljava/lang/String;Ljava/lang/String;Ljava/lang/Object;)J
+    //   31: lstore 4
+    //   33: aload 10
+    //   35: ifnull +15 -> 50
+    //   38: aload 10
+    //   40: invokevirtual 204	android/database/sqlite/SQLiteDatabase:isOpen	()Z
+    //   43: ifeq +7 -> 50
+    //   46: aload_0
+    //   47: invokevirtual 142	com/amplitude/api/DatabaseHelper:close	()V
+    //   50: goto +227 -> 277
+    //   53: astore_1
+    //   54: aload 10
+    //   56: astore 9
+    //   58: goto +224 -> 282
+    //   61: astore 9
+    //   63: aload 10
+    //   65: astore_3
+    //   66: aload 9
+    //   68: astore 10
+    //   70: goto +24 -> 94
+    //   73: astore 9
+    //   75: aload 10
+    //   77: astore_3
+    //   78: aload 9
+    //   80: astore 10
+    //   82: goto +108 -> 190
+    //   85: astore_1
+    //   86: goto +196 -> 282
+    //   89: astore 10
+    //   91: aload 11
+    //   93: astore_3
+    //   94: aload_3
+    //   95: astore 9
+    //   97: getstatic 73	com/amplitude/api/DatabaseHelper:logger	Lcom/amplitude/api/AmplitudeLog;
+    //   100: ldc 41
+    //   102: ldc_w 481
+    //   105: iconst_1
+    //   106: anewarray 129	java/lang/Object
+    //   109: dup
+    //   110: iconst_0
+    //   111: aload_1
+    //   112: aastore
+    //   113: invokestatic 135	java/lang/String:format	(Ljava/lang/String;[Ljava/lang/Object;)Ljava/lang/String;
+    //   116: aload 10
+    //   118: invokevirtual 148	com/amplitude/api/AmplitudeLog:e	(Ljava/lang/String;Ljava/lang/String;Ljava/lang/Throwable;)I
+    //   121: pop
+    //   122: aload_3
+    //   123: astore 9
+    //   125: invokestatic 153	com/amplitude/api/Diagnostics:getLogger	()Lcom/amplitude/api/Diagnostics;
+    //   128: ldc_w 483
+    //   131: iconst_1
+    //   132: anewarray 129	java/lang/Object
+    //   135: dup
+    //   136: iconst_0
+    //   137: aload_2
+    //   138: aastore
+    //   139: invokestatic 135	java/lang/String:format	(Ljava/lang/String;[Ljava/lang/Object;)Ljava/lang/String;
+    //   142: aload 10
+    //   144: invokevirtual 159	com/amplitude/api/Diagnostics:logError	(Ljava/lang/String;Ljava/lang/Throwable;)Lcom/amplitude/api/Diagnostics;
+    //   147: pop
+    //   148: aload_3
+    //   149: astore 9
+    //   151: aload_0
+    //   152: invokespecial 162	com/amplitude/api/DatabaseHelper:delete	()V
+    //   155: lload 6
+    //   157: lstore 4
+    //   159: aload_3
+    //   160: ifnull +117 -> 277
+    //   163: lload 6
+    //   165: lstore 4
+    //   167: aload_3
+    //   168: invokevirtual 204	android/database/sqlite/SQLiteDatabase:isOpen	()Z
+    //   171: ifeq +106 -> 277
+    //   174: aload_0
+    //   175: invokevirtual 142	com/amplitude/api/DatabaseHelper:close	()V
+    //   178: lload 6
+    //   180: lstore 4
+    //   182: goto +95 -> 277
+    //   185: astore 10
+    //   187: aload 12
+    //   189: astore_3
+    //   190: aload_3
+    //   191: astore 9
+    //   193: getstatic 73	com/amplitude/api/DatabaseHelper:logger	Lcom/amplitude/api/AmplitudeLog;
+    //   196: ldc 41
+    //   198: ldc_w 481
+    //   201: iconst_1
+    //   202: anewarray 129	java/lang/Object
+    //   205: dup
+    //   206: iconst_0
+    //   207: aload_1
+    //   208: aastore
+    //   209: invokestatic 135	java/lang/String:format	(Ljava/lang/String;[Ljava/lang/Object;)Ljava/lang/String;
+    //   212: aload 10
+    //   214: invokevirtual 148	com/amplitude/api/AmplitudeLog:e	(Ljava/lang/String;Ljava/lang/String;Ljava/lang/Throwable;)I
+    //   217: pop
+    //   218: aload_3
+    //   219: astore 9
+    //   221: invokestatic 153	com/amplitude/api/Diagnostics:getLogger	()Lcom/amplitude/api/Diagnostics;
+    //   224: ldc_w 483
+    //   227: iconst_1
+    //   228: anewarray 129	java/lang/Object
+    //   231: dup
+    //   232: iconst_0
+    //   233: aload_2
+    //   234: aastore
+    //   235: invokestatic 135	java/lang/String:format	(Ljava/lang/String;[Ljava/lang/Object;)Ljava/lang/String;
+    //   238: aload 10
+    //   240: invokevirtual 159	com/amplitude/api/Diagnostics:logError	(Ljava/lang/String;Ljava/lang/Throwable;)Lcom/amplitude/api/Diagnostics;
+    //   243: pop
+    //   244: aload_3
+    //   245: astore 9
+    //   247: aload_0
+    //   248: invokespecial 162	com/amplitude/api/DatabaseHelper:delete	()V
+    //   251: lload 6
+    //   253: lstore 4
+    //   255: aload_3
+    //   256: ifnull +21 -> 277
+    //   259: aload_3
+    //   260: invokevirtual 204	android/database/sqlite/SQLiteDatabase:isOpen	()Z
+    //   263: istore 8
+    //   265: lload 6
+    //   267: lstore 4
+    //   269: iload 8
+    //   271: ifeq +6 -> 277
+    //   274: goto -100 -> 174
+    //   277: aload_0
+    //   278: monitorexit
+    //   279: lload 4
+    //   281: lreturn
+    //   282: aload 9
+    //   284: ifnull +18 -> 302
+    //   287: aload 9
+    //   289: invokevirtual 204	android/database/sqlite/SQLiteDatabase:isOpen	()Z
+    //   292: ifeq +10 -> 302
+    //   295: aload_0
+    //   296: invokevirtual 142	com/amplitude/api/DatabaseHelper:close	()V
+    //   299: goto +3 -> 302
+    //   302: aload_1
+    //   303: athrow
+    //   304: aload_0
+    //   305: monitorexit
+    //   306: aload_1
+    //   307: athrow
+    //   308: astore_1
+    //   309: goto -5 -> 304
+    // Local variable table:
+    //   start	length	slot	name	signature
+    //   0	312	0	this	DatabaseHelper
+    //   0	312	1	paramString1	String
+    //   0	312	2	paramString2	String
+    //   0	312	3	paramObject	Object
+    //   31	249	4	l1	long
+    //   5	261	6	l2	long
+    //   263	7	8	bool	boolean
+    //   14	43	9	localObject1	Object
+    //   61	6	9	localStackOverflowError1	StackOverflowError
+    //   73	6	9	localSQLiteException1	SQLiteException
+    //   95	193	9	localObject2	Object
+    //   20	61	10	localObject3	Object
+    //   89	54	10	localStackOverflowError2	StackOverflowError
+    //   185	54	10	localSQLiteException2	SQLiteException
+    //   8	84	11	localObject4	Object
+    //   11	177	12	localObject5	Object
+    // Exception table:
+    //   from	to	target	type
+    //   22	33	53	finally
+    //   22	33	61	java/lang/StackOverflowError
+    //   22	33	73	android/database/sqlite/SQLiteException
+    //   16	22	85	finally
+    //   97	122	85	finally
+    //   125	148	85	finally
+    //   151	155	85	finally
+    //   193	218	85	finally
+    //   221	244	85	finally
+    //   247	251	85	finally
+    //   16	22	89	java/lang/StackOverflowError
+    //   16	22	185	android/database/sqlite/SQLiteException
+    //   38	50	308	finally
+    //   167	174	308	finally
+    //   174	178	308	finally
+    //   259	265	308	finally
+    //   287	299	308	finally
+    //   302	304	308	finally
+  }
+  
+  /* Error */
+  public void onCreate(SQLiteDatabase paramSQLiteDatabase)
+  {
+    // Byte code:
+    //   0: aload_1
+    //   1: ldc 17
+    //   3: invokevirtual 332	android/database/sqlite/SQLiteDatabase:execSQL	(Ljava/lang/String;)V
+    //   6: aload_1
+    //   7: ldc 14
+    //   9: invokevirtual 332	android/database/sqlite/SQLiteDatabase:execSQL	(Ljava/lang/String;)V
+    //   12: aload_1
+    //   13: ldc 8
+    //   15: invokevirtual 332	android/database/sqlite/SQLiteDatabase:execSQL	(Ljava/lang/String;)V
+    //   18: aload_1
+    //   19: ldc 11
+    //   21: invokevirtual 332	android/database/sqlite/SQLiteDatabase:execSQL	(Ljava/lang/String;)V
+    //   24: aload_0
+    //   25: getfield 193	com/amplitude/api/DatabaseHelper:databaseResetListener	Lcom/amplitude/api/DatabaseResetListener;
+    //   28: ifnull +84 -> 112
+    //   31: aload_0
+    //   32: getfield 87	com/amplitude/api/DatabaseHelper:callResetListenerOnDatabaseReset	Z
+    //   35: ifeq +77 -> 112
+    //   38: aload_0
+    //   39: iconst_0
+    //   40: putfield 87	com/amplitude/api/DatabaseHelper:callResetListenerOnDatabaseReset	Z
+    //   43: aload_0
+    //   44: getfield 193	com/amplitude/api/DatabaseHelper:databaseResetListener	Lcom/amplitude/api/DatabaseResetListener;
+    //   47: aload_1
+    //   48: invokeinterface 199 2 0
+    //   53: aload_0
+    //   54: iconst_1
+    //   55: putfield 87	com/amplitude/api/DatabaseHelper:callResetListenerOnDatabaseReset	Z
+    //   58: return
+    //   59: astore_1
+    //   60: goto +45 -> 105
+    //   63: astore_1
+    //   64: getstatic 73	com/amplitude/api/DatabaseHelper:logger	Lcom/amplitude/api/AmplitudeLog;
+    //   67: ldc 41
+    //   69: ldc_w 485
+    //   72: iconst_0
+    //   73: anewarray 129	java/lang/Object
+    //   76: invokestatic 135	java/lang/String:format	(Ljava/lang/String;[Ljava/lang/Object;)Ljava/lang/String;
+    //   79: aload_1
+    //   80: invokevirtual 148	com/amplitude/api/AmplitudeLog:e	(Ljava/lang/String;Ljava/lang/String;Ljava/lang/Throwable;)I
+    //   83: pop
+    //   84: invokestatic 153	com/amplitude/api/Diagnostics:getLogger	()Lcom/amplitude/api/Diagnostics;
+    //   87: ldc_w 487
+    //   90: iconst_0
+    //   91: anewarray 129	java/lang/Object
+    //   94: invokestatic 135	java/lang/String:format	(Ljava/lang/String;[Ljava/lang/Object;)Ljava/lang/String;
+    //   97: aload_1
+    //   98: invokevirtual 159	com/amplitude/api/Diagnostics:logError	(Ljava/lang/String;Ljava/lang/Throwable;)Lcom/amplitude/api/Diagnostics;
+    //   101: pop
+    //   102: goto -49 -> 53
+    //   105: aload_0
+    //   106: iconst_1
+    //   107: putfield 87	com/amplitude/api/DatabaseHelper:callResetListenerOnDatabaseReset	Z
+    //   110: aload_1
+    //   111: athrow
+    //   112: return
+    // Local variable table:
+    //   start	length	slot	name	signature
+    //   0	113	0	this	DatabaseHelper
+    //   0	113	1	paramSQLiteDatabase	SQLiteDatabase
+    // Exception table:
+    //   from	to	target	type
+    //   38	53	59	finally
+    //   64	102	59	finally
+    //   38	53	63	android/database/sqlite/SQLiteException
+  }
+  
+  public void onUpgrade(SQLiteDatabase paramSQLiteDatabase, int paramInt1, int paramInt2)
+  {
+    if (paramInt1 > paramInt2)
+    {
+      logger.e("com.amplitude.api.DatabaseHelper", "onUpgrade() with invalid oldVersion and newVersion");
+      resetDatabase(paramSQLiteDatabase);
+      return;
+    }
+    if (paramInt2 <= 1) {
+      return;
+    }
+    switch (paramInt1)
+    {
+    default: 
+      AmplitudeLog localAmplitudeLog = logger;
+      StringBuilder localStringBuilder = new StringBuilder();
+      localStringBuilder.append("onUpgrade() with unknown oldVersion ");
+      localStringBuilder.append(paramInt1);
+      localAmplitudeLog.e("com.amplitude.api.DatabaseHelper", localStringBuilder.toString());
+      resetDatabase(paramSQLiteDatabase);
+      return;
+    case 1: 
+      paramSQLiteDatabase.execSQL("CREATE TABLE IF NOT EXISTS store (key TEXT PRIMARY KEY NOT NULL, value TEXT);");
+      if (paramInt2 <= 2) {
+        return;
+      }
+    case 2: 
+      paramSQLiteDatabase.execSQL("CREATE TABLE IF NOT EXISTS identifys (id INTEGER PRIMARY KEY AUTOINCREMENT, event TEXT);");
+      paramSQLiteDatabase.execSQL("CREATE TABLE IF NOT EXISTS long_store (key TEXT PRIMARY KEY NOT NULL, value INTEGER);");
+    }
+  }
+  
+  Cursor queryDb(SQLiteDatabase paramSQLiteDatabase, String paramString1, String[] paramArrayOfString1, String paramString2, String[] paramArrayOfString2, String paramString3, String paramString4, String paramString5, String paramString6)
+  {
+    return paramSQLiteDatabase.query(paramString1, paramArrayOfString1, paramString2, paramArrayOfString2, paramString3, paramString4, paramString5, paramString6);
+  }
+  
+  void removeEvent(long paramLong)
+  {
+    try
+    {
+      removeEventFromTable("events", paramLong);
+      return;
+    }
+    finally
+    {
+      localObject = finally;
+      throw localObject;
+    }
+  }
+  
+  void removeEvents(long paramLong)
+  {
+    try
+    {
+      removeEventsFromTable("events", paramLong);
+      return;
+    }
+    finally
+    {
+      localObject = finally;
+      throw localObject;
+    }
+  }
+  
+  void removeIdentify(long paramLong)
+  {
+    try
+    {
+      removeEventFromTable("identifys", paramLong);
+      return;
+    }
+    finally
+    {
+      localObject = finally;
+      throw localObject;
+    }
+  }
+  
+  void removeIdentifys(long paramLong)
+  {
+    try
+    {
+      removeEventsFromTable("identifys", paramLong);
+      return;
+    }
+    finally
+    {
+      localObject = finally;
+      throw localObject;
+    }
+  }
+  
+  void setDatabaseResetListener(DatabaseResetListener paramDatabaseResetListener)
+  {
+    databaseResetListener = paramDatabaseResetListener;
+  }
+}

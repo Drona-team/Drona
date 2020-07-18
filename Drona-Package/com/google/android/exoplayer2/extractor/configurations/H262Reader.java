@@ -1,0 +1,193 @@
+package com.google.android.exoplayer2.extractor.configurations;
+
+import android.util.Pair;
+import com.google.android.exoplayer2.Format;
+import com.google.android.exoplayer2.extractor.ExtractorOutput;
+import com.google.android.exoplayer2.extractor.TrackOutput;
+import com.google.android.exoplayer2.util.NalUnitUtil;
+import com.google.android.exoplayer2.util.ParsableByteArray;
+import java.util.Arrays;
+import java.util.Collections;
+
+public final class H262Reader
+  implements ElementaryStreamReader
+{
+  private static final double[] FRAME_RATE_VALUES = { 23.976023976023978D, 24.0D, 25.0D, 29.97002997002997D, 30.0D, 50.0D, 59.94005994005994D, 60.0D };
+  private static final int START_EXTENSION = 181;
+  private static final int START_GROUP = 184;
+  private static final int START_PICTURE = 0;
+  private static final int START_SEQUENCE_HEADER = 179;
+  private static final int START_USER_DATA = 178;
+  private final CsdBuffer csdBuffer;
+  private String formatId;
+  private long frameDurationUs;
+  private boolean hasOutputFormat;
+  private TrackOutput output;
+  private long pesTimeUs;
+  private final boolean[] prefixFlags;
+  private boolean sampleHasPicture;
+  private boolean sampleIsKeyframe;
+  private long samplePosition;
+  private long sampleTimeUs;
+  private boolean startedFirstSample;
+  private long totalBytesWritten;
+  private final NalUnitTargetBuffer userData;
+  private final ParsableByteArray userDataParsable;
+  private final UserDataReader userDataReader;
+  
+  public H262Reader()
+  {
+    this(null);
+  }
+  
+  public H262Reader(UserDataReader paramUserDataReader)
+  {
+    userDataReader = paramUserDataReader;
+    prefixFlags = new boolean[4];
+    csdBuffer = new CsdBuffer(128);
+    if (paramUserDataReader != null)
+    {
+      userData = new NalUnitTargetBuffer(178, 128);
+      userDataParsable = new ParsableByteArray();
+      return;
+    }
+    userData = null;
+    userDataParsable = null;
+  }
+  
+  private static Pair parseCsdBuffer(CsdBuffer paramCsdBuffer, String paramString)
+  {
+    byte[] arrayOfByte = Arrays.copyOf(data, length);
+    int k = arrayOfByte[4];
+    int i = arrayOfByte[5] & 0xFF;
+    int j = arrayOfByte[6];
+    k = (k & 0xFF) << 4 | i >> 4;
+    i = (i & 0xF) << 8 | j & 0xFF;
+    float f;
+    switch ((arrayOfByte[7] & 0xF0) >> 4)
+    {
+    default: 
+      f = 1.0F;
+      break;
+    case 4: 
+      f = i * 121 / (k * 100);
+      break;
+    case 3: 
+      f = i * 16 / (k * 9);
+      break;
+    case 2: 
+      f = i * 4 / (k * 3);
+    }
+    paramString = Format.createVideoSampleFormat(paramString, "video/mpeg2", null, -1, -1, k, i, -1.0F, Collections.singletonList(arrayOfByte), -1, f, null);
+    long l2 = 0L;
+    i = (arrayOfByte[7] & 0xF) - 1;
+    long l1 = l2;
+    if (i >= 0)
+    {
+      l1 = l2;
+      if (i < FRAME_RATE_VALUES.length)
+      {
+        double d2 = FRAME_RATE_VALUES[i];
+        j = sequenceExtensionPosition + 9;
+        i = (arrayOfByte[j] & 0x60) >> 5;
+        j = arrayOfByte[j] & 0x1F;
+        double d1 = d2;
+        if (i != j) {
+          d1 = d2 * ((i + 1.0D) / (j + 1));
+        }
+        l1 = (1000000.0D / d1);
+      }
+    }
+    return Pair.create(paramString, Long.valueOf(l1));
+  }
+  
+  public void consume(ParsableByteArray paramParsableByteArray)
+  {
+    throw new Runtime("d2j fail translate: java.lang.RuntimeException: can not merge I and Z\n\tat com.googlecode.dex2jar.ir.TypeClass.merge(TypeClass.java:100)\n\tat com.googlecode.dex2jar.ir.ts.TypeTransformer$TypeRef.updateTypeClass(TypeTransformer.java:174)\n\tat com.googlecode.dex2jar.ir.ts.TypeTransformer$TypeAnalyze.copyTypes(TypeTransformer.java:311)\n\tat com.googlecode.dex2jar.ir.ts.TypeTransformer$TypeAnalyze.fixTypes(TypeTransformer.java:226)\n\tat com.googlecode.dex2jar.ir.ts.TypeTransformer$TypeAnalyze.analyze(TypeTransformer.java:207)\n\tat com.googlecode.dex2jar.ir.ts.TypeTransformer.transform(TypeTransformer.java:44)\n\tat com.googlecode.d2j.dex.Dex2jar$2.optimize(Dex2jar.java:162)\n\tat com.googlecode.d2j.dex.Dex2Asm.convertCode(Dex2Asm.java:414)\n\tat com.googlecode.d2j.dex.ExDex2Asm.convertCode(ExDex2Asm.java:42)\n\tat com.googlecode.d2j.dex.Dex2jar$2.convertCode(Dex2jar.java:128)\n\tat com.googlecode.d2j.dex.Dex2Asm.convertMethod(Dex2Asm.java:509)\n\tat com.googlecode.d2j.dex.Dex2Asm.convertClass(Dex2Asm.java:406)\n\tat com.googlecode.d2j.dex.Dex2Asm.convertDex(Dex2Asm.java:422)\n\tat com.googlecode.d2j.dex.Dex2jar.doTranslate(Dex2jar.java:172)\n\tat com.googlecode.d2j.dex.Dex2jar.to(Dex2jar.java:272)\n\tat com.googlecode.dex2jar.tools.Dex2jarCmd.doCommandLine(Dex2jarCmd.java:108)\n\tat com.googlecode.dex2jar.tools.BaseCmd.doMain(BaseCmd.java:288)\n\tat com.googlecode.dex2jar.tools.Dex2jarCmd.main(Dex2jarCmd.java:32)\n");
+  }
+  
+  public void createTracks(ExtractorOutput paramExtractorOutput, TsPayloadReader.TrackIdGenerator paramTrackIdGenerator)
+  {
+    paramTrackIdGenerator.generateNewId();
+    formatId = paramTrackIdGenerator.getFormatId();
+    output = paramExtractorOutput.track(paramTrackIdGenerator.getTrackId(), 2);
+    if (userDataReader != null) {
+      userDataReader.createTracks(paramExtractorOutput, paramTrackIdGenerator);
+    }
+  }
+  
+  public void packetFinished() {}
+  
+  public void packetStarted(long paramLong, boolean paramBoolean)
+  {
+    pesTimeUs = paramLong;
+  }
+  
+  public void seek()
+  {
+    NalUnitUtil.clearPrefixFlags(prefixFlags);
+    csdBuffer.reset();
+    if (userDataReader != null) {
+      userData.reset();
+    }
+    totalBytesWritten = 0L;
+    startedFirstSample = false;
+  }
+  
+  final class CsdBuffer
+  {
+    private static final byte[] START_CODE = { 0, 0, 1 };
+    public byte[] data;
+    private boolean isFilling;
+    public int length;
+    public int sequenceExtensionPosition;
+    
+    public CsdBuffer()
+    {
+      data = new byte[this$1];
+    }
+    
+    public void onData(byte[] paramArrayOfByte, int paramInt1, int paramInt2)
+    {
+      if (!isFilling) {
+        return;
+      }
+      paramInt2 -= paramInt1;
+      if (data.length < length + paramInt2) {
+        data = Arrays.copyOf(data, (length + paramInt2) * 2);
+      }
+      System.arraycopy(paramArrayOfByte, paramInt1, data, length, paramInt2);
+      length += paramInt2;
+    }
+    
+    public boolean onStartCode(int paramInt1, int paramInt2)
+    {
+      if (isFilling)
+      {
+        length -= paramInt2;
+        if ((sequenceExtensionPosition == 0) && (paramInt1 == 181))
+        {
+          sequenceExtensionPosition = length;
+        }
+        else
+        {
+          isFilling = false;
+          return true;
+        }
+      }
+      else if (paramInt1 == 179)
+      {
+        isFilling = true;
+      }
+      onData(START_CODE, 0, START_CODE.length);
+      return false;
+    }
+    
+    public void reset()
+    {
+      isFilling = false;
+      length = 0;
+      sequenceExtensionPosition = 0;
+    }
+  }
+}

@@ -1,0 +1,49 @@
+package com.bugsnag.android;
+
+import androidx.annotation.NonNull;
+import java.io.IOException;
+import java.util.List;
+import java.util.Map;
+
+class CachedThread
+  implements JsonStream.Streamable
+{
+  private final long id;
+  private final boolean isErrorReportingThread;
+  private final String name;
+  private Stacktrace stacktrace;
+  private final String type;
+  
+  private CachedThread(long paramLong, String paramString1, String paramString2, boolean paramBoolean, Stacktrace paramStacktrace)
+  {
+    id = paramLong;
+    name = paramString1;
+    type = paramString2;
+    isErrorReportingThread = paramBoolean;
+    stacktrace = paramStacktrace;
+  }
+  
+  CachedThread(long paramLong, String paramString1, String paramString2, boolean paramBoolean, List<Map<String, Object>> paramList)
+  {
+    this(paramLong, paramString1, paramString2, paramBoolean, new Stacktrace(paramList));
+  }
+  
+  CachedThread(Configuration paramConfiguration, long paramLong, String paramString1, String paramString2, boolean paramBoolean, StackTraceElement[] paramArrayOfStackTraceElement)
+  {
+    this(paramLong, paramString1, paramString2, paramBoolean, new Stacktrace(paramArrayOfStackTraceElement, paramConfiguration.getProjectPackages()));
+  }
+  
+  public void toStream(@NonNull JsonStream paramJsonStream)
+    throws IOException
+  {
+    paramJsonStream.beginObject();
+    paramJsonStream.name("id").value(id);
+    paramJsonStream.name("name").value(name);
+    paramJsonStream.name("type").value(type);
+    paramJsonStream.name("stacktrace").value(stacktrace);
+    if (isErrorReportingThread) {
+      paramJsonStream.name("errorReportingThread").value(true);
+    }
+    paramJsonStream.endObject();
+  }
+}

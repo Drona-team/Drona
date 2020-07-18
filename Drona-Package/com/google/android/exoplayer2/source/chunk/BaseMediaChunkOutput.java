@@ -1,0 +1,66 @@
+package com.google.android.exoplayer2.source.chunk;
+
+import com.google.android.exoplayer2.extractor.DummyTrackOutput;
+import com.google.android.exoplayer2.extractor.TrackOutput;
+import com.google.android.exoplayer2.source.SampleQueue;
+import com.google.android.exoplayer2.util.Log;
+
+public final class BaseMediaChunkOutput
+  implements ChunkExtractorWrapper.TrackOutputProvider
+{
+  private static final String PAGE_KEY = "BaseMediaChunkOutput";
+  private final SampleQueue[] sampleQueues;
+  private final int[] trackTypes;
+  
+  public BaseMediaChunkOutput(int[] paramArrayOfInt, SampleQueue[] paramArrayOfSampleQueue)
+  {
+    trackTypes = paramArrayOfInt;
+    sampleQueues = paramArrayOfSampleQueue;
+  }
+  
+  public int[] getWriteIndices()
+  {
+    int[] arrayOfInt = new int[sampleQueues.length];
+    int i = 0;
+    while (i < sampleQueues.length)
+    {
+      if (sampleQueues[i] != null) {
+        arrayOfInt[i] = sampleQueues[i].getWriteIndex();
+      }
+      i += 1;
+    }
+    return arrayOfInt;
+  }
+  
+  public void setSampleOffsetUs(long paramLong)
+  {
+    SampleQueue[] arrayOfSampleQueue = sampleQueues;
+    int j = arrayOfSampleQueue.length;
+    int i = 0;
+    while (i < j)
+    {
+      SampleQueue localSampleQueue = arrayOfSampleQueue[i];
+      if (localSampleQueue != null) {
+        localSampleQueue.setSampleOffsetUs(paramLong);
+      }
+      i += 1;
+    }
+  }
+  
+  public TrackOutput track(int paramInt1, int paramInt2)
+  {
+    paramInt1 = 0;
+    while (paramInt1 < trackTypes.length)
+    {
+      if (paramInt2 == trackTypes[paramInt1]) {
+        return sampleQueues[paramInt1];
+      }
+      paramInt1 += 1;
+    }
+    StringBuilder localStringBuilder = new StringBuilder();
+    localStringBuilder.append("Unmatched track of type: ");
+    localStringBuilder.append(paramInt2);
+    Log.e("BaseMediaChunkOutput", localStringBuilder.toString());
+    return new DummyTrackOutput();
+  }
+}

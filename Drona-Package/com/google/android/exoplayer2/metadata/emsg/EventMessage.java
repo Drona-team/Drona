@@ -1,0 +1,114 @@
+package com.google.android.exoplayer2.metadata.emsg;
+
+import android.os.Parcel;
+import android.os.Parcelable.Creator;
+import com.google.android.exoplayer2.metadata.Metadata.Entry;
+import com.google.android.exoplayer2.util.Util;
+import java.util.Arrays;
+
+public final class EventMessage
+  implements Metadata.Entry
+{
+  public static final Parcelable.Creator<EventMessage> CREATOR = new Parcelable.Creator()
+  {
+    public EventMessage createFromParcel(Parcel paramAnonymousParcel)
+    {
+      return new EventMessage(paramAnonymousParcel);
+    }
+    
+    public EventMessage[] newArray(int paramAnonymousInt)
+    {
+      return new EventMessage[paramAnonymousInt];
+    }
+  };
+  public final long durationMs;
+  private int hashCode;
+  public final long id;
+  public final byte[] messageData;
+  public final long presentationTimeUs;
+  public final String schemeIdUri;
+  public final String value;
+  
+  EventMessage(Parcel paramParcel)
+  {
+    schemeIdUri = ((String)Util.castNonNull(paramParcel.readString()));
+    value = ((String)Util.castNonNull(paramParcel.readString()));
+    presentationTimeUs = paramParcel.readLong();
+    durationMs = paramParcel.readLong();
+    id = paramParcel.readLong();
+    messageData = ((byte[])Util.castNonNull(paramParcel.createByteArray()));
+  }
+  
+  public EventMessage(String paramString1, String paramString2, long paramLong1, long paramLong2, byte[] paramArrayOfByte, long paramLong3)
+  {
+    schemeIdUri = paramString1;
+    value = paramString2;
+    durationMs = paramLong1;
+    id = paramLong2;
+    messageData = paramArrayOfByte;
+    presentationTimeUs = paramLong3;
+  }
+  
+  public int describeContents()
+  {
+    return 0;
+  }
+  
+  public boolean equals(Object paramObject)
+  {
+    if (this == paramObject) {
+      return true;
+    }
+    if (paramObject != null)
+    {
+      if (getClass() != paramObject.getClass()) {
+        return false;
+      }
+      paramObject = (EventMessage)paramObject;
+      return (presentationTimeUs == presentationTimeUs) && (durationMs == durationMs) && (id == id) && (Util.areEqual(schemeIdUri, schemeIdUri)) && (Util.areEqual(value, value)) && (Arrays.equals(messageData, messageData));
+    }
+    return false;
+  }
+  
+  public int hashCode()
+  {
+    if (hashCode == 0)
+    {
+      String str = schemeIdUri;
+      int j = 0;
+      int i;
+      if (str != null) {
+        i = schemeIdUri.hashCode();
+      } else {
+        i = 0;
+      }
+      if (value != null) {
+        j = value.hashCode();
+      }
+      hashCode = ((((((527 + i) * 31 + j) * 31 + (int)(presentationTimeUs ^ presentationTimeUs >>> 32)) * 31 + (int)(durationMs ^ durationMs >>> 32)) * 31 + (int)(id ^ id >>> 32)) * 31 + Arrays.hashCode(messageData));
+    }
+    return hashCode;
+  }
+  
+  public String toString()
+  {
+    StringBuilder localStringBuilder = new StringBuilder();
+    localStringBuilder.append("EMSG: scheme=");
+    localStringBuilder.append(schemeIdUri);
+    localStringBuilder.append(", id=");
+    localStringBuilder.append(id);
+    localStringBuilder.append(", value=");
+    localStringBuilder.append(value);
+    return localStringBuilder.toString();
+  }
+  
+  public void writeToParcel(Parcel paramParcel, int paramInt)
+  {
+    paramParcel.writeString(schemeIdUri);
+    paramParcel.writeString(value);
+    paramParcel.writeLong(presentationTimeUs);
+    paramParcel.writeLong(durationMs);
+    paramParcel.writeLong(id);
+    paramParcel.writeByteArray(messageData);
+  }
+}

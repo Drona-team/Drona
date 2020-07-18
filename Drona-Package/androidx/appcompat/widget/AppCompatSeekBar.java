@@ -1,0 +1,56 @@
+package androidx.appcompat.widget;
+
+import android.content.Context;
+import android.graphics.Canvas;
+import android.util.AttributeSet;
+import android.widget.AbsSeekBar;
+import android.widget.SeekBar;
+import androidx.appcompat.R.attr;
+
+public class AppCompatSeekBar
+  extends SeekBar
+{
+  private final AppCompatSeekBarHelper mAppCompatSeekBarHelper = new AppCompatSeekBarHelper(this);
+  
+  public AppCompatSeekBar(Context paramContext)
+  {
+    this(paramContext, null);
+  }
+  
+  public AppCompatSeekBar(Context paramContext, AttributeSet paramAttributeSet)
+  {
+    this(paramContext, paramAttributeSet, R.attr.seekBarStyle);
+  }
+  
+  public AppCompatSeekBar(Context paramContext, AttributeSet paramAttributeSet, int paramInt)
+  {
+    super(paramContext, paramAttributeSet, paramInt);
+    mAppCompatSeekBarHelper.loadFromAttributes(paramAttributeSet, paramInt);
+  }
+  
+  protected void drawableStateChanged()
+  {
+    super.drawableStateChanged();
+    mAppCompatSeekBarHelper.drawableStateChanged();
+  }
+  
+  public void jumpDrawablesToCurrentState()
+  {
+    super.jumpDrawablesToCurrentState();
+    mAppCompatSeekBarHelper.jumpDrawablesToCurrentState();
+  }
+  
+  protected void onDraw(Canvas paramCanvas)
+  {
+    try
+    {
+      super.onDraw(paramCanvas);
+      mAppCompatSeekBarHelper.drawTickMarks(paramCanvas);
+      return;
+    }
+    catch (Throwable paramCanvas)
+    {
+      throw paramCanvas;
+    }
+  }
+}

@@ -1,0 +1,17 @@
+package com.facebook.react.bridge;
+
+import androidx.annotation.Nullable;
+
+public class NativeArgumentsParseException
+  extends JSApplicationCausedNativeException
+{
+  public NativeArgumentsParseException(String paramString)
+  {
+    super(paramString);
+  }
+  
+  public NativeArgumentsParseException(@Nullable String paramString, @Nullable Throwable paramThrowable)
+  {
+    super(paramString, paramThrowable);
+  }
+}

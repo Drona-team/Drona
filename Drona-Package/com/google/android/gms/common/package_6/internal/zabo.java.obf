@@ -1,0 +1,38 @@
+package com.google.android.gms.common.api.internal;
+
+import android.util.Log;
+import com.google.android.gms.common.ConnectionResult;
+import com.google.android.gms.common.api.Api.Client;
+import java.util.Collections;
+import java.util.Map;
+
+final class zabo
+  implements Runnable
+{
+  zabo(GoogleApiManager.zac paramZac, ConnectionResult paramConnectionResult) {}
+  
+  public final void run()
+  {
+    if (zaiz.isSuccess())
+    {
+      GoogleApiManager.zac.zaa(zajg, true);
+      if (GoogleApiManager.zac.zaa(zajg).requiresSignIn())
+      {
+        GoogleApiManager.zac.zab(zajg);
+        return;
+      }
+      try
+      {
+        GoogleApiManager.zac.zaa(zajg).getRemoteService(null, Collections.emptySet());
+        return;
+      }
+      catch (SecurityException localSecurityException)
+      {
+        Log.e("GoogleApiManager", "Failed to get service from broker. ", localSecurityException);
+        ((GoogleApiManager.zaa)GoogleApiManager.zaj(zajg.zaim).get(GoogleApiManager.zac.zac(zajg))).onConnectionFailed(new ConnectionResult(10));
+        return;
+      }
+    }
+    ((GoogleApiManager.zaa)GoogleApiManager.zaj(zajg.zaim).get(GoogleApiManager.zac.zac(zajg))).onConnectionFailed(zaiz);
+  }
+}

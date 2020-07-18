@@ -1,0 +1,66 @@
+package bleshadow.dagger.internal;
+
+import bleshadow.dagger.Lazy;
+import bleshadow.javax.inject.Provider;
+
+public final class DoubleCheck<T>
+  implements Provider<T>, Lazy<T>
+{
+  private static final Object UNINITIALIZED = new Object();
+  private volatile Object instance = UNINITIALIZED;
+  private volatile Provider<T> provider;
+  
+  private DoubleCheck(Provider<T> paramProvider)
+  {
+    provider = paramProvider;
+  }
+  
+  public static <P extends Provider<T>, T> Lazy<T> lazy(P paramP)
+  {
+    if ((paramP instanceof Lazy)) {
+      return (Lazy)paramP;
+    }
+    return new DoubleCheck((Provider)Preconditions.checkNotNull(paramP));
+  }
+  
+  public static <P extends Provider<T>, T> Provider<T> provider(P paramP)
+  {
+    Preconditions.checkNotNull(paramP);
+    if ((paramP instanceof DoubleCheck)) {
+      return paramP;
+    }
+    return new DoubleCheck(paramP);
+  }
+  
+  public T get()
+  {
+    Object localObject1 = instance;
+    if (localObject1 == UNINITIALIZED) {
+      try
+      {
+        Object localObject2 = instance;
+        localObject1 = localObject2;
+        if (localObject2 == UNINITIALIZED)
+        {
+          localObject1 = provider.get();
+          localObject2 = instance;
+          if ((localObject2 != UNINITIALIZED) && (localObject2 != localObject1))
+          {
+            StringBuilder localStringBuilder = new StringBuilder();
+            localStringBuilder.append("Scoped provider was invoked recursively returning different results: ");
+            localStringBuilder.append(localObject2);
+            localStringBuilder.append(" & ");
+            localStringBuilder.append(localObject1);
+            localStringBuilder.append(". This is likely due to a circular dependency.");
+            throw new IllegalStateException(localStringBuilder.toString());
+          }
+          instance = localObject1;
+          provider = null;
+        }
+        return localObject1;
+      }
+      finally {}
+    }
+    return ?;
+  }
+}

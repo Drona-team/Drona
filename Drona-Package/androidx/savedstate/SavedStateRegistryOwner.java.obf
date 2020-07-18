@@ -1,0 +1,11 @@
+package androidx.savedstate;
+
+import androidx.annotation.NonNull;
+import androidx.lifecycle.LifecycleOwner;
+
+public abstract interface SavedStateRegistryOwner
+  extends LifecycleOwner
+{
+  @NonNull
+  public abstract SavedStateRegistry getSavedStateRegistry();
+}

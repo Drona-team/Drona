@@ -1,0 +1,180 @@
+package com.google.android.exoplayer2.trackselection;
+
+import android.os.SystemClock;
+import com.google.android.exoplayer2.Format;
+import com.google.android.exoplayer2.source.TrackGroup;
+import com.google.android.exoplayer2.util.Assertions;
+import com.google.android.exoplayer2.util.Util;
+import java.util.Arrays;
+import java.util.Comparator;
+import java.util.List;
+
+public abstract class BaseTrackSelection
+  implements TrackSelection
+{
+  private final long[] blacklistUntilTimes;
+  private final Format[] formats;
+  protected final TrackGroup group;
+  private int hashCode;
+  protected final int length;
+  protected final int[] tracks;
+  
+  public BaseTrackSelection(TrackGroup paramTrackGroup, int... paramVarArgs)
+  {
+    int i = paramVarArgs.length;
+    int j = 0;
+    boolean bool;
+    if (i > 0) {
+      bool = true;
+    } else {
+      bool = false;
+    }
+    Assertions.checkState(bool);
+    group = ((TrackGroup)Assertions.checkNotNull(paramTrackGroup));
+    length = paramVarArgs.length;
+    formats = new Format[length];
+    i = 0;
+    while (i < paramVarArgs.length)
+    {
+      formats[i] = paramTrackGroup.getFormat(paramVarArgs[i]);
+      i += 1;
+    }
+    Arrays.sort(formats, new DecreasingBandwidthComparator(null));
+    tracks = new int[length];
+    i = j;
+    while (i < length)
+    {
+      tracks[i] = paramTrackGroup.indexOf(formats[i]);
+      i += 1;
+    }
+    blacklistUntilTimes = new long[length];
+  }
+  
+  public final boolean blacklist(int paramInt, long paramLong)
+  {
+    long l = SystemClock.elapsedRealtime();
+    boolean bool = isBlacklisted(paramInt, l);
+    int i = 0;
+    while ((i < length) && (!bool))
+    {
+      if ((i != paramInt) && (!isBlacklisted(i, l))) {
+        bool = true;
+      } else {
+        bool = false;
+      }
+      i += 1;
+    }
+    if (!bool) {
+      return false;
+    }
+    blacklistUntilTimes[paramInt] = Math.max(blacklistUntilTimes[paramInt], Util.addWithOverflowDefault(l, paramLong, Long.MAX_VALUE));
+    return true;
+  }
+  
+  public void disable() {}
+  
+  public void enable() {}
+  
+  public boolean equals(Object paramObject)
+  {
+    if (this == paramObject) {
+      return true;
+    }
+    if (paramObject != null)
+    {
+      if (getClass() != paramObject.getClass()) {
+        return false;
+      }
+      paramObject = (BaseTrackSelection)paramObject;
+      return (group == group) && (Arrays.equals(tracks, tracks));
+    }
+    return false;
+  }
+  
+  public int evaluateQueueSize(long paramLong, List paramList)
+  {
+    return paramList.size();
+  }
+  
+  public final Format getFormat(int paramInt)
+  {
+    return formats[paramInt];
+  }
+  
+  public final int getIndexInTrackGroup(int paramInt)
+  {
+    return tracks[paramInt];
+  }
+  
+  public final Format getSelectedFormat()
+  {
+    return formats[getSelectedIndex()];
+  }
+  
+  public final int getSelectedIndexInTrackGroup()
+  {
+    return tracks[getSelectedIndex()];
+  }
+  
+  public final TrackGroup getTrackGroup()
+  {
+    return group;
+  }
+  
+  public int hashCode()
+  {
+    if (hashCode == 0) {
+      hashCode = (System.identityHashCode(group) * 31 + Arrays.hashCode(tracks));
+    }
+    return hashCode;
+  }
+  
+  public final int indexOf(int paramInt)
+  {
+    int i = 0;
+    while (i < length)
+    {
+      if (tracks[i] == paramInt) {
+        return i;
+      }
+      i += 1;
+    }
+    return -1;
+  }
+  
+  public final int indexOf(Format paramFormat)
+  {
+    int i = 0;
+    while (i < length)
+    {
+      if (formats[i] == paramFormat) {
+        return i;
+      }
+      i += 1;
+    }
+    return -1;
+  }
+  
+  protected final boolean isBlacklisted(int paramInt, long paramLong)
+  {
+    return blacklistUntilTimes[paramInt] > paramLong;
+  }
+  
+  public final int length()
+  {
+    return tracks.length;
+  }
+  
+  public void onPlaybackSpeed(float paramFloat) {}
+  
+  private static final class DecreasingBandwidthComparator
+    implements Comparator<Format>
+  {
+    private DecreasingBandwidthComparator() {}
+    
+    public int compare(Format paramFormat1, Format paramFormat2)
+    {
+      return bitrate - bitrate;
+    }
+  }
+}

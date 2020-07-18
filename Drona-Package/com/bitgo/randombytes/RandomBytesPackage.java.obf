@@ -1,0 +1,33 @@
+package com.bitgo.randombytes;
+
+import com.facebook.react.ReactPackage;
+import com.facebook.react.bridge.JavaScriptModule;
+import com.facebook.react.bridge.NativeModule;
+import com.facebook.react.bridge.ReactApplicationContext;
+import com.facebook.react.uimanager.ViewManager;
+import java.util.ArrayList;
+import java.util.Collections;
+import java.util.List;
+
+public class RandomBytesPackage
+  implements ReactPackage
+{
+  public RandomBytesPackage() {}
+  
+  public List<Class<? extends JavaScriptModule>> createJSModules()
+  {
+    return Collections.emptyList();
+  }
+  
+  public List<NativeModule> createNativeModules(ReactApplicationContext paramReactApplicationContext)
+  {
+    ArrayList localArrayList = new ArrayList();
+    localArrayList.add(new RandomBytesModule(paramReactApplicationContext));
+    return localArrayList;
+  }
+  
+  public List<ViewManager> createViewManagers(ReactApplicationContext paramReactApplicationContext)
+  {
+    return Collections.emptyList();
+  }
+}

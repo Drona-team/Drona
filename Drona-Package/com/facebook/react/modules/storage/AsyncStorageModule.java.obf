@@ -1,0 +1,1335 @@
+package com.facebook.react.modules.storage;
+
+import android.os.AsyncTask;
+import com.facebook.common.logging.FLog;
+import com.facebook.react.bridge.Callback;
+import com.facebook.react.bridge.GuardedAsyncTask;
+import com.facebook.react.bridge.ReactApplicationContext;
+import com.facebook.react.bridge.ReactContext;
+import com.facebook.react.bridge.ReactContextBaseJavaModule;
+import com.facebook.react.bridge.ReactMethod;
+import com.facebook.react.bridge.ReadableArray;
+import com.facebook.react.common.annotations.VisibleForTesting;
+import com.facebook.react.module.annotations.ReactModule;
+import com.facebook.react.modules.common.ModuleDataCleaner.Cleanable;
+import java.util.ArrayDeque;
+import java.util.concurrent.Executor;
+
+@ReactModule(name="AsyncSQLiteDBStorage")
+public final class AsyncStorageModule
+  extends ReactContextBaseJavaModule
+  implements ModuleDataCleaner.Cleanable
+{
+  private static final int MAX_SQL_KEYS = 999;
+  public static final String NAME = "AsyncSQLiteDBStorage";
+  private final SerialExecutor executor;
+  private ReactDatabaseSupplier mReactDatabaseSupplier;
+  private boolean mShuttingDown = false;
+  
+  public AsyncStorageModule(ReactApplicationContext paramReactApplicationContext)
+  {
+    this(paramReactApplicationContext, AsyncTask.THREAD_POOL_EXECUTOR);
+  }
+  
+  @VisibleForTesting
+  AsyncStorageModule(ReactApplicationContext paramReactApplicationContext, Executor paramExecutor)
+  {
+    super(paramReactApplicationContext);
+    executor = new SerialExecutor(paramExecutor);
+    mReactDatabaseSupplier = ReactDatabaseSupplier.getInstance(paramReactApplicationContext);
+  }
+  
+  private boolean ensureDatabase()
+  {
+    return (!mShuttingDown) && (mReactDatabaseSupplier.ensureDatabase());
+  }
+  
+  @ReactMethod
+  public void clear(final Callback paramCallback)
+  {
+    new GuardedAsyncTask(getReactApplicationContext())
+    {
+      protected void doInBackgroundGuarded(Void... paramAnonymousVarArgs)
+      {
+        if (!mReactDatabaseSupplier.ensureDatabase())
+        {
+          paramCallback.invoke(new Object[] { AsyncStorageErrorUtil.getDBError(null) });
+          return;
+        }
+        try
+        {
+          mReactDatabaseSupplier.clear();
+          paramCallback.invoke(new Object[0]);
+          return;
+        }
+        catch (Exception paramAnonymousVarArgs)
+        {
+          FLog.w("ReactNative", paramAnonymousVarArgs.getMessage(), paramAnonymousVarArgs);
+          paramCallback.invoke(new Object[] { AsyncStorageErrorUtil.getError(null, paramAnonymousVarArgs.getMessage()) });
+        }
+      }
+    }.executeOnExecutor(executor, new Void[0]);
+  }
+  
+  public void clearSensitiveData()
+  {
+    mReactDatabaseSupplier.clearAndCloseDatabase();
+  }
+  
+  @ReactMethod
+  public void getAllKeys(final Callback paramCallback)
+  {
+    new GuardedAsyncTask(getReactApplicationContext())
+    {
+      /* Error */
+      protected void doInBackgroundGuarded(Void... paramAnonymousVarArgs)
+      {
+        // Byte code:
+        //   0: aload_0
+        //   1: getfield 18	com/facebook/react/modules/storage/AsyncStorageModule$6:this$0	Lcom/facebook/react/modules/storage/AsyncStorageModule;
+        //   4: invokestatic 37	com/facebook/react/modules/storage/AsyncStorageModule:access$000	(Lcom/facebook/react/modules/storage/AsyncStorageModule;)Z
+        //   7: ifne +28 -> 35
+        //   10: aload_0
+        //   11: getfield 20	com/facebook/react/modules/storage/AsyncStorageModule$6:val$callback	Lcom/facebook/react/bridge/Callback;
+        //   14: iconst_2
+        //   15: anewarray 39	java/lang/Object
+        //   18: dup
+        //   19: iconst_0
+        //   20: aconst_null
+        //   21: invokestatic 45	com/facebook/react/modules/storage/AsyncStorageErrorUtil:getDBError	(Ljava/lang/String;)Lcom/facebook/react/bridge/WritableMap;
+        //   24: aastore
+        //   25: dup
+        //   26: iconst_1
+        //   27: aconst_null
+        //   28: aastore
+        //   29: invokeinterface 50 2 0
+        //   34: return
+        //   35: invokestatic 56	com/facebook/react/bridge/Arguments:createArray	()Lcom/facebook/react/bridge/WritableArray;
+        //   38: astore_3
+        //   39: aload_0
+        //   40: getfield 18	com/facebook/react/modules/storage/AsyncStorageModule$6:this$0	Lcom/facebook/react/modules/storage/AsyncStorageModule;
+        //   43: invokestatic 60	com/facebook/react/modules/storage/AsyncStorageModule:access$100	(Lcom/facebook/react/modules/storage/AsyncStorageModule;)Lcom/facebook/react/modules/storage/ReactDatabaseSupplier;
+        //   46: invokevirtual 66	com/facebook/react/modules/storage/ReactDatabaseSupplier:get	()Landroid/database/sqlite/SQLiteDatabase;
+        //   49: ldc 68
+        //   51: iconst_1
+        //   52: anewarray 70	java/lang/String
+        //   55: dup
+        //   56: iconst_0
+        //   57: ldc 72
+        //   59: aastore
+        //   60: aconst_null
+        //   61: aconst_null
+        //   62: aconst_null
+        //   63: aconst_null
+        //   64: aconst_null
+        //   65: invokevirtual 78	android/database/sqlite/SQLiteDatabase:query	(Ljava/lang/String;[Ljava/lang/String;Ljava/lang/String;[Ljava/lang/String;Ljava/lang/String;Ljava/lang/String;Ljava/lang/String;)Landroid/database/Cursor;
+        //   68: astore_1
+        //   69: aload_1
+        //   70: invokeinterface 84 1 0
+        //   75: ifeq +27 -> 102
+        //   78: aload_3
+        //   79: aload_1
+        //   80: iconst_0
+        //   81: invokeinterface 88 2 0
+        //   86: invokeinterface 94 2 0
+        //   91: aload_1
+        //   92: invokeinterface 97 1 0
+        //   97: istore_2
+        //   98: iload_2
+        //   99: ifne -21 -> 78
+        //   102: aload_1
+        //   103: invokeinterface 101 1 0
+        //   108: aload_0
+        //   109: getfield 20	com/facebook/react/modules/storage/AsyncStorageModule$6:val$callback	Lcom/facebook/react/bridge/Callback;
+        //   112: iconst_2
+        //   113: anewarray 39	java/lang/Object
+        //   116: dup
+        //   117: iconst_0
+        //   118: aconst_null
+        //   119: aastore
+        //   120: dup
+        //   121: iconst_1
+        //   122: aload_3
+        //   123: aastore
+        //   124: invokeinterface 50 2 0
+        //   129: return
+        //   130: astore_3
+        //   131: goto +49 -> 180
+        //   134: astore_3
+        //   135: ldc 103
+        //   137: aload_3
+        //   138: invokevirtual 107	java/lang/Exception:getMessage	()Ljava/lang/String;
+        //   141: aload_3
+        //   142: invokestatic 113	com/facebook/common/logging/FLog:w	(Ljava/lang/String;Ljava/lang/String;Ljava/lang/Throwable;)V
+        //   145: aload_0
+        //   146: getfield 20	com/facebook/react/modules/storage/AsyncStorageModule$6:val$callback	Lcom/facebook/react/bridge/Callback;
+        //   149: iconst_2
+        //   150: anewarray 39	java/lang/Object
+        //   153: dup
+        //   154: iconst_0
+        //   155: aconst_null
+        //   156: aload_3
+        //   157: invokevirtual 107	java/lang/Exception:getMessage	()Ljava/lang/String;
+        //   160: invokestatic 117	com/facebook/react/modules/storage/AsyncStorageErrorUtil:getError	(Ljava/lang/String;Ljava/lang/String;)Lcom/facebook/react/bridge/WritableMap;
+        //   163: aastore
+        //   164: dup
+        //   165: iconst_1
+        //   166: aconst_null
+        //   167: aastore
+        //   168: invokeinterface 50 2 0
+        //   173: aload_1
+        //   174: invokeinterface 101 1 0
+        //   179: return
+        //   180: aload_1
+        //   181: invokeinterface 101 1 0
+        //   186: aload_3
+        //   187: athrow
+        // Local variable table:
+        //   start	length	slot	name	signature
+        //   0	188	0	this	6
+        //   0	188	1	paramAnonymousVarArgs	Void[]
+        //   97	2	2	bool	boolean
+        //   38	85	3	localWritableArray	com.facebook.react.bridge.WritableArray
+        //   130	1	3	localObject	Object
+        //   134	53	3	localException	Exception
+        // Exception table:
+        //   from	to	target	type
+        //   69	78	130	finally
+        //   78	98	130	finally
+        //   135	173	130	finally
+        //   69	78	134	java/lang/Exception
+        //   78	98	134	java/lang/Exception
+      }
+    }.executeOnExecutor(executor, new Void[0]);
+  }
+  
+  public String getName()
+  {
+    return "AsyncSQLiteDBStorage";
+  }
+  
+  public void initialize()
+  {
+    super.initialize();
+    mShuttingDown = false;
+  }
+  
+  @ReactMethod
+  public void multiGet(final ReadableArray paramReadableArray, final Callback paramCallback)
+  {
+    if (paramReadableArray == null)
+    {
+      paramCallback.invoke(new Object[] { AsyncStorageErrorUtil.getInvalidKeyError(null), null });
+      return;
+    }
+    new GuardedAsyncTask(getReactApplicationContext())
+    {
+      /* Error */
+      protected void doInBackgroundGuarded(Void... paramAnonymousVarArgs)
+      {
+        // Byte code:
+        //   0: aload_0
+        //   1: getfield 20	com/facebook/react/modules/storage/AsyncStorageModule$1:this$0	Lcom/facebook/react/modules/storage/AsyncStorageModule;
+        //   4: invokestatic 41	com/facebook/react/modules/storage/AsyncStorageModule:access$000	(Lcom/facebook/react/modules/storage/AsyncStorageModule;)Z
+        //   7: ifne +28 -> 35
+        //   10: aload_0
+        //   11: getfield 22	com/facebook/react/modules/storage/AsyncStorageModule$1:val$callback	Lcom/facebook/react/bridge/Callback;
+        //   14: iconst_2
+        //   15: anewarray 43	java/lang/Object
+        //   18: dup
+        //   19: iconst_0
+        //   20: aconst_null
+        //   21: invokestatic 49	com/facebook/react/modules/storage/AsyncStorageErrorUtil:getDBError	(Ljava/lang/String;)Lcom/facebook/react/bridge/WritableMap;
+        //   24: aastore
+        //   25: dup
+        //   26: iconst_1
+        //   27: aconst_null
+        //   28: aastore
+        //   29: invokeinterface 54 2 0
+        //   34: return
+        //   35: new 56	java/util/HashSet
+        //   38: dup
+        //   39: invokespecial 59	java/util/HashSet:<init>	()V
+        //   42: astore_1
+        //   43: invokestatic 65	com/facebook/react/bridge/Arguments:createArray	()Lcom/facebook/react/bridge/WritableArray;
+        //   46: astore 6
+        //   48: iconst_0
+        //   49: istore_2
+        //   50: iload_2
+        //   51: aload_0
+        //   52: getfield 24	com/facebook/react/modules/storage/AsyncStorageModule$1:val$keys	Lcom/facebook/react/bridge/ReadableArray;
+        //   55: invokeinterface 71 1 0
+        //   60: if_icmpge +360 -> 420
+        //   63: aload_0
+        //   64: getfield 24	com/facebook/react/modules/storage/AsyncStorageModule$1:val$keys	Lcom/facebook/react/bridge/ReadableArray;
+        //   67: invokeinterface 71 1 0
+        //   72: iload_2
+        //   73: isub
+        //   74: sipush 999
+        //   77: invokestatic 77	java/lang/Math:min	(II)I
+        //   80: istore 4
+        //   82: aload_0
+        //   83: getfield 20	com/facebook/react/modules/storage/AsyncStorageModule$1:this$0	Lcom/facebook/react/modules/storage/AsyncStorageModule;
+        //   86: invokestatic 81	com/facebook/react/modules/storage/AsyncStorageModule:access$100	(Lcom/facebook/react/modules/storage/AsyncStorageModule;)Lcom/facebook/react/modules/storage/ReactDatabaseSupplier;
+        //   89: invokevirtual 87	com/facebook/react/modules/storage/ReactDatabaseSupplier:get	()Landroid/database/sqlite/SQLiteDatabase;
+        //   92: astore 7
+        //   94: iload 4
+        //   96: invokestatic 93	com/facebook/react/modules/storage/AsyncLocalStorageUtil:buildKeySelection	(I)Ljava/lang/String;
+        //   99: astore 8
+        //   101: aload_0
+        //   102: getfield 24	com/facebook/react/modules/storage/AsyncStorageModule$1:val$keys	Lcom/facebook/react/bridge/ReadableArray;
+        //   105: iload_2
+        //   106: iload 4
+        //   108: invokestatic 97	com/facebook/react/modules/storage/AsyncLocalStorageUtil:buildKeySelectionArgs	(Lcom/facebook/react/bridge/ReadableArray;II)[Ljava/lang/String;
+        //   111: astore 9
+        //   113: aload 7
+        //   115: ldc 99
+        //   117: iconst_2
+        //   118: anewarray 101	java/lang/String
+        //   121: dup
+        //   122: iconst_0
+        //   123: ldc 103
+        //   125: aastore
+        //   126: dup
+        //   127: iconst_1
+        //   128: ldc 105
+        //   130: aastore
+        //   131: aload 8
+        //   133: aload 9
+        //   135: aconst_null
+        //   136: aconst_null
+        //   137: aconst_null
+        //   138: invokevirtual 111	android/database/sqlite/SQLiteDatabase:query	(Ljava/lang/String;[Ljava/lang/String;Ljava/lang/String;[Ljava/lang/String;Ljava/lang/String;Ljava/lang/String;Ljava/lang/String;)Landroid/database/Cursor;
+        //   141: astore 7
+        //   143: aload_1
+        //   144: invokevirtual 114	java/util/HashSet:clear	()V
+        //   147: aload 7
+        //   149: invokeinterface 119 1 0
+        //   154: aload_0
+        //   155: getfield 24	com/facebook/react/modules/storage/AsyncStorageModule$1:val$keys	Lcom/facebook/react/bridge/ReadableArray;
+        //   158: invokeinterface 71 1 0
+        //   163: if_icmpeq +35 -> 198
+        //   166: iload_2
+        //   167: istore_3
+        //   168: iload_3
+        //   169: iload_2
+        //   170: iload 4
+        //   172: iadd
+        //   173: if_icmpge +25 -> 198
+        //   176: aload_1
+        //   177: aload_0
+        //   178: getfield 24	com/facebook/react/modules/storage/AsyncStorageModule$1:val$keys	Lcom/facebook/react/bridge/ReadableArray;
+        //   181: iload_3
+        //   182: invokeinterface 122 2 0
+        //   187: invokevirtual 126	java/util/HashSet:add	(Ljava/lang/Object;)Z
+        //   190: pop
+        //   191: iload_3
+        //   192: iconst_1
+        //   193: iadd
+        //   194: istore_3
+        //   195: goto -27 -> 168
+        //   198: aload 7
+        //   200: invokeinterface 130 1 0
+        //   205: ifeq +74 -> 279
+        //   208: invokestatic 65	com/facebook/react/bridge/Arguments:createArray	()Lcom/facebook/react/bridge/WritableArray;
+        //   211: astore 8
+        //   213: aload 8
+        //   215: aload 7
+        //   217: iconst_0
+        //   218: invokeinterface 131 2 0
+        //   223: invokeinterface 137 2 0
+        //   228: aload 8
+        //   230: aload 7
+        //   232: iconst_1
+        //   233: invokeinterface 131 2 0
+        //   238: invokeinterface 137 2 0
+        //   243: aload 6
+        //   245: aload 8
+        //   247: invokeinterface 141 2 0
+        //   252: aload_1
+        //   253: aload 7
+        //   255: iconst_0
+        //   256: invokeinterface 131 2 0
+        //   261: invokevirtual 144	java/util/HashSet:remove	(Ljava/lang/Object;)Z
+        //   264: pop
+        //   265: aload 7
+        //   267: invokeinterface 147 1 0
+        //   272: istore 5
+        //   274: iload 5
+        //   276: ifne -68 -> 208
+        //   279: aload 7
+        //   281: invokeinterface 150 1 0
+        //   286: aload_1
+        //   287: invokevirtual 154	java/util/HashSet:iterator	()Ljava/util/Iterator;
+        //   290: astore 7
+        //   292: aload 7
+        //   294: invokeinterface 159 1 0
+        //   299: ifeq +48 -> 347
+        //   302: aload 7
+        //   304: invokeinterface 163 1 0
+        //   309: checkcast 101	java/lang/String
+        //   312: astore 8
+        //   314: invokestatic 65	com/facebook/react/bridge/Arguments:createArray	()Lcom/facebook/react/bridge/WritableArray;
+        //   317: astore 9
+        //   319: aload 9
+        //   321: aload 8
+        //   323: invokeinterface 137 2 0
+        //   328: aload 9
+        //   330: invokeinterface 166 1 0
+        //   335: aload 6
+        //   337: aload 9
+        //   339: invokeinterface 141 2 0
+        //   344: goto -52 -> 292
+        //   347: aload_1
+        //   348: invokevirtual 114	java/util/HashSet:clear	()V
+        //   351: iload_2
+        //   352: sipush 999
+        //   355: iadd
+        //   356: istore_2
+        //   357: goto -307 -> 50
+        //   360: astore_1
+        //   361: goto +50 -> 411
+        //   364: astore_1
+        //   365: ldc -88
+        //   367: aload_1
+        //   368: invokevirtual 172	java/lang/Exception:getMessage	()Ljava/lang/String;
+        //   371: aload_1
+        //   372: invokestatic 178	com/facebook/common/logging/FLog:w	(Ljava/lang/String;Ljava/lang/String;Ljava/lang/Throwable;)V
+        //   375: aload_0
+        //   376: getfield 22	com/facebook/react/modules/storage/AsyncStorageModule$1:val$callback	Lcom/facebook/react/bridge/Callback;
+        //   379: iconst_2
+        //   380: anewarray 43	java/lang/Object
+        //   383: dup
+        //   384: iconst_0
+        //   385: aconst_null
+        //   386: aload_1
+        //   387: invokevirtual 172	java/lang/Exception:getMessage	()Ljava/lang/String;
+        //   390: invokestatic 182	com/facebook/react/modules/storage/AsyncStorageErrorUtil:getError	(Ljava/lang/String;Ljava/lang/String;)Lcom/facebook/react/bridge/WritableMap;
+        //   393: aastore
+        //   394: dup
+        //   395: iconst_1
+        //   396: aconst_null
+        //   397: aastore
+        //   398: invokeinterface 54 2 0
+        //   403: aload 7
+        //   405: invokeinterface 150 1 0
+        //   410: return
+        //   411: aload 7
+        //   413: invokeinterface 150 1 0
+        //   418: aload_1
+        //   419: athrow
+        //   420: aload_0
+        //   421: getfield 22	com/facebook/react/modules/storage/AsyncStorageModule$1:val$callback	Lcom/facebook/react/bridge/Callback;
+        //   424: iconst_2
+        //   425: anewarray 43	java/lang/Object
+        //   428: dup
+        //   429: iconst_0
+        //   430: aconst_null
+        //   431: aastore
+        //   432: dup
+        //   433: iconst_1
+        //   434: aload 6
+        //   436: aastore
+        //   437: invokeinterface 54 2 0
+        //   442: return
+        // Local variable table:
+        //   start	length	slot	name	signature
+        //   0	443	0	this	1
+        //   0	443	1	paramAnonymousVarArgs	Void[]
+        //   49	308	2	i	int
+        //   167	28	3	j	int
+        //   80	93	4	k	int
+        //   272	3	5	bool	boolean
+        //   46	389	6	localWritableArray	com.facebook.react.bridge.WritableArray
+        //   92	320	7	localObject1	Object
+        //   99	223	8	localObject2	Object
+        //   111	227	9	localObject3	Object
+        // Exception table:
+        //   from	to	target	type
+        //   147	166	360	finally
+        //   176	191	360	finally
+        //   198	208	360	finally
+        //   208	274	360	finally
+        //   365	403	360	finally
+        //   147	166	364	java/lang/Exception
+        //   176	191	364	java/lang/Exception
+        //   198	208	364	java/lang/Exception
+        //   208	274	364	java/lang/Exception
+      }
+    }.executeOnExecutor(executor, new Void[0]);
+  }
+  
+  @ReactMethod
+  public void multiMerge(final ReadableArray paramReadableArray, final Callback paramCallback)
+  {
+    new GuardedAsyncTask(getReactApplicationContext())
+    {
+      /* Error */
+      protected void doInBackgroundGuarded(Void... paramAnonymousVarArgs)
+      {
+        // Byte code:
+        //   0: aload_0
+        //   1: getfield 20	com/facebook/react/modules/storage/AsyncStorageModule$4:this$0	Lcom/facebook/react/modules/storage/AsyncStorageModule;
+        //   4: invokestatic 41	com/facebook/react/modules/storage/AsyncStorageModule:access$000	(Lcom/facebook/react/modules/storage/AsyncStorageModule;)Z
+        //   7: istore_3
+        //   8: aconst_null
+        //   9: astore_1
+        //   10: iload_3
+        //   11: ifne +24 -> 35
+        //   14: aload_0
+        //   15: getfield 22	com/facebook/react/modules/storage/AsyncStorageModule$4:val$callback	Lcom/facebook/react/bridge/Callback;
+        //   18: iconst_1
+        //   19: anewarray 43	java/lang/Object
+        //   22: dup
+        //   23: iconst_0
+        //   24: aconst_null
+        //   25: invokestatic 49	com/facebook/react/modules/storage/AsyncStorageErrorUtil:getDBError	(Ljava/lang/String;)Lcom/facebook/react/bridge/WritableMap;
+        //   28: aastore
+        //   29: invokeinterface 54 2 0
+        //   34: return
+        //   35: aload_0
+        //   36: getfield 20	com/facebook/react/modules/storage/AsyncStorageModule$4:this$0	Lcom/facebook/react/modules/storage/AsyncStorageModule;
+        //   39: invokestatic 58	com/facebook/react/modules/storage/AsyncStorageModule:access$100	(Lcom/facebook/react/modules/storage/AsyncStorageModule;)Lcom/facebook/react/modules/storage/ReactDatabaseSupplier;
+        //   42: invokevirtual 64	com/facebook/react/modules/storage/ReactDatabaseSupplier:get	()Landroid/database/sqlite/SQLiteDatabase;
+        //   45: invokevirtual 70	android/database/sqlite/SQLiteDatabase:beginTransaction	()V
+        //   48: iconst_0
+        //   49: istore_2
+        //   50: iload_2
+        //   51: aload_0
+        //   52: getfield 24	com/facebook/react/modules/storage/AsyncStorageModule$4:val$keyValueArray	Lcom/facebook/react/bridge/ReadableArray;
+        //   55: invokeinterface 76 1 0
+        //   60: if_icmpge +307 -> 367
+        //   63: aload_0
+        //   64: getfield 24	com/facebook/react/modules/storage/AsyncStorageModule$4:val$keyValueArray	Lcom/facebook/react/bridge/ReadableArray;
+        //   67: iload_2
+        //   68: invokeinterface 80 2 0
+        //   73: invokeinterface 76 1 0
+        //   78: iconst_2
+        //   79: if_icmpeq +51 -> 130
+        //   82: aconst_null
+        //   83: invokestatic 83	com/facebook/react/modules/storage/AsyncStorageErrorUtil:getInvalidValueError	(Ljava/lang/String;)Lcom/facebook/react/bridge/WritableMap;
+        //   86: astore_1
+        //   87: aload_0
+        //   88: getfield 20	com/facebook/react/modules/storage/AsyncStorageModule$4:this$0	Lcom/facebook/react/modules/storage/AsyncStorageModule;
+        //   91: invokestatic 58	com/facebook/react/modules/storage/AsyncStorageModule:access$100	(Lcom/facebook/react/modules/storage/AsyncStorageModule;)Lcom/facebook/react/modules/storage/ReactDatabaseSupplier;
+        //   94: invokevirtual 64	com/facebook/react/modules/storage/ReactDatabaseSupplier:get	()Landroid/database/sqlite/SQLiteDatabase;
+        //   97: invokevirtual 86	android/database/sqlite/SQLiteDatabase:endTransaction	()V
+        //   100: return
+        //   101: astore 4
+        //   103: ldc 88
+        //   105: aload 4
+        //   107: invokevirtual 92	java/lang/Exception:getMessage	()Ljava/lang/String;
+        //   110: aload 4
+        //   112: invokestatic 98	com/facebook/common/logging/FLog:w	(Ljava/lang/String;Ljava/lang/String;Ljava/lang/Throwable;)V
+        //   115: aload_1
+        //   116: ifnonnull +13 -> 129
+        //   119: aconst_null
+        //   120: aload 4
+        //   122: invokevirtual 92	java/lang/Exception:getMessage	()Ljava/lang/String;
+        //   125: invokestatic 102	com/facebook/react/modules/storage/AsyncStorageErrorUtil:getError	(Ljava/lang/String;Ljava/lang/String;)Lcom/facebook/react/bridge/WritableMap;
+        //   128: pop
+        //   129: return
+        //   130: aload_0
+        //   131: getfield 24	com/facebook/react/modules/storage/AsyncStorageModule$4:val$keyValueArray	Lcom/facebook/react/bridge/ReadableArray;
+        //   134: iload_2
+        //   135: invokeinterface 80 2 0
+        //   140: iconst_0
+        //   141: invokeinterface 106 2 0
+        //   146: ifnonnull +51 -> 197
+        //   149: aconst_null
+        //   150: invokestatic 109	com/facebook/react/modules/storage/AsyncStorageErrorUtil:getInvalidKeyError	(Ljava/lang/String;)Lcom/facebook/react/bridge/WritableMap;
+        //   153: astore_1
+        //   154: aload_0
+        //   155: getfield 20	com/facebook/react/modules/storage/AsyncStorageModule$4:this$0	Lcom/facebook/react/modules/storage/AsyncStorageModule;
+        //   158: invokestatic 58	com/facebook/react/modules/storage/AsyncStorageModule:access$100	(Lcom/facebook/react/modules/storage/AsyncStorageModule;)Lcom/facebook/react/modules/storage/ReactDatabaseSupplier;
+        //   161: invokevirtual 64	com/facebook/react/modules/storage/ReactDatabaseSupplier:get	()Landroid/database/sqlite/SQLiteDatabase;
+        //   164: invokevirtual 86	android/database/sqlite/SQLiteDatabase:endTransaction	()V
+        //   167: return
+        //   168: astore 4
+        //   170: ldc 88
+        //   172: aload 4
+        //   174: invokevirtual 92	java/lang/Exception:getMessage	()Ljava/lang/String;
+        //   177: aload 4
+        //   179: invokestatic 98	com/facebook/common/logging/FLog:w	(Ljava/lang/String;Ljava/lang/String;Ljava/lang/Throwable;)V
+        //   182: aload_1
+        //   183: ifnonnull +13 -> 196
+        //   186: aconst_null
+        //   187: aload 4
+        //   189: invokevirtual 92	java/lang/Exception:getMessage	()Ljava/lang/String;
+        //   192: invokestatic 102	com/facebook/react/modules/storage/AsyncStorageErrorUtil:getError	(Ljava/lang/String;Ljava/lang/String;)Lcom/facebook/react/bridge/WritableMap;
+        //   195: pop
+        //   196: return
+        //   197: aload_0
+        //   198: getfield 24	com/facebook/react/modules/storage/AsyncStorageModule$4:val$keyValueArray	Lcom/facebook/react/bridge/ReadableArray;
+        //   201: iload_2
+        //   202: invokeinterface 80 2 0
+        //   207: iconst_1
+        //   208: invokeinterface 106 2 0
+        //   213: ifnonnull +51 -> 264
+        //   216: aconst_null
+        //   217: invokestatic 83	com/facebook/react/modules/storage/AsyncStorageErrorUtil:getInvalidValueError	(Ljava/lang/String;)Lcom/facebook/react/bridge/WritableMap;
+        //   220: astore_1
+        //   221: aload_0
+        //   222: getfield 20	com/facebook/react/modules/storage/AsyncStorageModule$4:this$0	Lcom/facebook/react/modules/storage/AsyncStorageModule;
+        //   225: invokestatic 58	com/facebook/react/modules/storage/AsyncStorageModule:access$100	(Lcom/facebook/react/modules/storage/AsyncStorageModule;)Lcom/facebook/react/modules/storage/ReactDatabaseSupplier;
+        //   228: invokevirtual 64	com/facebook/react/modules/storage/ReactDatabaseSupplier:get	()Landroid/database/sqlite/SQLiteDatabase;
+        //   231: invokevirtual 86	android/database/sqlite/SQLiteDatabase:endTransaction	()V
+        //   234: return
+        //   235: astore 4
+        //   237: ldc 88
+        //   239: aload 4
+        //   241: invokevirtual 92	java/lang/Exception:getMessage	()Ljava/lang/String;
+        //   244: aload 4
+        //   246: invokestatic 98	com/facebook/common/logging/FLog:w	(Ljava/lang/String;Ljava/lang/String;Ljava/lang/Throwable;)V
+        //   249: aload_1
+        //   250: ifnonnull +13 -> 263
+        //   253: aconst_null
+        //   254: aload 4
+        //   256: invokevirtual 92	java/lang/Exception:getMessage	()Ljava/lang/String;
+        //   259: invokestatic 102	com/facebook/react/modules/storage/AsyncStorageErrorUtil:getError	(Ljava/lang/String;Ljava/lang/String;)Lcom/facebook/react/bridge/WritableMap;
+        //   262: pop
+        //   263: return
+        //   264: aload_0
+        //   265: getfield 20	com/facebook/react/modules/storage/AsyncStorageModule$4:this$0	Lcom/facebook/react/modules/storage/AsyncStorageModule;
+        //   268: invokestatic 58	com/facebook/react/modules/storage/AsyncStorageModule:access$100	(Lcom/facebook/react/modules/storage/AsyncStorageModule;)Lcom/facebook/react/modules/storage/ReactDatabaseSupplier;
+        //   271: invokevirtual 64	com/facebook/react/modules/storage/ReactDatabaseSupplier:get	()Landroid/database/sqlite/SQLiteDatabase;
+        //   274: aload_0
+        //   275: getfield 24	com/facebook/react/modules/storage/AsyncStorageModule$4:val$keyValueArray	Lcom/facebook/react/bridge/ReadableArray;
+        //   278: iload_2
+        //   279: invokeinterface 80 2 0
+        //   284: iconst_0
+        //   285: invokeinterface 106 2 0
+        //   290: aload_0
+        //   291: getfield 24	com/facebook/react/modules/storage/AsyncStorageModule$4:val$keyValueArray	Lcom/facebook/react/bridge/ReadableArray;
+        //   294: iload_2
+        //   295: invokeinterface 80 2 0
+        //   300: iconst_1
+        //   301: invokeinterface 106 2 0
+        //   306: invokestatic 115	com/facebook/react/modules/storage/AsyncLocalStorageUtil:mergeImpl	(Landroid/database/sqlite/SQLiteDatabase;Ljava/lang/String;Ljava/lang/String;)Z
+        //   309: ifne +51 -> 360
+        //   312: aconst_null
+        //   313: invokestatic 49	com/facebook/react/modules/storage/AsyncStorageErrorUtil:getDBError	(Ljava/lang/String;)Lcom/facebook/react/bridge/WritableMap;
+        //   316: astore_1
+        //   317: aload_0
+        //   318: getfield 20	com/facebook/react/modules/storage/AsyncStorageModule$4:this$0	Lcom/facebook/react/modules/storage/AsyncStorageModule;
+        //   321: invokestatic 58	com/facebook/react/modules/storage/AsyncStorageModule:access$100	(Lcom/facebook/react/modules/storage/AsyncStorageModule;)Lcom/facebook/react/modules/storage/ReactDatabaseSupplier;
+        //   324: invokevirtual 64	com/facebook/react/modules/storage/ReactDatabaseSupplier:get	()Landroid/database/sqlite/SQLiteDatabase;
+        //   327: invokevirtual 86	android/database/sqlite/SQLiteDatabase:endTransaction	()V
+        //   330: return
+        //   331: astore 4
+        //   333: ldc 88
+        //   335: aload 4
+        //   337: invokevirtual 92	java/lang/Exception:getMessage	()Ljava/lang/String;
+        //   340: aload 4
+        //   342: invokestatic 98	com/facebook/common/logging/FLog:w	(Ljava/lang/String;Ljava/lang/String;Ljava/lang/Throwable;)V
+        //   345: aload_1
+        //   346: ifnonnull +13 -> 359
+        //   349: aconst_null
+        //   350: aload 4
+        //   352: invokevirtual 92	java/lang/Exception:getMessage	()Ljava/lang/String;
+        //   355: invokestatic 102	com/facebook/react/modules/storage/AsyncStorageErrorUtil:getError	(Ljava/lang/String;Ljava/lang/String;)Lcom/facebook/react/bridge/WritableMap;
+        //   358: pop
+        //   359: return
+        //   360: iload_2
+        //   361: iconst_1
+        //   362: iadd
+        //   363: istore_2
+        //   364: goto -314 -> 50
+        //   367: aload_0
+        //   368: getfield 20	com/facebook/react/modules/storage/AsyncStorageModule$4:this$0	Lcom/facebook/react/modules/storage/AsyncStorageModule;
+        //   371: invokestatic 58	com/facebook/react/modules/storage/AsyncStorageModule:access$100	(Lcom/facebook/react/modules/storage/AsyncStorageModule;)Lcom/facebook/react/modules/storage/ReactDatabaseSupplier;
+        //   374: invokevirtual 64	com/facebook/react/modules/storage/ReactDatabaseSupplier:get	()Landroid/database/sqlite/SQLiteDatabase;
+        //   377: invokevirtual 118	android/database/sqlite/SQLiteDatabase:setTransactionSuccessful	()V
+        //   380: aload_0
+        //   381: getfield 20	com/facebook/react/modules/storage/AsyncStorageModule$4:this$0	Lcom/facebook/react/modules/storage/AsyncStorageModule;
+        //   384: invokestatic 58	com/facebook/react/modules/storage/AsyncStorageModule:access$100	(Lcom/facebook/react/modules/storage/AsyncStorageModule;)Lcom/facebook/react/modules/storage/ReactDatabaseSupplier;
+        //   387: invokevirtual 64	com/facebook/react/modules/storage/ReactDatabaseSupplier:get	()Landroid/database/sqlite/SQLiteDatabase;
+        //   390: invokevirtual 86	android/database/sqlite/SQLiteDatabase:endTransaction	()V
+        //   393: goto +105 -> 498
+        //   396: astore_1
+        //   397: ldc 88
+        //   399: aload_1
+        //   400: invokevirtual 92	java/lang/Exception:getMessage	()Ljava/lang/String;
+        //   403: aload_1
+        //   404: invokestatic 98	com/facebook/common/logging/FLog:w	(Ljava/lang/String;Ljava/lang/String;Ljava/lang/Throwable;)V
+        //   407: aconst_null
+        //   408: aload_1
+        //   409: invokevirtual 92	java/lang/Exception:getMessage	()Ljava/lang/String;
+        //   412: invokestatic 102	com/facebook/react/modules/storage/AsyncStorageErrorUtil:getError	(Ljava/lang/String;Ljava/lang/String;)Lcom/facebook/react/bridge/WritableMap;
+        //   415: astore_1
+        //   416: goto +82 -> 498
+        //   419: astore_1
+        //   420: goto +114 -> 534
+        //   423: astore_1
+        //   424: ldc 88
+        //   426: aload_1
+        //   427: invokevirtual 92	java/lang/Exception:getMessage	()Ljava/lang/String;
+        //   430: aload_1
+        //   431: invokestatic 98	com/facebook/common/logging/FLog:w	(Ljava/lang/String;Ljava/lang/String;Ljava/lang/Throwable;)V
+        //   434: aconst_null
+        //   435: aload_1
+        //   436: invokevirtual 92	java/lang/Exception:getMessage	()Ljava/lang/String;
+        //   439: invokestatic 102	com/facebook/react/modules/storage/AsyncStorageErrorUtil:getError	(Ljava/lang/String;Ljava/lang/String;)Lcom/facebook/react/bridge/WritableMap;
+        //   442: astore 4
+        //   444: aload_0
+        //   445: getfield 20	com/facebook/react/modules/storage/AsyncStorageModule$4:this$0	Lcom/facebook/react/modules/storage/AsyncStorageModule;
+        //   448: invokestatic 58	com/facebook/react/modules/storage/AsyncStorageModule:access$100	(Lcom/facebook/react/modules/storage/AsyncStorageModule;)Lcom/facebook/react/modules/storage/ReactDatabaseSupplier;
+        //   451: invokevirtual 64	com/facebook/react/modules/storage/ReactDatabaseSupplier:get	()Landroid/database/sqlite/SQLiteDatabase;
+        //   454: invokevirtual 86	android/database/sqlite/SQLiteDatabase:endTransaction	()V
+        //   457: aload 4
+        //   459: astore_1
+        //   460: goto +38 -> 498
+        //   463: astore 5
+        //   465: ldc 88
+        //   467: aload 5
+        //   469: invokevirtual 92	java/lang/Exception:getMessage	()Ljava/lang/String;
+        //   472: aload 5
+        //   474: invokestatic 98	com/facebook/common/logging/FLog:w	(Ljava/lang/String;Ljava/lang/String;Ljava/lang/Throwable;)V
+        //   477: aload 4
+        //   479: astore_1
+        //   480: aload 4
+        //   482: ifnonnull -22 -> 460
+        //   485: aconst_null
+        //   486: aload 5
+        //   488: invokevirtual 92	java/lang/Exception:getMessage	()Ljava/lang/String;
+        //   491: invokestatic 102	com/facebook/react/modules/storage/AsyncStorageErrorUtil:getError	(Ljava/lang/String;Ljava/lang/String;)Lcom/facebook/react/bridge/WritableMap;
+        //   494: astore_1
+        //   495: goto -35 -> 460
+        //   498: aload_1
+        //   499: ifnull +21 -> 520
+        //   502: aload_0
+        //   503: getfield 22	com/facebook/react/modules/storage/AsyncStorageModule$4:val$callback	Lcom/facebook/react/bridge/Callback;
+        //   506: iconst_1
+        //   507: anewarray 43	java/lang/Object
+        //   510: dup
+        //   511: iconst_0
+        //   512: aload_1
+        //   513: aastore
+        //   514: invokeinterface 54 2 0
+        //   519: return
+        //   520: aload_0
+        //   521: getfield 22	com/facebook/react/modules/storage/AsyncStorageModule$4:val$callback	Lcom/facebook/react/bridge/Callback;
+        //   524: iconst_0
+        //   525: anewarray 43	java/lang/Object
+        //   528: invokeinterface 54 2 0
+        //   533: return
+        //   534: aload_0
+        //   535: getfield 20	com/facebook/react/modules/storage/AsyncStorageModule$4:this$0	Lcom/facebook/react/modules/storage/AsyncStorageModule;
+        //   538: invokestatic 58	com/facebook/react/modules/storage/AsyncStorageModule:access$100	(Lcom/facebook/react/modules/storage/AsyncStorageModule;)Lcom/facebook/react/modules/storage/ReactDatabaseSupplier;
+        //   541: invokevirtual 64	com/facebook/react/modules/storage/ReactDatabaseSupplier:get	()Landroid/database/sqlite/SQLiteDatabase;
+        //   544: invokevirtual 86	android/database/sqlite/SQLiteDatabase:endTransaction	()V
+        //   547: goto +27 -> 574
+        //   550: astore 4
+        //   552: ldc 88
+        //   554: aload 4
+        //   556: invokevirtual 92	java/lang/Exception:getMessage	()Ljava/lang/String;
+        //   559: aload 4
+        //   561: invokestatic 98	com/facebook/common/logging/FLog:w	(Ljava/lang/String;Ljava/lang/String;Ljava/lang/Throwable;)V
+        //   564: aconst_null
+        //   565: aload 4
+        //   567: invokevirtual 92	java/lang/Exception:getMessage	()Ljava/lang/String;
+        //   570: invokestatic 102	com/facebook/react/modules/storage/AsyncStorageErrorUtil:getError	(Ljava/lang/String;Ljava/lang/String;)Lcom/facebook/react/bridge/WritableMap;
+        //   573: pop
+        //   574: aload_1
+        //   575: athrow
+        // Local variable table:
+        //   start	length	slot	name	signature
+        //   0	576	0	this	4
+        //   0	576	1	paramAnonymousVarArgs	Void[]
+        //   49	315	2	i	int
+        //   7	4	3	bool	boolean
+        //   101	20	4	localException1	Exception
+        //   168	20	4	localException2	Exception
+        //   235	20	4	localException3	Exception
+        //   331	20	4	localException4	Exception
+        //   442	39	4	localWritableMap	com.facebook.react.bridge.WritableMap
+        //   550	16	4	localException5	Exception
+        //   463	24	5	localException6	Exception
+        // Exception table:
+        //   from	to	target	type
+        //   87	100	101	java/lang/Exception
+        //   154	167	168	java/lang/Exception
+        //   221	234	235	java/lang/Exception
+        //   317	330	331	java/lang/Exception
+        //   380	393	396	java/lang/Exception
+        //   35	48	419	finally
+        //   50	87	419	finally
+        //   130	154	419	finally
+        //   197	221	419	finally
+        //   264	317	419	finally
+        //   367	380	419	finally
+        //   424	444	419	finally
+        //   35	48	423	java/lang/Exception
+        //   50	87	423	java/lang/Exception
+        //   130	154	423	java/lang/Exception
+        //   197	221	423	java/lang/Exception
+        //   264	317	423	java/lang/Exception
+        //   367	380	423	java/lang/Exception
+        //   444	457	463	java/lang/Exception
+        //   534	547	550	java/lang/Exception
+      }
+    }.executeOnExecutor(executor, new Void[0]);
+  }
+  
+  @ReactMethod
+  public void multiRemove(final ReadableArray paramReadableArray, final Callback paramCallback)
+  {
+    if (paramReadableArray.size() == 0)
+    {
+      paramCallback.invoke(new Object[] { AsyncStorageErrorUtil.getInvalidKeyError(null) });
+      return;
+    }
+    new GuardedAsyncTask(getReactApplicationContext())
+    {
+      /* Error */
+      protected void doInBackgroundGuarded(Void... paramAnonymousVarArgs)
+      {
+        // Byte code:
+        //   0: aload_0
+        //   1: getfield 20	com/facebook/react/modules/storage/AsyncStorageModule$3:this$0	Lcom/facebook/react/modules/storage/AsyncStorageModule;
+        //   4: invokestatic 41	com/facebook/react/modules/storage/AsyncStorageModule:access$000	(Lcom/facebook/react/modules/storage/AsyncStorageModule;)Z
+        //   7: istore 4
+        //   9: aconst_null
+        //   10: astore_1
+        //   11: iload 4
+        //   13: ifne +24 -> 37
+        //   16: aload_0
+        //   17: getfield 22	com/facebook/react/modules/storage/AsyncStorageModule$3:val$callback	Lcom/facebook/react/bridge/Callback;
+        //   20: iconst_1
+        //   21: anewarray 43	java/lang/Object
+        //   24: dup
+        //   25: iconst_0
+        //   26: aconst_null
+        //   27: invokestatic 49	com/facebook/react/modules/storage/AsyncStorageErrorUtil:getDBError	(Ljava/lang/String;)Lcom/facebook/react/bridge/WritableMap;
+        //   30: aastore
+        //   31: invokeinterface 54 2 0
+        //   36: return
+        //   37: aload_0
+        //   38: getfield 20	com/facebook/react/modules/storage/AsyncStorageModule$3:this$0	Lcom/facebook/react/modules/storage/AsyncStorageModule;
+        //   41: invokestatic 58	com/facebook/react/modules/storage/AsyncStorageModule:access$100	(Lcom/facebook/react/modules/storage/AsyncStorageModule;)Lcom/facebook/react/modules/storage/ReactDatabaseSupplier;
+        //   44: invokevirtual 64	com/facebook/react/modules/storage/ReactDatabaseSupplier:get	()Landroid/database/sqlite/SQLiteDatabase;
+        //   47: invokevirtual 70	android/database/sqlite/SQLiteDatabase:beginTransaction	()V
+        //   50: iconst_0
+        //   51: istore_2
+        //   52: iload_2
+        //   53: aload_0
+        //   54: getfield 24	com/facebook/react/modules/storage/AsyncStorageModule$3:val$keys	Lcom/facebook/react/bridge/ReadableArray;
+        //   57: invokeinterface 76 1 0
+        //   62: if_icmpge +59 -> 121
+        //   65: aload_0
+        //   66: getfield 24	com/facebook/react/modules/storage/AsyncStorageModule$3:val$keys	Lcom/facebook/react/bridge/ReadableArray;
+        //   69: invokeinterface 76 1 0
+        //   74: iload_2
+        //   75: isub
+        //   76: sipush 999
+        //   79: invokestatic 82	java/lang/Math:min	(II)I
+        //   82: istore_3
+        //   83: aload_0
+        //   84: getfield 20	com/facebook/react/modules/storage/AsyncStorageModule$3:this$0	Lcom/facebook/react/modules/storage/AsyncStorageModule;
+        //   87: invokestatic 58	com/facebook/react/modules/storage/AsyncStorageModule:access$100	(Lcom/facebook/react/modules/storage/AsyncStorageModule;)Lcom/facebook/react/modules/storage/ReactDatabaseSupplier;
+        //   90: invokevirtual 64	com/facebook/react/modules/storage/ReactDatabaseSupplier:get	()Landroid/database/sqlite/SQLiteDatabase;
+        //   93: ldc 84
+        //   95: iload_3
+        //   96: invokestatic 90	com/facebook/react/modules/storage/AsyncLocalStorageUtil:buildKeySelection	(I)Ljava/lang/String;
+        //   99: aload_0
+        //   100: getfield 24	com/facebook/react/modules/storage/AsyncStorageModule$3:val$keys	Lcom/facebook/react/bridge/ReadableArray;
+        //   103: iload_2
+        //   104: iload_3
+        //   105: invokestatic 94	com/facebook/react/modules/storage/AsyncLocalStorageUtil:buildKeySelectionArgs	(Lcom/facebook/react/bridge/ReadableArray;II)[Ljava/lang/String;
+        //   108: invokevirtual 98	android/database/sqlite/SQLiteDatabase:delete	(Ljava/lang/String;Ljava/lang/String;[Ljava/lang/String;)I
+        //   111: pop
+        //   112: iload_2
+        //   113: sipush 999
+        //   116: iadd
+        //   117: istore_2
+        //   118: goto -66 -> 52
+        //   121: aload_0
+        //   122: getfield 20	com/facebook/react/modules/storage/AsyncStorageModule$3:this$0	Lcom/facebook/react/modules/storage/AsyncStorageModule;
+        //   125: invokestatic 58	com/facebook/react/modules/storage/AsyncStorageModule:access$100	(Lcom/facebook/react/modules/storage/AsyncStorageModule;)Lcom/facebook/react/modules/storage/ReactDatabaseSupplier;
+        //   128: invokevirtual 64	com/facebook/react/modules/storage/ReactDatabaseSupplier:get	()Landroid/database/sqlite/SQLiteDatabase;
+        //   131: invokevirtual 101	android/database/sqlite/SQLiteDatabase:setTransactionSuccessful	()V
+        //   134: aload_0
+        //   135: getfield 20	com/facebook/react/modules/storage/AsyncStorageModule$3:this$0	Lcom/facebook/react/modules/storage/AsyncStorageModule;
+        //   138: invokestatic 58	com/facebook/react/modules/storage/AsyncStorageModule:access$100	(Lcom/facebook/react/modules/storage/AsyncStorageModule;)Lcom/facebook/react/modules/storage/ReactDatabaseSupplier;
+        //   141: invokevirtual 64	com/facebook/react/modules/storage/ReactDatabaseSupplier:get	()Landroid/database/sqlite/SQLiteDatabase;
+        //   144: invokevirtual 104	android/database/sqlite/SQLiteDatabase:endTransaction	()V
+        //   147: goto +105 -> 252
+        //   150: astore_1
+        //   151: ldc 106
+        //   153: aload_1
+        //   154: invokevirtual 110	java/lang/Exception:getMessage	()Ljava/lang/String;
+        //   157: aload_1
+        //   158: invokestatic 116	com/facebook/common/logging/FLog:w	(Ljava/lang/String;Ljava/lang/String;Ljava/lang/Throwable;)V
+        //   161: aconst_null
+        //   162: aload_1
+        //   163: invokevirtual 110	java/lang/Exception:getMessage	()Ljava/lang/String;
+        //   166: invokestatic 120	com/facebook/react/modules/storage/AsyncStorageErrorUtil:getError	(Ljava/lang/String;Ljava/lang/String;)Lcom/facebook/react/bridge/WritableMap;
+        //   169: astore_1
+        //   170: goto +82 -> 252
+        //   173: astore_1
+        //   174: goto +114 -> 288
+        //   177: astore_1
+        //   178: ldc 106
+        //   180: aload_1
+        //   181: invokevirtual 110	java/lang/Exception:getMessage	()Ljava/lang/String;
+        //   184: aload_1
+        //   185: invokestatic 116	com/facebook/common/logging/FLog:w	(Ljava/lang/String;Ljava/lang/String;Ljava/lang/Throwable;)V
+        //   188: aconst_null
+        //   189: aload_1
+        //   190: invokevirtual 110	java/lang/Exception:getMessage	()Ljava/lang/String;
+        //   193: invokestatic 120	com/facebook/react/modules/storage/AsyncStorageErrorUtil:getError	(Ljava/lang/String;Ljava/lang/String;)Lcom/facebook/react/bridge/WritableMap;
+        //   196: astore 5
+        //   198: aload_0
+        //   199: getfield 20	com/facebook/react/modules/storage/AsyncStorageModule$3:this$0	Lcom/facebook/react/modules/storage/AsyncStorageModule;
+        //   202: invokestatic 58	com/facebook/react/modules/storage/AsyncStorageModule:access$100	(Lcom/facebook/react/modules/storage/AsyncStorageModule;)Lcom/facebook/react/modules/storage/ReactDatabaseSupplier;
+        //   205: invokevirtual 64	com/facebook/react/modules/storage/ReactDatabaseSupplier:get	()Landroid/database/sqlite/SQLiteDatabase;
+        //   208: invokevirtual 104	android/database/sqlite/SQLiteDatabase:endTransaction	()V
+        //   211: aload 5
+        //   213: astore_1
+        //   214: goto +38 -> 252
+        //   217: astore 6
+        //   219: ldc 106
+        //   221: aload 6
+        //   223: invokevirtual 110	java/lang/Exception:getMessage	()Ljava/lang/String;
+        //   226: aload 6
+        //   228: invokestatic 116	com/facebook/common/logging/FLog:w	(Ljava/lang/String;Ljava/lang/String;Ljava/lang/Throwable;)V
+        //   231: aload 5
+        //   233: astore_1
+        //   234: aload 5
+        //   236: ifnonnull -22 -> 214
+        //   239: aconst_null
+        //   240: aload 6
+        //   242: invokevirtual 110	java/lang/Exception:getMessage	()Ljava/lang/String;
+        //   245: invokestatic 120	com/facebook/react/modules/storage/AsyncStorageErrorUtil:getError	(Ljava/lang/String;Ljava/lang/String;)Lcom/facebook/react/bridge/WritableMap;
+        //   248: astore_1
+        //   249: goto -35 -> 214
+        //   252: aload_1
+        //   253: ifnull +21 -> 274
+        //   256: aload_0
+        //   257: getfield 22	com/facebook/react/modules/storage/AsyncStorageModule$3:val$callback	Lcom/facebook/react/bridge/Callback;
+        //   260: iconst_1
+        //   261: anewarray 43	java/lang/Object
+        //   264: dup
+        //   265: iconst_0
+        //   266: aload_1
+        //   267: aastore
+        //   268: invokeinterface 54 2 0
+        //   273: return
+        //   274: aload_0
+        //   275: getfield 22	com/facebook/react/modules/storage/AsyncStorageModule$3:val$callback	Lcom/facebook/react/bridge/Callback;
+        //   278: iconst_0
+        //   279: anewarray 43	java/lang/Object
+        //   282: invokeinterface 54 2 0
+        //   287: return
+        //   288: aload_0
+        //   289: getfield 20	com/facebook/react/modules/storage/AsyncStorageModule$3:this$0	Lcom/facebook/react/modules/storage/AsyncStorageModule;
+        //   292: invokestatic 58	com/facebook/react/modules/storage/AsyncStorageModule:access$100	(Lcom/facebook/react/modules/storage/AsyncStorageModule;)Lcom/facebook/react/modules/storage/ReactDatabaseSupplier;
+        //   295: invokevirtual 64	com/facebook/react/modules/storage/ReactDatabaseSupplier:get	()Landroid/database/sqlite/SQLiteDatabase;
+        //   298: invokevirtual 104	android/database/sqlite/SQLiteDatabase:endTransaction	()V
+        //   301: goto +27 -> 328
+        //   304: astore 5
+        //   306: ldc 106
+        //   308: aload 5
+        //   310: invokevirtual 110	java/lang/Exception:getMessage	()Ljava/lang/String;
+        //   313: aload 5
+        //   315: invokestatic 116	com/facebook/common/logging/FLog:w	(Ljava/lang/String;Ljava/lang/String;Ljava/lang/Throwable;)V
+        //   318: aconst_null
+        //   319: aload 5
+        //   321: invokevirtual 110	java/lang/Exception:getMessage	()Ljava/lang/String;
+        //   324: invokestatic 120	com/facebook/react/modules/storage/AsyncStorageErrorUtil:getError	(Ljava/lang/String;Ljava/lang/String;)Lcom/facebook/react/bridge/WritableMap;
+        //   327: pop
+        //   328: aload_1
+        //   329: athrow
+        // Local variable table:
+        //   start	length	slot	name	signature
+        //   0	330	0	this	3
+        //   0	330	1	paramAnonymousVarArgs	Void[]
+        //   51	67	2	i	int
+        //   82	23	3	j	int
+        //   7	5	4	bool	boolean
+        //   196	39	5	localWritableMap	com.facebook.react.bridge.WritableMap
+        //   304	16	5	localException1	Exception
+        //   217	24	6	localException2	Exception
+        // Exception table:
+        //   from	to	target	type
+        //   134	147	150	java/lang/Exception
+        //   37	50	173	finally
+        //   52	112	173	finally
+        //   121	134	173	finally
+        //   178	198	173	finally
+        //   37	50	177	java/lang/Exception
+        //   52	112	177	java/lang/Exception
+        //   121	134	177	java/lang/Exception
+        //   198	211	217	java/lang/Exception
+        //   288	301	304	java/lang/Exception
+      }
+    }.executeOnExecutor(executor, new Void[0]);
+  }
+  
+  @ReactMethod
+  public void multiSet(final ReadableArray paramReadableArray, final Callback paramCallback)
+  {
+    if (paramReadableArray.size() == 0)
+    {
+      paramCallback.invoke(new Object[] { AsyncStorageErrorUtil.getInvalidKeyError(null) });
+      return;
+    }
+    new GuardedAsyncTask(getReactApplicationContext())
+    {
+      /* Error */
+      protected void doInBackgroundGuarded(Void... paramAnonymousVarArgs)
+      {
+        // Byte code:
+        //   0: aload_0
+        //   1: getfield 20	com/facebook/react/modules/storage/AsyncStorageModule$2:this$0	Lcom/facebook/react/modules/storage/AsyncStorageModule;
+        //   4: invokestatic 41	com/facebook/react/modules/storage/AsyncStorageModule:access$000	(Lcom/facebook/react/modules/storage/AsyncStorageModule;)Z
+        //   7: istore_3
+        //   8: aconst_null
+        //   9: astore_1
+        //   10: iload_3
+        //   11: ifne +24 -> 35
+        //   14: aload_0
+        //   15: getfield 22	com/facebook/react/modules/storage/AsyncStorageModule$2:val$callback	Lcom/facebook/react/bridge/Callback;
+        //   18: iconst_1
+        //   19: anewarray 43	java/lang/Object
+        //   22: dup
+        //   23: iconst_0
+        //   24: aconst_null
+        //   25: invokestatic 49	com/facebook/react/modules/storage/AsyncStorageErrorUtil:getDBError	(Ljava/lang/String;)Lcom/facebook/react/bridge/WritableMap;
+        //   28: aastore
+        //   29: invokeinterface 54 2 0
+        //   34: return
+        //   35: aload_0
+        //   36: getfield 20	com/facebook/react/modules/storage/AsyncStorageModule$2:this$0	Lcom/facebook/react/modules/storage/AsyncStorageModule;
+        //   39: invokestatic 58	com/facebook/react/modules/storage/AsyncStorageModule:access$100	(Lcom/facebook/react/modules/storage/AsyncStorageModule;)Lcom/facebook/react/modules/storage/ReactDatabaseSupplier;
+        //   42: invokevirtual 64	com/facebook/react/modules/storage/ReactDatabaseSupplier:get	()Landroid/database/sqlite/SQLiteDatabase;
+        //   45: ldc 66
+        //   47: invokevirtual 72	android/database/sqlite/SQLiteDatabase:compileStatement	(Ljava/lang/String;)Landroid/database/sqlite/SQLiteStatement;
+        //   50: astore 4
+        //   52: aload_0
+        //   53: getfield 20	com/facebook/react/modules/storage/AsyncStorageModule$2:this$0	Lcom/facebook/react/modules/storage/AsyncStorageModule;
+        //   56: invokestatic 58	com/facebook/react/modules/storage/AsyncStorageModule:access$100	(Lcom/facebook/react/modules/storage/AsyncStorageModule;)Lcom/facebook/react/modules/storage/ReactDatabaseSupplier;
+        //   59: invokevirtual 64	com/facebook/react/modules/storage/ReactDatabaseSupplier:get	()Landroid/database/sqlite/SQLiteDatabase;
+        //   62: invokevirtual 76	android/database/sqlite/SQLiteDatabase:beginTransaction	()V
+        //   65: iconst_0
+        //   66: istore_2
+        //   67: iload_2
+        //   68: aload_0
+        //   69: getfield 24	com/facebook/react/modules/storage/AsyncStorageModule$2:val$keyValueArray	Lcom/facebook/react/bridge/ReadableArray;
+        //   72: invokeinterface 82 1 0
+        //   77: if_icmpge +265 -> 342
+        //   80: aload_0
+        //   81: getfield 24	com/facebook/react/modules/storage/AsyncStorageModule$2:val$keyValueArray	Lcom/facebook/react/bridge/ReadableArray;
+        //   84: iload_2
+        //   85: invokeinterface 86 2 0
+        //   90: invokeinterface 82 1 0
+        //   95: iconst_2
+        //   96: if_icmpeq +51 -> 147
+        //   99: aconst_null
+        //   100: invokestatic 89	com/facebook/react/modules/storage/AsyncStorageErrorUtil:getInvalidValueError	(Ljava/lang/String;)Lcom/facebook/react/bridge/WritableMap;
+        //   103: astore_1
+        //   104: aload_0
+        //   105: getfield 20	com/facebook/react/modules/storage/AsyncStorageModule$2:this$0	Lcom/facebook/react/modules/storage/AsyncStorageModule;
+        //   108: invokestatic 58	com/facebook/react/modules/storage/AsyncStorageModule:access$100	(Lcom/facebook/react/modules/storage/AsyncStorageModule;)Lcom/facebook/react/modules/storage/ReactDatabaseSupplier;
+        //   111: invokevirtual 64	com/facebook/react/modules/storage/ReactDatabaseSupplier:get	()Landroid/database/sqlite/SQLiteDatabase;
+        //   114: invokevirtual 92	android/database/sqlite/SQLiteDatabase:endTransaction	()V
+        //   117: return
+        //   118: astore 4
+        //   120: ldc 94
+        //   122: aload 4
+        //   124: invokevirtual 98	java/lang/Exception:getMessage	()Ljava/lang/String;
+        //   127: aload 4
+        //   129: invokestatic 104	com/facebook/common/logging/FLog:w	(Ljava/lang/String;Ljava/lang/String;Ljava/lang/Throwable;)V
+        //   132: aload_1
+        //   133: ifnonnull +13 -> 146
+        //   136: aconst_null
+        //   137: aload 4
+        //   139: invokevirtual 98	java/lang/Exception:getMessage	()Ljava/lang/String;
+        //   142: invokestatic 108	com/facebook/react/modules/storage/AsyncStorageErrorUtil:getError	(Ljava/lang/String;Ljava/lang/String;)Lcom/facebook/react/bridge/WritableMap;
+        //   145: pop
+        //   146: return
+        //   147: aload_0
+        //   148: getfield 24	com/facebook/react/modules/storage/AsyncStorageModule$2:val$keyValueArray	Lcom/facebook/react/bridge/ReadableArray;
+        //   151: iload_2
+        //   152: invokeinterface 86 2 0
+        //   157: iconst_0
+        //   158: invokeinterface 112 2 0
+        //   163: ifnonnull +51 -> 214
+        //   166: aconst_null
+        //   167: invokestatic 115	com/facebook/react/modules/storage/AsyncStorageErrorUtil:getInvalidKeyError	(Ljava/lang/String;)Lcom/facebook/react/bridge/WritableMap;
+        //   170: astore_1
+        //   171: aload_0
+        //   172: getfield 20	com/facebook/react/modules/storage/AsyncStorageModule$2:this$0	Lcom/facebook/react/modules/storage/AsyncStorageModule;
+        //   175: invokestatic 58	com/facebook/react/modules/storage/AsyncStorageModule:access$100	(Lcom/facebook/react/modules/storage/AsyncStorageModule;)Lcom/facebook/react/modules/storage/ReactDatabaseSupplier;
+        //   178: invokevirtual 64	com/facebook/react/modules/storage/ReactDatabaseSupplier:get	()Landroid/database/sqlite/SQLiteDatabase;
+        //   181: invokevirtual 92	android/database/sqlite/SQLiteDatabase:endTransaction	()V
+        //   184: return
+        //   185: astore 4
+        //   187: ldc 94
+        //   189: aload 4
+        //   191: invokevirtual 98	java/lang/Exception:getMessage	()Ljava/lang/String;
+        //   194: aload 4
+        //   196: invokestatic 104	com/facebook/common/logging/FLog:w	(Ljava/lang/String;Ljava/lang/String;Ljava/lang/Throwable;)V
+        //   199: aload_1
+        //   200: ifnonnull +13 -> 213
+        //   203: aconst_null
+        //   204: aload 4
+        //   206: invokevirtual 98	java/lang/Exception:getMessage	()Ljava/lang/String;
+        //   209: invokestatic 108	com/facebook/react/modules/storage/AsyncStorageErrorUtil:getError	(Ljava/lang/String;Ljava/lang/String;)Lcom/facebook/react/bridge/WritableMap;
+        //   212: pop
+        //   213: return
+        //   214: aload_0
+        //   215: getfield 24	com/facebook/react/modules/storage/AsyncStorageModule$2:val$keyValueArray	Lcom/facebook/react/bridge/ReadableArray;
+        //   218: iload_2
+        //   219: invokeinterface 86 2 0
+        //   224: iconst_1
+        //   225: invokeinterface 112 2 0
+        //   230: ifnonnull +51 -> 281
+        //   233: aconst_null
+        //   234: invokestatic 89	com/facebook/react/modules/storage/AsyncStorageErrorUtil:getInvalidValueError	(Ljava/lang/String;)Lcom/facebook/react/bridge/WritableMap;
+        //   237: astore_1
+        //   238: aload_0
+        //   239: getfield 20	com/facebook/react/modules/storage/AsyncStorageModule$2:this$0	Lcom/facebook/react/modules/storage/AsyncStorageModule;
+        //   242: invokestatic 58	com/facebook/react/modules/storage/AsyncStorageModule:access$100	(Lcom/facebook/react/modules/storage/AsyncStorageModule;)Lcom/facebook/react/modules/storage/ReactDatabaseSupplier;
+        //   245: invokevirtual 64	com/facebook/react/modules/storage/ReactDatabaseSupplier:get	()Landroid/database/sqlite/SQLiteDatabase;
+        //   248: invokevirtual 92	android/database/sqlite/SQLiteDatabase:endTransaction	()V
+        //   251: return
+        //   252: astore 4
+        //   254: ldc 94
+        //   256: aload 4
+        //   258: invokevirtual 98	java/lang/Exception:getMessage	()Ljava/lang/String;
+        //   261: aload 4
+        //   263: invokestatic 104	com/facebook/common/logging/FLog:w	(Ljava/lang/String;Ljava/lang/String;Ljava/lang/Throwable;)V
+        //   266: aload_1
+        //   267: ifnonnull +13 -> 280
+        //   270: aconst_null
+        //   271: aload 4
+        //   273: invokevirtual 98	java/lang/Exception:getMessage	()Ljava/lang/String;
+        //   276: invokestatic 108	com/facebook/react/modules/storage/AsyncStorageErrorUtil:getError	(Ljava/lang/String;Ljava/lang/String;)Lcom/facebook/react/bridge/WritableMap;
+        //   279: pop
+        //   280: return
+        //   281: aload 4
+        //   283: invokevirtual 120	android/database/sqlite/SQLiteStatement:clearBindings	()V
+        //   286: aload 4
+        //   288: iconst_1
+        //   289: aload_0
+        //   290: getfield 24	com/facebook/react/modules/storage/AsyncStorageModule$2:val$keyValueArray	Lcom/facebook/react/bridge/ReadableArray;
+        //   293: iload_2
+        //   294: invokeinterface 86 2 0
+        //   299: iconst_0
+        //   300: invokeinterface 112 2 0
+        //   305: invokevirtual 124	android/database/sqlite/SQLiteStatement:bindString	(ILjava/lang/String;)V
+        //   308: aload 4
+        //   310: iconst_2
+        //   311: aload_0
+        //   312: getfield 24	com/facebook/react/modules/storage/AsyncStorageModule$2:val$keyValueArray	Lcom/facebook/react/bridge/ReadableArray;
+        //   315: iload_2
+        //   316: invokeinterface 86 2 0
+        //   321: iconst_1
+        //   322: invokeinterface 112 2 0
+        //   327: invokevirtual 124	android/database/sqlite/SQLiteStatement:bindString	(ILjava/lang/String;)V
+        //   330: aload 4
+        //   332: invokevirtual 127	android/database/sqlite/SQLiteStatement:execute	()V
+        //   335: iload_2
+        //   336: iconst_1
+        //   337: iadd
+        //   338: istore_2
+        //   339: goto -272 -> 67
+        //   342: aload_0
+        //   343: getfield 20	com/facebook/react/modules/storage/AsyncStorageModule$2:this$0	Lcom/facebook/react/modules/storage/AsyncStorageModule;
+        //   346: invokestatic 58	com/facebook/react/modules/storage/AsyncStorageModule:access$100	(Lcom/facebook/react/modules/storage/AsyncStorageModule;)Lcom/facebook/react/modules/storage/ReactDatabaseSupplier;
+        //   349: invokevirtual 64	com/facebook/react/modules/storage/ReactDatabaseSupplier:get	()Landroid/database/sqlite/SQLiteDatabase;
+        //   352: invokevirtual 130	android/database/sqlite/SQLiteDatabase:setTransactionSuccessful	()V
+        //   355: aload_0
+        //   356: getfield 20	com/facebook/react/modules/storage/AsyncStorageModule$2:this$0	Lcom/facebook/react/modules/storage/AsyncStorageModule;
+        //   359: invokestatic 58	com/facebook/react/modules/storage/AsyncStorageModule:access$100	(Lcom/facebook/react/modules/storage/AsyncStorageModule;)Lcom/facebook/react/modules/storage/ReactDatabaseSupplier;
+        //   362: invokevirtual 64	com/facebook/react/modules/storage/ReactDatabaseSupplier:get	()Landroid/database/sqlite/SQLiteDatabase;
+        //   365: invokevirtual 92	android/database/sqlite/SQLiteDatabase:endTransaction	()V
+        //   368: goto +105 -> 473
+        //   371: astore_1
+        //   372: ldc 94
+        //   374: aload_1
+        //   375: invokevirtual 98	java/lang/Exception:getMessage	()Ljava/lang/String;
+        //   378: aload_1
+        //   379: invokestatic 104	com/facebook/common/logging/FLog:w	(Ljava/lang/String;Ljava/lang/String;Ljava/lang/Throwable;)V
+        //   382: aconst_null
+        //   383: aload_1
+        //   384: invokevirtual 98	java/lang/Exception:getMessage	()Ljava/lang/String;
+        //   387: invokestatic 108	com/facebook/react/modules/storage/AsyncStorageErrorUtil:getError	(Ljava/lang/String;Ljava/lang/String;)Lcom/facebook/react/bridge/WritableMap;
+        //   390: astore_1
+        //   391: goto +82 -> 473
+        //   394: astore_1
+        //   395: goto +114 -> 509
+        //   398: astore_1
+        //   399: ldc 94
+        //   401: aload_1
+        //   402: invokevirtual 98	java/lang/Exception:getMessage	()Ljava/lang/String;
+        //   405: aload_1
+        //   406: invokestatic 104	com/facebook/common/logging/FLog:w	(Ljava/lang/String;Ljava/lang/String;Ljava/lang/Throwable;)V
+        //   409: aconst_null
+        //   410: aload_1
+        //   411: invokevirtual 98	java/lang/Exception:getMessage	()Ljava/lang/String;
+        //   414: invokestatic 108	com/facebook/react/modules/storage/AsyncStorageErrorUtil:getError	(Ljava/lang/String;Ljava/lang/String;)Lcom/facebook/react/bridge/WritableMap;
+        //   417: astore 4
+        //   419: aload_0
+        //   420: getfield 20	com/facebook/react/modules/storage/AsyncStorageModule$2:this$0	Lcom/facebook/react/modules/storage/AsyncStorageModule;
+        //   423: invokestatic 58	com/facebook/react/modules/storage/AsyncStorageModule:access$100	(Lcom/facebook/react/modules/storage/AsyncStorageModule;)Lcom/facebook/react/modules/storage/ReactDatabaseSupplier;
+        //   426: invokevirtual 64	com/facebook/react/modules/storage/ReactDatabaseSupplier:get	()Landroid/database/sqlite/SQLiteDatabase;
+        //   429: invokevirtual 92	android/database/sqlite/SQLiteDatabase:endTransaction	()V
+        //   432: aload 4
+        //   434: astore_1
+        //   435: goto +38 -> 473
+        //   438: astore 5
+        //   440: ldc 94
+        //   442: aload 5
+        //   444: invokevirtual 98	java/lang/Exception:getMessage	()Ljava/lang/String;
+        //   447: aload 5
+        //   449: invokestatic 104	com/facebook/common/logging/FLog:w	(Ljava/lang/String;Ljava/lang/String;Ljava/lang/Throwable;)V
+        //   452: aload 4
+        //   454: astore_1
+        //   455: aload 4
+        //   457: ifnonnull -22 -> 435
+        //   460: aconst_null
+        //   461: aload 5
+        //   463: invokevirtual 98	java/lang/Exception:getMessage	()Ljava/lang/String;
+        //   466: invokestatic 108	com/facebook/react/modules/storage/AsyncStorageErrorUtil:getError	(Ljava/lang/String;Ljava/lang/String;)Lcom/facebook/react/bridge/WritableMap;
+        //   469: astore_1
+        //   470: goto -35 -> 435
+        //   473: aload_1
+        //   474: ifnull +21 -> 495
+        //   477: aload_0
+        //   478: getfield 22	com/facebook/react/modules/storage/AsyncStorageModule$2:val$callback	Lcom/facebook/react/bridge/Callback;
+        //   481: iconst_1
+        //   482: anewarray 43	java/lang/Object
+        //   485: dup
+        //   486: iconst_0
+        //   487: aload_1
+        //   488: aastore
+        //   489: invokeinterface 54 2 0
+        //   494: return
+        //   495: aload_0
+        //   496: getfield 22	com/facebook/react/modules/storage/AsyncStorageModule$2:val$callback	Lcom/facebook/react/bridge/Callback;
+        //   499: iconst_0
+        //   500: anewarray 43	java/lang/Object
+        //   503: invokeinterface 54 2 0
+        //   508: return
+        //   509: aload_0
+        //   510: getfield 20	com/facebook/react/modules/storage/AsyncStorageModule$2:this$0	Lcom/facebook/react/modules/storage/AsyncStorageModule;
+        //   513: invokestatic 58	com/facebook/react/modules/storage/AsyncStorageModule:access$100	(Lcom/facebook/react/modules/storage/AsyncStorageModule;)Lcom/facebook/react/modules/storage/ReactDatabaseSupplier;
+        //   516: invokevirtual 64	com/facebook/react/modules/storage/ReactDatabaseSupplier:get	()Landroid/database/sqlite/SQLiteDatabase;
+        //   519: invokevirtual 92	android/database/sqlite/SQLiteDatabase:endTransaction	()V
+        //   522: goto +27 -> 549
+        //   525: astore 4
+        //   527: ldc 94
+        //   529: aload 4
+        //   531: invokevirtual 98	java/lang/Exception:getMessage	()Ljava/lang/String;
+        //   534: aload 4
+        //   536: invokestatic 104	com/facebook/common/logging/FLog:w	(Ljava/lang/String;Ljava/lang/String;Ljava/lang/Throwable;)V
+        //   539: aconst_null
+        //   540: aload 4
+        //   542: invokevirtual 98	java/lang/Exception:getMessage	()Ljava/lang/String;
+        //   545: invokestatic 108	com/facebook/react/modules/storage/AsyncStorageErrorUtil:getError	(Ljava/lang/String;Ljava/lang/String;)Lcom/facebook/react/bridge/WritableMap;
+        //   548: pop
+        //   549: aload_1
+        //   550: athrow
+        // Local variable table:
+        //   start	length	slot	name	signature
+        //   0	551	0	this	2
+        //   0	551	1	paramAnonymousVarArgs	Void[]
+        //   66	273	2	i	int
+        //   7	4	3	bool	boolean
+        //   50	1	4	localSQLiteStatement	android.database.sqlite.SQLiteStatement
+        //   118	20	4	localException1	Exception
+        //   185	20	4	localException2	Exception
+        //   252	79	4	localException3	Exception
+        //   417	39	4	localWritableMap	com.facebook.react.bridge.WritableMap
+        //   525	16	4	localException4	Exception
+        //   438	24	5	localException5	Exception
+        // Exception table:
+        //   from	to	target	type
+        //   104	117	118	java/lang/Exception
+        //   171	184	185	java/lang/Exception
+        //   238	251	252	java/lang/Exception
+        //   355	368	371	java/lang/Exception
+        //   52	65	394	finally
+        //   67	104	394	finally
+        //   147	171	394	finally
+        //   214	238	394	finally
+        //   281	335	394	finally
+        //   342	355	394	finally
+        //   399	419	394	finally
+        //   52	65	398	java/lang/Exception
+        //   67	104	398	java/lang/Exception
+        //   147	171	398	java/lang/Exception
+        //   214	238	398	java/lang/Exception
+        //   281	335	398	java/lang/Exception
+        //   342	355	398	java/lang/Exception
+        //   419	432	438	java/lang/Exception
+        //   509	522	525	java/lang/Exception
+      }
+    }.executeOnExecutor(executor, new Void[0]);
+  }
+  
+  public void onCatalystInstanceDestroy()
+  {
+    mShuttingDown = true;
+  }
+  
+  private class SerialExecutor
+    implements Executor
+  {
+    private final Executor executor;
+    private Runnable mActive;
+    private final ArrayDeque<Runnable> mTasks = new ArrayDeque();
+    
+    SerialExecutor(Executor paramExecutor)
+    {
+      executor = paramExecutor;
+    }
+    
+    public void execute(final Runnable paramRunnable)
+    {
+      try
+      {
+        mTasks.offer(new Runnable()
+        {
+          public void run()
+          {
+            try
+            {
+              paramRunnable.run();
+              return;
+            }
+            finally
+            {
+              scheduleNext();
+            }
+          }
+        });
+        if (mActive == null) {
+          scheduleNext();
+        }
+        return;
+      }
+      finally
+      {
+        paramRunnable = finally;
+        throw paramRunnable;
+      }
+    }
+    
+    void scheduleNext()
+    {
+      try
+      {
+        Runnable localRunnable = (Runnable)mTasks.poll();
+        mActive = localRunnable;
+        if (localRunnable != null) {
+          executor.execute(mActive);
+        }
+        return;
+      }
+      finally {}
+    }
+  }
+}

@@ -1,0 +1,380 @@
+package de.innfactory.apiai;
+
+import ai.api.AIConfiguration.SupportedLanguages;
+import ai.api.AIListener;
+import ai.api.AIServiceException;
+import ai.api.RequestExtras;
+import ai.api.android.AIConfiguration;
+import ai.api.android.AIConfiguration.RecognitionEngine;
+import ai.api.android.AIDataService;
+import ai.api.android.AIService;
+import ai.api.android.SessionIdStorage;
+import ai.api.model.AIContext;
+import ai.api.model.AIError;
+import ai.api.model.AIRequest;
+import ai.api.model.AIResponse;
+import ai.api.model.Entity;
+import android.app.Activity;
+import android.os.AsyncTask;
+import android.util.Log;
+import com.facebook.react.bridge.Callback;
+import com.facebook.react.bridge.Promise;
+import com.facebook.react.bridge.ReactApplicationContext;
+import com.facebook.react.bridge.ReactContextBaseJavaModule;
+import com.facebook.react.bridge.ReactMethod;
+import com.google.gson.Gson;
+import com.google.gson.reflect.TypeToken;
+import java.util.HashMap;
+import java.util.List;
+import java.util.Map;
+
+public class RNApiAiModule
+  extends ReactContextBaseJavaModule
+  implements AIListener
+{
+  private static final String LANG_CHINESE_CHINA = "LANG_CHINESE_CHINA";
+  private static final String LANG_CHINESE_HONGKONG = "LANG_CHINESE_HONGKONG";
+  private static final String LANG_CHINESE_TAIWAN = "LANG_CHINESE_TAIWAN";
+  private static final String LANG_DUTCH = "LANG_DUTCH";
+  private static final String LANG_ENGLISH = "LANG_ENGLISH";
+  private static final String LANG_ENGLISH_GB = "LANG_ENGLISH_GB";
+  private static final String LANG_ENGLISH_US = "LANG_ENGLISH_US";
+  private static final String LANG_FRENCH = "LANG_FRENCH";
+  private static final String LANG_GERMAN = "LANG_GERMAN";
+  private static final String LANG_ITALIAN = "LANG_ITALIAN";
+  private static final String LANG_JAPANESE = "LANG_JAPANESE";
+  private static final String LANG_KOREAN = "LANG_KOREAN";
+  private static final String LANG_PORTUGUESE = "LANG_PORTUGUESE";
+  private static final String LANG_PORTUGUESE_BRAZIL = "LANG_PORTUGUESE_BRAZIL";
+  private static final String LANG_RUSSIAN = "LANG_RUSSIAN";
+  private static final String LANG_SPANISH = "LANG_SPANISH";
+  private static final String LANG_UKRAINIAN = "LANG_UKRAINIAN";
+  private static final String TAG = "ApiAi";
+  private String accessToken;
+  private AIDataService aiDataService;
+  private AIService aiService;
+  private AIConfiguration config = new AIConfiguration("", AIConfiguration.SupportedLanguages.DEFAULT, AIConfiguration.RecognitionEngine.System);
+  private List<AIContext> contexts;
+  private List<Entity> entities;
+  private String languageTag;
+  private Callback onAudioLevelCallback;
+  private Callback onErrorCallback;
+  private Callback onListeningCanceledCallback;
+  private Callback onListeningFinishedCallback;
+  private Callback onListeningStartedCallback;
+  private Callback onResultCallback;
+  private List<AIContext> permantentContexts;
+  
+  public RNApiAiModule(ReactApplicationContext paramReactApplicationContext)
+  {
+    super(paramReactApplicationContext);
+  }
+  
+  private List<AIContext> mergeContexts(List<AIContext> paramList1, List<AIContext> paramList2)
+  {
+    if (paramList1 == null) {
+      return paramList2;
+    }
+    if (paramList2 == null) {
+      return paramList1;
+    }
+    paramList1.addAll(paramList2);
+    return paramList1;
+  }
+  
+  @ReactMethod
+  public void cancel()
+  {
+    getCurrentActivity().runOnUiThread(new Runnable()
+    {
+      public void run()
+      {
+        if (aiService != null) {
+          aiService.cancel();
+        }
+      }
+    });
+  }
+  
+  @ReactMethod
+  public void getAccessToken(Promise paramPromise)
+  {
+    paramPromise.resolve(accessToken);
+  }
+  
+  public Map<String, Object> getConstants()
+  {
+    HashMap localHashMap = new HashMap();
+    localHashMap.put("LANG_CHINESE_CHINA", "zh-CN");
+    localHashMap.put("LANG_CHINESE_HONGKONG", "zh-HK");
+    localHashMap.put("LANG_CHINESE_TAIWAN", "zh-TW");
+    localHashMap.put("LANG_DUTCH", "nl");
+    localHashMap.put("LANG_ENGLISH", "en");
+    localHashMap.put("LANG_ENGLISH_GB", "en-GB");
+    localHashMap.put("LANG_ENGLISH_US", "en-US");
+    localHashMap.put("LANG_FRENCH", "fr");
+    localHashMap.put("LANG_GERMAN", "de");
+    localHashMap.put("LANG_ITALIAN", "it");
+    localHashMap.put("LANG_JAPANESE", "ja");
+    localHashMap.put("LANG_KOREAN", "ko");
+    localHashMap.put("LANG_PORTUGUESE", "pt");
+    localHashMap.put("LANG_PORTUGUESE_BRAZIL", "pt-BR");
+    localHashMap.put("LANG_RUSSIAN", "ru");
+    localHashMap.put("LANG_SPANISH", "es");
+    localHashMap.put("LANG_UKRAINIAN", "uk");
+    return localHashMap;
+  }
+  
+  @ReactMethod
+  public void getLanguage(Promise paramPromise)
+  {
+    paramPromise.resolve(languageTag);
+  }
+  
+  public String getName()
+  {
+    return "ApiAi";
+  }
+  
+  @ReactMethod
+  public void getSessionId(Promise paramPromise)
+  {
+    paramPromise.resolve(SessionIdStorage.getSessionId(getReactApplicationContext()));
+  }
+  
+  public void onAudioLevel(float paramFloat)
+  {
+    if (onAudioLevelCallback != null) {
+      try
+      {
+        onAudioLevelCallback.invoke(new Object[] { Float.valueOf(paramFloat) });
+        return;
+      }
+      catch (Exception localException)
+      {
+        Log.e("ApiAi", localException.getMessage(), localException);
+      }
+    }
+  }
+  
+  @ReactMethod
+  public void onAudioLevel(Callback paramCallback)
+  {
+    onAudioLevelCallback = paramCallback;
+  }
+  
+  public void onError(AIError paramAIError)
+  {
+    if (onErrorCallback != null)
+    {
+      Gson localGson = new Gson();
+      try
+      {
+        onErrorCallback.invoke(new Object[] { localGson.toJson(paramAIError) });
+        return;
+      }
+      catch (Exception paramAIError)
+      {
+        Log.e("ApiAi", paramAIError.getMessage(), paramAIError);
+      }
+    }
+  }
+  
+  public void onListeningCanceled()
+  {
+    if (onListeningCanceledCallback != null) {
+      try
+      {
+        onListeningCanceledCallback.invoke(new Object[0]);
+        return;
+      }
+      catch (Exception localException)
+      {
+        Log.e("ApiAi", localException.getMessage(), localException);
+      }
+    }
+  }
+  
+  @ReactMethod
+  public void onListeningCanceled(Callback paramCallback)
+  {
+    onListeningCanceledCallback = paramCallback;
+  }
+  
+  public void onListeningFinished()
+  {
+    if (onListeningFinishedCallback != null) {
+      try
+      {
+        onListeningFinishedCallback.invoke(new Object[0]);
+        return;
+      }
+      catch (Exception localException)
+      {
+        Log.e("ApiAi", localException.getMessage(), localException);
+      }
+    }
+  }
+  
+  @ReactMethod
+  public void onListeningFinished(Callback paramCallback)
+  {
+    onListeningFinishedCallback = paramCallback;
+  }
+  
+  public void onListeningStarted()
+  {
+    if (onListeningStartedCallback != null) {
+      try
+      {
+        onListeningStartedCallback.invoke(new Object[0]);
+        return;
+      }
+      catch (Exception localException)
+      {
+        Log.e("ApiAi", localException.getMessage(), localException);
+      }
+    }
+  }
+  
+  @ReactMethod
+  public void onListeningStarted(Callback paramCallback)
+  {
+    onListeningStartedCallback = paramCallback;
+  }
+  
+  public void onResult(AIResponse paramAIResponse)
+  {
+    if (onResultCallback != null)
+    {
+      Gson localGson = new Gson();
+      try
+      {
+        onResultCallback.invoke(new Object[] { localGson.toJson(paramAIResponse) });
+        return;
+      }
+      catch (Exception paramAIResponse)
+      {
+        Log.e("ApiAi", paramAIResponse.getMessage(), paramAIResponse);
+      }
+    }
+  }
+  
+  @ReactMethod
+  public void requestQueryNative(String paramString, final Callback paramCallback1, Callback paramCallback2)
+  {
+    onResultCallback = paramCallback1;
+    onErrorCallback = paramCallback2;
+    if (aiDataService == null) {
+      aiDataService = new AIDataService(getReactApplicationContext(), config);
+    }
+    paramCallback1 = new AIRequest();
+    paramCallback1.setQuery(paramString);
+    new AsyncTask()
+    {
+      protected AIResponse doInBackground(AIRequest... paramAnonymousVarArgs)
+      {
+        paramAnonymousVarArgs = paramAnonymousVarArgs[0];
+        Gson localGson;
+        try
+        {
+          if ((contexts == null) && (permantentContexts == null) && (entities == null)) {
+            return aiDataService.request(paramCallback1);
+          }
+          paramAnonymousVarArgs = new RequestExtras(RNApiAiModule.this.mergeContexts(contexts, permantentContexts), entities);
+          paramAnonymousVarArgs = aiDataService.request(paramCallback1, paramAnonymousVarArgs);
+          RNApiAiModule.access$302(RNApiAiModule.this, null);
+          RNApiAiModule.access$502(RNApiAiModule.this, null);
+          return paramAnonymousVarArgs;
+        }
+        catch (AIServiceException paramAnonymousVarArgs)
+        {
+          localGson = new Gson();
+        }
+        try
+        {
+          onErrorCallback.invoke(new Object[] { localGson.toJson(paramAnonymousVarArgs) });
+          return null;
+        }
+        catch (Exception localException)
+        {
+          for (;;) {}
+        }
+        Log.e("ApiAi", paramAnonymousVarArgs.getMessage(), paramAnonymousVarArgs);
+        return null;
+      }
+      
+      protected void onPostExecute(AIResponse paramAnonymousAIResponse)
+      {
+        if (paramAnonymousAIResponse != null) {
+          onResult(paramAnonymousAIResponse);
+        }
+      }
+    }.execute(new AIRequest[] { paramCallback1 });
+  }
+  
+  @ReactMethod
+  public void setConfiguration(String paramString1, String paramString2)
+  {
+    accessToken = paramString1;
+    languageTag = paramString2;
+    config = new AIConfiguration(paramString1, AIConfiguration.SupportedLanguages.fromLanguageTag(paramString2), AIConfiguration.RecognitionEngine.System);
+  }
+  
+  @ReactMethod
+  public void setContextsAsJson(String paramString)
+  {
+    contexts = ((List)new Gson().fromJson(paramString, new TypeToken() {}.getType()));
+  }
+  
+  @ReactMethod
+  public void setEntitiesAsJson(String paramString)
+    throws AIServiceException
+  {
+    entities = ((List)new Gson().fromJson(paramString, new TypeToken() {}.getType()));
+  }
+  
+  @ReactMethod
+  public void setPermanentContextsAsJson(String paramString)
+  {
+    permantentContexts = ((List)new Gson().fromJson(paramString, new TypeToken() {}.getType()));
+  }
+  
+  @ReactMethod
+  public void startListeningNative(Callback paramCallback1, Callback paramCallback2)
+  {
+    onResultCallback = paramCallback1;
+    onErrorCallback = paramCallback2;
+    getCurrentActivity().runOnUiThread(new Runnable()
+    {
+      public void run()
+      {
+        RNApiAiModule.access$002(RNApiAiModule.this, AIService.getService(getReactApplicationContext(), config));
+        aiService.setListener(RNApiAiModule.this);
+        if ((contexts == null) && (permantentContexts == null) && (entities == null))
+        {
+          aiService.startListening();
+          return;
+        }
+        RequestExtras localRequestExtras = new RequestExtras(RNApiAiModule.this.mergeContexts(contexts, permantentContexts), entities);
+        aiService.startListening(localRequestExtras);
+        RNApiAiModule.access$302(RNApiAiModule.this, null);
+        RNApiAiModule.access$502(RNApiAiModule.this, null);
+      }
+    });
+  }
+  
+  @ReactMethod
+  public void stopListening()
+  {
+    getCurrentActivity().runOnUiThread(new Runnable()
+    {
+      public void run()
+      {
+        if (aiService != null) {
+          aiService.stopListening();
+        }
+      }
+    });
+  }
+}

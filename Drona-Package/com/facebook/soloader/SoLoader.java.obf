@@ -1,0 +1,1680 @@
+package com.facebook.soloader;
+
+import android.annotation.TargetApi;
+import android.content.Context;
+import android.content.pm.ApplicationInfo;
+import android.os.Build.VERSION;
+import android.os.StrictMode;
+import android.os.StrictMode.ThreadPolicy;
+import android.text.TextUtils;
+import android.util.Log;
+import dalvik.system.BaseDexClassLoader;
+import java.io.File;
+import java.io.FileNotFoundException;
+import java.io.IOException;
+import java.lang.reflect.Method;
+import java.util.ArrayList;
+import java.util.Collection;
+import java.util.Collections;
+import java.util.HashMap;
+import java.util.HashSet;
+import java.util.Map;
+import java.util.Set;
+import java.util.concurrent.ConcurrentHashMap;
+import java.util.concurrent.locks.ReentrantReadWriteLock;
+import java.util.concurrent.locks.ReentrantReadWriteLock.ReadLock;
+import java.util.concurrent.locks.ReentrantReadWriteLock.WriteLock;
+import javax.annotation.Nullable;
+import javax.annotation.concurrent.GuardedBy;
+import javax.annotation.concurrent.ThreadSafe;
+
+@ThreadSafe
+public class SoLoader
+{
+  static final boolean DEBUG = false;
+  public static final int SOLOADER_ALLOW_ASYNC_INIT = 2;
+  public static final int SOLOADER_DISABLE_BACKUP_SOSOURCE = 8;
+  public static final int SOLOADER_ENABLE_EXOPACKAGE = 1;
+  public static final int SOLOADER_LOOK_IN_ZIP = 4;
+  private static final String SO_STORE_NAME_MAIN = "lib-main";
+  private static final String SO_STORE_NAME_SPLIT = "lib-";
+  static final boolean SYSTRACE_LIBRARY_LOADING;
+  static final String TAG = "SoLoader";
+  @Nullable
+  @GuardedBy("sSoSourcesLock")
+  private static ApplicationSoSource sApplicationSoSource;
+  @Nullable
+  @GuardedBy("sSoSourcesLock")
+  private static UnpackingSoSource[] sBackupSoSources;
+  @GuardedBy("sSoSourcesLock")
+  private static int sFlags;
+  private static final Set<String> sLoadedAndMergedLibraries;
+  @GuardedBy("SoLoader.class")
+  private static final HashSet<String> sLoadedLibraries;
+  @GuardedBy("SoLoader.class")
+  private static final Map<String, Object> sLoadingLibraries;
+  @Nullable
+  static SoFileLoader sSoFileLoader;
+  @Nullable
+  @GuardedBy("sSoSourcesLock")
+  private static SoSource[] sSoSources;
+  private static final ReentrantReadWriteLock sSoSourcesLock = new ReentrantReadWriteLock();
+  private static int sSoSourcesVersion;
+  @Nullable
+  private static SystemLoadLibraryWrapper sSystemLoadLibraryWrapper;
+  
+  static
+  {
+    sSoSources = null;
+    boolean bool = false;
+    sSoSourcesVersion = 0;
+    sLoadedLibraries = new HashSet();
+    sLoadingLibraries = new HashMap();
+    sLoadedAndMergedLibraries = Collections.newSetFromMap(new ConcurrentHashMap());
+    sSystemLoadLibraryWrapper = null;
+    try
+    {
+      int i = Build.VERSION.SDK_INT;
+      if (i >= 18) {
+        bool = true;
+      }
+    }
+    catch (NoClassDefFoundError|UnsatisfiedLinkError localNoClassDefFoundError)
+    {
+      for (;;) {}
+    }
+    SYSTRACE_LIBRARY_LOADING = bool;
+  }
+  
+  public SoLoader() {}
+  
+  public static boolean areSoSourcesAbisSupported()
+  {
+    sSoSourcesLock.readLock().lock();
+    try
+    {
+      Object localObject1 = sSoSources;
+      if (localObject1 == null) {
+        return false;
+      }
+      Object localObject3 = SysUtil.getSupportedAbis();
+      int i = 0;
+      while (i < sSoSources.length)
+      {
+        localObject1 = sSoSources[i].getSoSourceAbis();
+        int j = 0;
+        while (j < localObject1.length)
+        {
+          int k = 0;
+          boolean bool = false;
+          while ((k < localObject3.length) && (!bool))
+          {
+            bool = localObject1[j].equals(localObject3[k]);
+            k += 1;
+          }
+          if (!bool)
+          {
+            localObject3 = new StringBuilder();
+            ((StringBuilder)localObject3).append("abi not supported: ");
+            ((StringBuilder)localObject3).append(localObject1[j]);
+            Log.e("SoLoader", ((StringBuilder)localObject3).toString());
+            return false;
+          }
+          j += 1;
+        }
+        i += 1;
+      }
+      return true;
+    }
+    finally
+    {
+      sSoSourcesLock.readLock().unlock();
+    }
+  }
+  
+  private static void assertInitialized()
+  {
+    sSoSourcesLock.readLock().lock();
+    try
+    {
+      SoSource[] arrayOfSoSource = sSoSources;
+      if (arrayOfSoSource != null) {
+        return;
+      }
+      throw new RuntimeException("SoLoader.init() not yet called");
+    }
+    finally
+    {
+      sSoSourcesLock.readLock().unlock();
+    }
+  }
+  
+  public static void deinitForTest()
+  {
+    setSoSources(null);
+  }
+  
+  /* Error */
+  private static void doLoadLibraryBySoName(String paramString, int paramInt, StrictMode.ThreadPolicy paramThreadPolicy)
+    throws IOException
+  {
+    // Byte code:
+    //   0: getstatic 76	com/facebook/soloader/SoLoader:sSoSourcesLock	Ljava/util/concurrent/locks/ReentrantReadWriteLock;
+    //   3: invokevirtual 118	java/util/concurrent/locks/ReentrantReadWriteLock:readLock	()Ljava/util/concurrent/locks/ReentrantReadWriteLock$ReadLock;
+    //   6: invokevirtual 123	java/util/concurrent/locks/ReentrantReadWriteLock$ReadLock:lock	()V
+    //   9: getstatic 78	com/facebook/soloader/SoLoader:sSoSources	[Lcom/facebook/soloader/SoSource;
+    //   12: astore 9
+    //   14: aload 9
+    //   16: ifnull +731 -> 747
+    //   19: getstatic 76	com/facebook/soloader/SoLoader:sSoSourcesLock	Ljava/util/concurrent/locks/ReentrantReadWriteLock;
+    //   22: invokevirtual 118	java/util/concurrent/locks/ReentrantReadWriteLock:readLock	()Ljava/util/concurrent/locks/ReentrantReadWriteLock$ReadLock;
+    //   25: invokevirtual 126	java/util/concurrent/locks/ReentrantReadWriteLock$ReadLock:unlock	()V
+    //   28: aload_2
+    //   29: ifnonnull +13 -> 42
+    //   32: invokestatic 187	android/os/StrictMode:allowThreadDiskReads	()Landroid/os/StrictMode$ThreadPolicy;
+    //   35: astore_2
+    //   36: iconst_1
+    //   37: istore 7
+    //   39: goto +6 -> 45
+    //   42: iconst_0
+    //   43: istore 7
+    //   45: getstatic 110	com/facebook/soloader/SoLoader:SYSTRACE_LIBRARY_LOADING	Z
+    //   48: ifeq +43 -> 91
+    //   51: new 145	java/lang/StringBuilder
+    //   54: dup
+    //   55: invokespecial 146	java/lang/StringBuilder:<init>	()V
+    //   58: astore 9
+    //   60: aload 9
+    //   62: ldc -67
+    //   64: invokevirtual 152	java/lang/StringBuilder:append	(Ljava/lang/String;)Ljava/lang/StringBuilder;
+    //   67: pop
+    //   68: aload 9
+    //   70: aload_0
+    //   71: invokevirtual 152	java/lang/StringBuilder:append	(Ljava/lang/String;)Ljava/lang/StringBuilder;
+    //   74: pop
+    //   75: aload 9
+    //   77: ldc -65
+    //   79: invokevirtual 152	java/lang/StringBuilder:append	(Ljava/lang/String;)Ljava/lang/StringBuilder;
+    //   82: pop
+    //   83: aload 9
+    //   85: invokevirtual 156	java/lang/StringBuilder:toString	()Ljava/lang/String;
+    //   88: invokestatic 196	com/facebook/soloader/Api18TraceUtils:beginTraceSection	(Ljava/lang/String;)V
+    //   91: iconst_0
+    //   92: istore 4
+    //   94: iload 4
+    //   96: istore 5
+    //   98: iload 4
+    //   100: istore 6
+    //   102: getstatic 76	com/facebook/soloader/SoLoader:sSoSourcesLock	Ljava/util/concurrent/locks/ReentrantReadWriteLock;
+    //   105: invokevirtual 118	java/util/concurrent/locks/ReentrantReadWriteLock:readLock	()Ljava/util/concurrent/locks/ReentrantReadWriteLock$ReadLock;
+    //   108: invokevirtual 123	java/util/concurrent/locks/ReentrantReadWriteLock$ReadLock:lock	()V
+    //   111: iload 4
+    //   113: istore 5
+    //   115: iload 4
+    //   117: istore 6
+    //   119: getstatic 80	com/facebook/soloader/SoLoader:sSoSourcesVersion	I
+    //   122: istore 8
+    //   124: iconst_0
+    //   125: istore 5
+    //   127: iload 4
+    //   129: istore_3
+    //   130: iload 4
+    //   132: ifne +194 -> 326
+    //   135: iload 4
+    //   137: istore_3
+    //   138: iload 5
+    //   140: getstatic 78	com/facebook/soloader/SoLoader:sSoSources	[Lcom/facebook/soloader/SoSource;
+    //   143: arraylength
+    //   144: if_icmpge +182 -> 326
+    //   147: getstatic 78	com/facebook/soloader/SoLoader:sSoSources	[Lcom/facebook/soloader/SoSource;
+    //   150: iload 5
+    //   152: aaload
+    //   153: aload_0
+    //   154: iload_1
+    //   155: aload_2
+    //   156: invokevirtual 200	com/facebook/soloader/SoSource:loadLibrary	(Ljava/lang/String;ILandroid/os/StrictMode$ThreadPolicy;)I
+    //   159: istore_3
+    //   160: iload_3
+    //   161: iconst_3
+    //   162: if_icmpne +122 -> 284
+    //   165: getstatic 202	com/facebook/soloader/SoLoader:sBackupSoSources	[Lcom/facebook/soloader/UnpackingSoSource;
+    //   168: ifnull +116 -> 284
+    //   171: new 145	java/lang/StringBuilder
+    //   174: dup
+    //   175: invokespecial 146	java/lang/StringBuilder:<init>	()V
+    //   178: astore 9
+    //   180: aload 9
+    //   182: ldc -52
+    //   184: invokevirtual 152	java/lang/StringBuilder:append	(Ljava/lang/String;)Ljava/lang/StringBuilder;
+    //   187: pop
+    //   188: aload 9
+    //   190: aload_0
+    //   191: invokevirtual 152	java/lang/StringBuilder:append	(Ljava/lang/String;)Ljava/lang/StringBuilder;
+    //   194: pop
+    //   195: ldc 36
+    //   197: aload 9
+    //   199: invokevirtual 156	java/lang/StringBuilder:toString	()Ljava/lang/String;
+    //   202: invokestatic 207	android/util/Log:d	(Ljava/lang/String;Ljava/lang/String;)I
+    //   205: pop
+    //   206: getstatic 202	com/facebook/soloader/SoLoader:sBackupSoSources	[Lcom/facebook/soloader/UnpackingSoSource;
+    //   209: astore 9
+    //   211: aload 9
+    //   213: arraylength
+    //   214: istore 6
+    //   216: iconst_0
+    //   217: istore 5
+    //   219: iload_3
+    //   220: istore 4
+    //   222: iload 5
+    //   224: iload 6
+    //   226: if_icmpge +44 -> 270
+    //   229: aload 9
+    //   231: iload 5
+    //   233: aaload
+    //   234: astore 10
+    //   236: aload 10
+    //   238: aload_0
+    //   239: invokevirtual 212	com/facebook/soloader/UnpackingSoSource:prepare	(Ljava/lang/String;)V
+    //   242: aload 10
+    //   244: aload_0
+    //   245: iload_1
+    //   246: aload_2
+    //   247: invokevirtual 213	com/facebook/soloader/UnpackingSoSource:loadLibrary	(Ljava/lang/String;ILandroid/os/StrictMode$ThreadPolicy;)I
+    //   250: istore 4
+    //   252: iload 4
+    //   254: iconst_1
+    //   255: if_icmpne +6 -> 261
+    //   258: goto +12 -> 270
+    //   261: iload 5
+    //   263: iconst_1
+    //   264: iadd
+    //   265: istore 5
+    //   267: goto -48 -> 219
+    //   270: iload 4
+    //   272: istore_3
+    //   273: goto +53 -> 326
+    //   276: astore 9
+    //   278: iload_3
+    //   279: istore 4
+    //   281: goto +17 -> 298
+    //   284: iload 5
+    //   286: iconst_1
+    //   287: iadd
+    //   288: istore 5
+    //   290: iload_3
+    //   291: istore 4
+    //   293: goto -166 -> 127
+    //   296: astore 9
+    //   298: iload 4
+    //   300: istore 5
+    //   302: iload 4
+    //   304: istore 6
+    //   306: getstatic 76	com/facebook/soloader/SoLoader:sSoSourcesLock	Ljava/util/concurrent/locks/ReentrantReadWriteLock;
+    //   309: invokevirtual 118	java/util/concurrent/locks/ReentrantReadWriteLock:readLock	()Ljava/util/concurrent/locks/ReentrantReadWriteLock$ReadLock;
+    //   312: invokevirtual 126	java/util/concurrent/locks/ReentrantReadWriteLock$ReadLock:unlock	()V
+    //   315: iload 4
+    //   317: istore 5
+    //   319: iload 4
+    //   321: istore 6
+    //   323: aload 9
+    //   325: athrow
+    //   326: iload_3
+    //   327: istore 5
+    //   329: iload_3
+    //   330: istore 6
+    //   332: getstatic 76	com/facebook/soloader/SoLoader:sSoSourcesLock	Ljava/util/concurrent/locks/ReentrantReadWriteLock;
+    //   335: invokevirtual 118	java/util/concurrent/locks/ReentrantReadWriteLock:readLock	()Ljava/util/concurrent/locks/ReentrantReadWriteLock$ReadLock;
+    //   338: invokevirtual 126	java/util/concurrent/locks/ReentrantReadWriteLock$ReadLock:unlock	()V
+    //   341: iload_1
+    //   342: iconst_2
+    //   343: iand
+    //   344: iconst_2
+    //   345: if_icmpne +114 -> 459
+    //   348: iload_3
+    //   349: ifne +110 -> 459
+    //   352: iload_3
+    //   353: istore 5
+    //   355: iload_3
+    //   356: istore 6
+    //   358: getstatic 76	com/facebook/soloader/SoLoader:sSoSourcesLock	Ljava/util/concurrent/locks/ReentrantReadWriteLock;
+    //   361: invokevirtual 217	java/util/concurrent/locks/ReentrantReadWriteLock:writeLock	()Ljava/util/concurrent/locks/ReentrantReadWriteLock$WriteLock;
+    //   364: invokevirtual 220	java/util/concurrent/locks/ReentrantReadWriteLock$WriteLock:lock	()V
+    //   367: getstatic 222	com/facebook/soloader/SoLoader:sApplicationSoSource	Lcom/facebook/soloader/ApplicationSoSource;
+    //   370: ifnull +20 -> 390
+    //   373: getstatic 222	com/facebook/soloader/SoLoader:sApplicationSoSource	Lcom/facebook/soloader/ApplicationSoSource;
+    //   376: invokevirtual 227	com/facebook/soloader/ApplicationSoSource:checkAndMaybeUpdate	()Z
+    //   379: ifeq +11 -> 390
+    //   382: getstatic 80	com/facebook/soloader/SoLoader:sSoSourcesVersion	I
+    //   385: iconst_1
+    //   386: iadd
+    //   387: putstatic 80	com/facebook/soloader/SoLoader:sSoSourcesVersion	I
+    //   390: getstatic 80	com/facebook/soloader/SoLoader:sSoSourcesVersion	I
+    //   393: istore 4
+    //   395: iload 4
+    //   397: iload 8
+    //   399: if_icmpeq +9 -> 408
+    //   402: iconst_1
+    //   403: istore 4
+    //   405: goto +6 -> 411
+    //   408: iconst_0
+    //   409: istore 4
+    //   411: iload_3
+    //   412: istore 5
+    //   414: iload_3
+    //   415: istore 6
+    //   417: getstatic 76	com/facebook/soloader/SoLoader:sSoSourcesLock	Ljava/util/concurrent/locks/ReentrantReadWriteLock;
+    //   420: invokevirtual 217	java/util/concurrent/locks/ReentrantReadWriteLock:writeLock	()Ljava/util/concurrent/locks/ReentrantReadWriteLock$WriteLock;
+    //   423: invokevirtual 228	java/util/concurrent/locks/ReentrantReadWriteLock$WriteLock:unlock	()V
+    //   426: iload 4
+    //   428: istore 5
+    //   430: goto +32 -> 462
+    //   433: astore 9
+    //   435: iload_3
+    //   436: istore 5
+    //   438: iload_3
+    //   439: istore 6
+    //   441: getstatic 76	com/facebook/soloader/SoLoader:sSoSourcesLock	Ljava/util/concurrent/locks/ReentrantReadWriteLock;
+    //   444: invokevirtual 217	java/util/concurrent/locks/ReentrantReadWriteLock:writeLock	()Ljava/util/concurrent/locks/ReentrantReadWriteLock$WriteLock;
+    //   447: invokevirtual 228	java/util/concurrent/locks/ReentrantReadWriteLock$WriteLock:unlock	()V
+    //   450: iload_3
+    //   451: istore 5
+    //   453: iload_3
+    //   454: istore 6
+    //   456: aload 9
+    //   458: athrow
+    //   459: iconst_0
+    //   460: istore 5
+    //   462: iload_3
+    //   463: istore 4
+    //   465: iload 5
+    //   467: ifne -373 -> 94
+    //   470: getstatic 110	com/facebook/soloader/SoLoader:SYSTRACE_LIBRARY_LOADING	Z
+    //   473: ifeq +6 -> 479
+    //   476: invokestatic 231	com/facebook/soloader/Api18TraceUtils:endSection	()V
+    //   479: iload 7
+    //   481: ifeq +7 -> 488
+    //   484: aload_2
+    //   485: invokestatic 235	android/os/StrictMode:setThreadPolicy	(Landroid/os/StrictMode$ThreadPolicy;)V
+    //   488: iload_3
+    //   489: ifeq +8 -> 497
+    //   492: iload_3
+    //   493: iconst_3
+    //   494: if_icmpne +158 -> 652
+    //   497: new 145	java/lang/StringBuilder
+    //   500: dup
+    //   501: invokespecial 146	java/lang/StringBuilder:<init>	()V
+    //   504: astore_2
+    //   505: aload_2
+    //   506: ldc -19
+    //   508: invokevirtual 152	java/lang/StringBuilder:append	(Ljava/lang/String;)Ljava/lang/StringBuilder;
+    //   511: pop
+    //   512: aload_2
+    //   513: aload_0
+    //   514: invokevirtual 152	java/lang/StringBuilder:append	(Ljava/lang/String;)Ljava/lang/StringBuilder;
+    //   517: pop
+    //   518: aload_2
+    //   519: invokevirtual 156	java/lang/StringBuilder:toString	()Ljava/lang/String;
+    //   522: astore_0
+    //   523: ldc 36
+    //   525: aload_0
+    //   526: invokestatic 162	android/util/Log:e	(Ljava/lang/String;Ljava/lang/String;)I
+    //   529: pop
+    //   530: new 69	java/lang/UnsatisfiedLinkError
+    //   533: dup
+    //   534: aload_0
+    //   535: invokespecial 238	java/lang/UnsatisfiedLinkError:<init>	(Ljava/lang/String;)V
+    //   538: athrow
+    //   539: astore 9
+    //   541: getstatic 110	com/facebook/soloader/SoLoader:SYSTRACE_LIBRARY_LOADING	Z
+    //   544: ifeq +6 -> 550
+    //   547: invokestatic 231	com/facebook/soloader/Api18TraceUtils:endSection	()V
+    //   550: iload 7
+    //   552: ifeq +7 -> 559
+    //   555: aload_2
+    //   556: invokestatic 235	android/os/StrictMode:setThreadPolicy	(Landroid/os/StrictMode$ThreadPolicy;)V
+    //   559: iload 5
+    //   561: ifeq +15 -> 576
+    //   564: iload 5
+    //   566: iconst_3
+    //   567: if_icmpne +6 -> 573
+    //   570: goto +6 -> 576
+    //   573: aload 9
+    //   575: athrow
+    //   576: new 145	java/lang/StringBuilder
+    //   579: dup
+    //   580: invokespecial 146	java/lang/StringBuilder:<init>	()V
+    //   583: astore_2
+    //   584: aload_2
+    //   585: ldc -19
+    //   587: invokevirtual 152	java/lang/StringBuilder:append	(Ljava/lang/String;)Ljava/lang/StringBuilder;
+    //   590: pop
+    //   591: aload_2
+    //   592: aload_0
+    //   593: invokevirtual 152	java/lang/StringBuilder:append	(Ljava/lang/String;)Ljava/lang/StringBuilder;
+    //   596: pop
+    //   597: aload_2
+    //   598: invokevirtual 156	java/lang/StringBuilder:toString	()Ljava/lang/String;
+    //   601: astore_0
+    //   602: ldc 36
+    //   604: aload_0
+    //   605: invokestatic 162	android/util/Log:e	(Ljava/lang/String;Ljava/lang/String;)I
+    //   608: pop
+    //   609: new 69	java/lang/UnsatisfiedLinkError
+    //   612: dup
+    //   613: aload_0
+    //   614: invokespecial 238	java/lang/UnsatisfiedLinkError:<init>	(Ljava/lang/String;)V
+    //   617: athrow
+    //   618: astore 9
+    //   620: getstatic 110	com/facebook/soloader/SoLoader:SYSTRACE_LIBRARY_LOADING	Z
+    //   623: ifeq +6 -> 629
+    //   626: invokestatic 231	com/facebook/soloader/Api18TraceUtils:endSection	()V
+    //   629: iload 7
+    //   631: ifeq +7 -> 638
+    //   634: aload_2
+    //   635: invokestatic 235	android/os/StrictMode:setThreadPolicy	(Landroid/os/StrictMode$ThreadPolicy;)V
+    //   638: iload 6
+    //   640: ifeq +13 -> 653
+    //   643: iload 6
+    //   645: iconst_3
+    //   646: if_icmpne +6 -> 652
+    //   649: goto +4 -> 653
+    //   652: return
+    //   653: new 145	java/lang/StringBuilder
+    //   656: dup
+    //   657: invokespecial 146	java/lang/StringBuilder:<init>	()V
+    //   660: astore_2
+    //   661: aload_2
+    //   662: ldc -19
+    //   664: invokevirtual 152	java/lang/StringBuilder:append	(Ljava/lang/String;)Ljava/lang/StringBuilder;
+    //   667: pop
+    //   668: aload_2
+    //   669: aload_0
+    //   670: invokevirtual 152	java/lang/StringBuilder:append	(Ljava/lang/String;)Ljava/lang/StringBuilder;
+    //   673: pop
+    //   674: aload_2
+    //   675: invokevirtual 156	java/lang/StringBuilder:toString	()Ljava/lang/String;
+    //   678: astore 10
+    //   680: aload 9
+    //   682: invokevirtual 241	java/lang/Throwable:getMessage	()Ljava/lang/String;
+    //   685: astore_2
+    //   686: aload_2
+    //   687: astore_0
+    //   688: aload_2
+    //   689: ifnonnull +9 -> 698
+    //   692: aload 9
+    //   694: invokevirtual 242	java/lang/Throwable:toString	()Ljava/lang/String;
+    //   697: astore_0
+    //   698: new 145	java/lang/StringBuilder
+    //   701: dup
+    //   702: invokespecial 146	java/lang/StringBuilder:<init>	()V
+    //   705: astore_2
+    //   706: aload_2
+    //   707: aload 10
+    //   709: invokevirtual 152	java/lang/StringBuilder:append	(Ljava/lang/String;)Ljava/lang/StringBuilder;
+    //   712: pop
+    //   713: aload_2
+    //   714: ldc -12
+    //   716: invokevirtual 152	java/lang/StringBuilder:append	(Ljava/lang/String;)Ljava/lang/StringBuilder;
+    //   719: pop
+    //   720: aload_2
+    //   721: aload_0
+    //   722: invokevirtual 152	java/lang/StringBuilder:append	(Ljava/lang/String;)Ljava/lang/StringBuilder;
+    //   725: pop
+    //   726: aload_2
+    //   727: invokevirtual 156	java/lang/StringBuilder:toString	()Ljava/lang/String;
+    //   730: astore_0
+    //   731: ldc 36
+    //   733: aload_0
+    //   734: invokestatic 162	android/util/Log:e	(Ljava/lang/String;Ljava/lang/String;)I
+    //   737: pop
+    //   738: new 69	java/lang/UnsatisfiedLinkError
+    //   741: dup
+    //   742: aload_0
+    //   743: invokespecial 238	java/lang/UnsatisfiedLinkError:<init>	(Ljava/lang/String;)V
+    //   746: athrow
+    //   747: new 145	java/lang/StringBuilder
+    //   750: dup
+    //   751: invokespecial 146	java/lang/StringBuilder:<init>	()V
+    //   754: astore_2
+    //   755: aload_2
+    //   756: ldc -10
+    //   758: invokevirtual 152	java/lang/StringBuilder:append	(Ljava/lang/String;)Ljava/lang/StringBuilder;
+    //   761: pop
+    //   762: aload_2
+    //   763: aload_0
+    //   764: invokevirtual 152	java/lang/StringBuilder:append	(Ljava/lang/String;)Ljava/lang/StringBuilder;
+    //   767: pop
+    //   768: aload_2
+    //   769: ldc -8
+    //   771: invokevirtual 152	java/lang/StringBuilder:append	(Ljava/lang/String;)Ljava/lang/StringBuilder;
+    //   774: pop
+    //   775: ldc 36
+    //   777: aload_2
+    //   778: invokevirtual 156	java/lang/StringBuilder:toString	()Ljava/lang/String;
+    //   781: invokestatic 162	android/util/Log:e	(Ljava/lang/String;Ljava/lang/String;)I
+    //   784: pop
+    //   785: new 145	java/lang/StringBuilder
+    //   788: dup
+    //   789: invokespecial 146	java/lang/StringBuilder:<init>	()V
+    //   792: astore_2
+    //   793: aload_2
+    //   794: ldc -19
+    //   796: invokevirtual 152	java/lang/StringBuilder:append	(Ljava/lang/String;)Ljava/lang/StringBuilder;
+    //   799: pop
+    //   800: aload_2
+    //   801: aload_0
+    //   802: invokevirtual 152	java/lang/StringBuilder:append	(Ljava/lang/String;)Ljava/lang/StringBuilder;
+    //   805: pop
+    //   806: new 69	java/lang/UnsatisfiedLinkError
+    //   809: dup
+    //   810: aload_2
+    //   811: invokevirtual 156	java/lang/StringBuilder:toString	()Ljava/lang/String;
+    //   814: invokespecial 238	java/lang/UnsatisfiedLinkError:<init>	(Ljava/lang/String;)V
+    //   817: athrow
+    //   818: astore_0
+    //   819: getstatic 76	com/facebook/soloader/SoLoader:sSoSourcesLock	Ljava/util/concurrent/locks/ReentrantReadWriteLock;
+    //   822: invokevirtual 118	java/util/concurrent/locks/ReentrantReadWriteLock:readLock	()Ljava/util/concurrent/locks/ReentrantReadWriteLock$ReadLock;
+    //   825: invokevirtual 126	java/util/concurrent/locks/ReentrantReadWriteLock$ReadLock:unlock	()V
+    //   828: aload_0
+    //   829: athrow
+    // Local variable table:
+    //   start	length	slot	name	signature
+    //   0	830	0	paramString	String
+    //   0	830	1	paramInt	int
+    //   0	830	2	paramThreadPolicy	StrictMode.ThreadPolicy
+    //   129	366	3	i	int
+    //   92	372	4	j	int
+    //   96	472	5	k	int
+    //   100	547	6	m	int
+    //   37	593	7	n	int
+    //   122	278	8	i1	int
+    //   12	218	9	localObject1	Object
+    //   276	1	9	localObject2	Object
+    //   296	28	9	localObject3	Object
+    //   433	24	9	localObject4	Object
+    //   539	35	9	localObject5	Object
+    //   618	75	9	localThrowable	Throwable
+    //   234	474	10	str	String
+    // Exception table:
+    //   from	to	target	type
+    //   165	216	276	finally
+    //   236	252	276	finally
+    //   138	160	296	finally
+    //   367	390	433	finally
+    //   390	395	433	finally
+    //   102	111	539	finally
+    //   119	124	539	finally
+    //   306	315	539	finally
+    //   323	326	539	finally
+    //   332	341	539	finally
+    //   358	367	539	finally
+    //   417	426	539	finally
+    //   441	450	539	finally
+    //   456	459	539	finally
+    //   102	111	618	java/lang/Throwable
+    //   119	124	618	java/lang/Throwable
+    //   306	315	618	java/lang/Throwable
+    //   323	326	618	java/lang/Throwable
+    //   332	341	618	java/lang/Throwable
+    //   358	367	618	java/lang/Throwable
+    //   417	426	618	java/lang/Throwable
+    //   441	450	618	java/lang/Throwable
+    //   456	459	618	java/lang/Throwable
+    //   9	14	818	finally
+    //   747	818	818	finally
+  }
+  
+  @Nullable
+  private static Method getNativeLoadRuntimeMethod()
+  {
+    if (Build.VERSION.SDK_INT >= 23)
+    {
+      if (Build.VERSION.SDK_INT > 27) {
+        return null;
+      }
+      try
+      {
+        Method localMethod = Runtime.class.getDeclaredMethod("nativeLoad", new Class[] { String.class, ClassLoader.class, String.class });
+        localMethod.setAccessible(true);
+        return localMethod;
+      }
+      catch (NoSuchMethodException|SecurityException localNoSuchMethodException)
+      {
+        Log.w("SoLoader", "Cannot get nativeLoad method", localNoSuchMethodException);
+        return null;
+      }
+    }
+    return null;
+  }
+  
+  public static void init(Context paramContext, int paramInt)
+    throws IOException
+  {
+    init(paramContext, paramInt, null);
+  }
+  
+  private static void init(Context paramContext, int paramInt, @Nullable SoFileLoader paramSoFileLoader)
+    throws IOException
+  {
+    StrictMode.ThreadPolicy localThreadPolicy = StrictMode.allowThreadDiskWrites();
+    try
+    {
+      initSoLoader(paramSoFileLoader);
+      initSoSources(paramContext, paramInt, paramSoFileLoader);
+      return;
+    }
+    finally
+    {
+      StrictMode.setThreadPolicy(localThreadPolicy);
+    }
+  }
+  
+  public static void init(Context paramContext, boolean paramBoolean)
+  {
+    throw new Runtime("d2j fail translate: java.lang.RuntimeException: can not merge I and Z\n\tat com.googlecode.dex2jar.ir.TypeClass.merge(TypeClass.java:100)\n\tat com.googlecode.dex2jar.ir.ts.TypeTransformer$TypeRef.updateTypeClass(TypeTransformer.java:174)\n\tat com.googlecode.dex2jar.ir.ts.TypeTransformer$TypeAnalyze.copyTypes(TypeTransformer.java:311)\n\tat com.googlecode.dex2jar.ir.ts.TypeTransformer$TypeAnalyze.fixTypes(TypeTransformer.java:226)\n\tat com.googlecode.dex2jar.ir.ts.TypeTransformer$TypeAnalyze.analyze(TypeTransformer.java:207)\n\tat com.googlecode.dex2jar.ir.ts.TypeTransformer.transform(TypeTransformer.java:44)\n\tat com.googlecode.d2j.dex.Dex2jar$2.optimize(Dex2jar.java:162)\n\tat com.googlecode.d2j.dex.Dex2Asm.convertCode(Dex2Asm.java:414)\n\tat com.googlecode.d2j.dex.ExDex2Asm.convertCode(ExDex2Asm.java:42)\n\tat com.googlecode.d2j.dex.Dex2jar$2.convertCode(Dex2jar.java:128)\n\tat com.googlecode.d2j.dex.Dex2Asm.convertMethod(Dex2Asm.java:509)\n\tat com.googlecode.d2j.dex.Dex2Asm.convertClass(Dex2Asm.java:406)\n\tat com.googlecode.d2j.dex.Dex2Asm.convertDex(Dex2Asm.java:422)\n\tat com.googlecode.d2j.dex.Dex2jar.doTranslate(Dex2jar.java:172)\n\tat com.googlecode.d2j.dex.Dex2jar.to(Dex2jar.java:272)\n\tat com.googlecode.dex2jar.tools.Dex2jarCmd.doCommandLine(Dex2jarCmd.java:108)\n\tat com.googlecode.dex2jar.tools.BaseCmd.doMain(BaseCmd.java:288)\n\tat com.googlecode.dex2jar.tools.Dex2jarCmd.main(Dex2jarCmd.java:32)\n");
+  }
+  
+  private static void initSoLoader(@Nullable final SoFileLoader paramSoFileLoader)
+  {
+    if (paramSoFileLoader != null) {
+      try
+      {
+        sSoFileLoader = paramSoFileLoader;
+        return;
+      }
+      finally
+      {
+        break label69;
+      }
+    }
+    final Runtime localRuntime = Runtime.getRuntime();
+    final Method localMethod = getNativeLoadRuntimeMethod();
+    boolean bool;
+    if (localMethod != null)
+    {
+      bool = true;
+      if (!bool) {
+        break label79;
+      }
+      paramSoFileLoader = Api14Utils.getClassLoaderLdLoadLibrary();
+    }
+    for (;;)
+    {
+      sSoFileLoader = new SoFileLoader()
+      {
+        /* Error */
+        private String getLibHash(String paramAnonymousString)
+        {
+          // Byte code:
+          //   0: new 48	java/io/File
+          //   3: dup
+          //   4: aload_1
+          //   5: invokespecial 51	java/io/File:<init>	(Ljava/lang/String;)V
+          //   8: astore_1
+          //   9: ldc 53
+          //   11: invokestatic 59	java/security/MessageDigest:getInstance	(Ljava/lang/String;)Ljava/security/MessageDigest;
+          //   14: astore 5
+          //   16: new 61	java/io/FileInputStream
+          //   19: dup
+          //   20: aload_1
+          //   21: invokespecial 64	java/io/FileInputStream:<init>	(Ljava/io/File;)V
+          //   24: astore 4
+          //   26: aconst_null
+          //   27: astore_3
+          //   28: aload_3
+          //   29: astore_1
+          //   30: sipush 4096
+          //   33: newarray byte
+          //   35: astore 6
+          //   37: aload_3
+          //   38: astore_1
+          //   39: aload 4
+          //   41: aload 6
+          //   43: invokevirtual 70	java/io/InputStream:read	([B)I
+          //   46: istore_2
+          //   47: iload_2
+          //   48: ifle +17 -> 65
+          //   51: aload_3
+          //   52: astore_1
+          //   53: aload 5
+          //   55: aload 6
+          //   57: iconst_0
+          //   58: iload_2
+          //   59: invokevirtual 74	java/security/MessageDigest:update	([BII)V
+          //   62: goto -25 -> 37
+          //   65: aload_3
+          //   66: astore_1
+          //   67: ldc 76
+          //   69: iconst_1
+          //   70: anewarray 4	java/lang/Object
+          //   73: dup
+          //   74: iconst_0
+          //   75: new 78	java/math/BigInteger
+          //   78: dup
+          //   79: iconst_1
+          //   80: aload 5
+          //   82: invokevirtual 82	java/security/MessageDigest:digest	()[B
+          //   85: invokespecial 85	java/math/BigInteger:<init>	(I[B)V
+          //   88: aastore
+          //   89: invokestatic 91	java/lang/String:format	(Ljava/lang/String;[Ljava/lang/Object;)Ljava/lang/String;
+          //   92: astore_3
+          //   93: aload 4
+          //   95: invokevirtual 94	java/io/InputStream:close	()V
+          //   98: aload_3
+          //   99: areturn
+          //   100: astore_3
+          //   101: goto +8 -> 109
+          //   104: astore_3
+          //   105: aload_3
+          //   106: astore_1
+          //   107: aload_3
+          //   108: athrow
+          //   109: aload_1
+          //   110: ifnull +22 -> 132
+          //   113: aload 4
+          //   115: invokevirtual 94	java/io/InputStream:close	()V
+          //   118: goto +19 -> 137
+          //   121: astore 4
+          //   123: aload_1
+          //   124: aload 4
+          //   126: invokevirtual 98	java/lang/Throwable:addSuppressed	(Ljava/lang/Throwable;)V
+          //   129: goto +8 -> 137
+          //   132: aload 4
+          //   134: invokevirtual 94	java/io/InputStream:close	()V
+          //   137: aload_3
+          //   138: athrow
+          //   139: astore_1
+          //   140: aload_1
+          //   141: invokevirtual 102	java/security/NoSuchAlgorithmException:toString	()Ljava/lang/String;
+          //   144: areturn
+          //   145: astore_1
+          //   146: aload_1
+          //   147: invokevirtual 103	java/lang/SecurityException:toString	()Ljava/lang/String;
+          //   150: areturn
+          //   151: astore_1
+          //   152: aload_1
+          //   153: invokevirtual 104	java/io/IOException:toString	()Ljava/lang/String;
+          //   156: areturn
+          // Local variable table:
+          //   start	length	slot	name	signature
+          //   0	157	0	this	1
+          //   0	157	1	paramAnonymousString	String
+          //   46	13	2	i	int
+          //   27	72	3	str	String
+          //   100	1	3	localObject	Object
+          //   104	34	3	localThrowable1	Throwable
+          //   24	90	4	localFileInputStream	java.io.FileInputStream
+          //   121	12	4	localThrowable2	Throwable
+          //   14	67	5	localMessageDigest	java.security.MessageDigest
+          //   35	21	6	arrayOfByte	byte[]
+          // Exception table:
+          //   from	to	target	type
+          //   30	37	100	finally
+          //   39	47	100	finally
+          //   53	62	100	finally
+          //   67	93	100	finally
+          //   107	109	100	finally
+          //   30	37	104	java/lang/Throwable
+          //   39	47	104	java/lang/Throwable
+          //   53	62	104	java/lang/Throwable
+          //   67	93	104	java/lang/Throwable
+          //   113	118	121	java/lang/Throwable
+          //   0	26	139	java/security/NoSuchAlgorithmException
+          //   93	98	139	java/security/NoSuchAlgorithmException
+          //   113	118	139	java/security/NoSuchAlgorithmException
+          //   123	129	139	java/security/NoSuchAlgorithmException
+          //   132	137	139	java/security/NoSuchAlgorithmException
+          //   137	139	139	java/security/NoSuchAlgorithmException
+          //   0	26	145	java/lang/SecurityException
+          //   93	98	145	java/lang/SecurityException
+          //   113	118	145	java/lang/SecurityException
+          //   123	129	145	java/lang/SecurityException
+          //   132	137	145	java/lang/SecurityException
+          //   137	139	145	java/lang/SecurityException
+          //   0	26	151	java/io/IOException
+          //   93	98	151	java/io/IOException
+          //   113	118	151	java/io/IOException
+          //   123	129	151	java/io/IOException
+          //   132	137	151	java/io/IOException
+          //   137	139	151	java/io/IOException
+        }
+        
+        /* Error */
+        public void load(String paramAnonymousString, int paramAnonymousInt)
+        {
+          // Byte code:
+          //   0: aload_0
+          //   1: getfield 24	com/facebook/soloader/SoLoader$1:val$hasNativeLoadMethod	Z
+          //   4: ifeq +423 -> 427
+          //   7: iload_2
+          //   8: iconst_4
+          //   9: iand
+          //   10: iconst_4
+          //   11: if_icmpne +8 -> 19
+          //   14: iconst_1
+          //   15: istore_2
+          //   16: goto +5 -> 21
+          //   19: iconst_0
+          //   20: istore_2
+          //   21: iload_2
+          //   22: ifeq +11 -> 33
+          //   25: aload_0
+          //   26: getfield 26	com/facebook/soloader/SoLoader$1:val$localLdLibraryPath	Ljava/lang/String;
+          //   29: astore_3
+          //   30: goto +8 -> 38
+          //   33: aload_0
+          //   34: getfield 28	com/facebook/soloader/SoLoader$1:val$localLdLibraryPathNoZips	Ljava/lang/String;
+          //   37: astore_3
+          //   38: aconst_null
+          //   39: astore 9
+          //   41: aconst_null
+          //   42: astore 10
+          //   44: aconst_null
+          //   45: astore 8
+          //   47: aload 9
+          //   49: astore 5
+          //   51: aload_3
+          //   52: astore 4
+          //   54: aload 10
+          //   56: astore 7
+          //   58: aload_3
+          //   59: astore 6
+          //   61: aload_0
+          //   62: getfield 30	com/facebook/soloader/SoLoader$1:val$runtime	Ljava/lang/Runtime;
+          //   65: astore 11
+          //   67: aload 9
+          //   69: astore 5
+          //   71: aload_3
+          //   72: astore 4
+          //   74: aload 10
+          //   76: astore 7
+          //   78: aload_3
+          //   79: astore 6
+          //   81: aload 11
+          //   83: monitorenter
+          //   84: aload 8
+          //   86: astore 4
+          //   88: aload_3
+          //   89: astore 5
+          //   91: aload_0
+          //   92: getfield 32	com/facebook/soloader/SoLoader$1:val$nativeLoadRuntimeMethod	Ljava/lang/reflect/Method;
+          //   95: aload_0
+          //   96: getfield 30	com/facebook/soloader/SoLoader$1:val$runtime	Ljava/lang/Runtime;
+          //   99: iconst_3
+          //   100: anewarray 4	java/lang/Object
+          //   103: dup
+          //   104: iconst_0
+          //   105: aload_1
+          //   106: aastore
+          //   107: dup
+          //   108: iconst_1
+          //   109: ldc 8
+          //   111: invokevirtual 118	java/lang/Class:getClassLoader	()Ljava/lang/ClassLoader;
+          //   114: aastore
+          //   115: dup
+          //   116: iconst_2
+          //   117: aload_3
+          //   118: aastore
+          //   119: invokevirtual 124	java/lang/reflect/Method:invoke	(Ljava/lang/Object;[Ljava/lang/Object;)Ljava/lang/Object;
+          //   122: checkcast 87	java/lang/String
+          //   125: astore 6
+          //   127: aload 6
+          //   129: ifnonnull +82 -> 211
+          //   132: aload 11
+          //   134: monitorexit
+          //   135: aload 6
+          //   137: ifnull +294 -> 431
+          //   140: new 126	java/lang/StringBuilder
+          //   143: dup
+          //   144: invokespecial 127	java/lang/StringBuilder:<init>	()V
+          //   147: astore 4
+          //   149: aload 4
+          //   151: ldc -127
+          //   153: invokevirtual 133	java/lang/StringBuilder:append	(Ljava/lang/String;)Ljava/lang/StringBuilder;
+          //   156: pop
+          //   157: aload 4
+          //   159: aload 6
+          //   161: invokevirtual 133	java/lang/StringBuilder:append	(Ljava/lang/String;)Ljava/lang/StringBuilder;
+          //   164: pop
+          //   165: aload 4
+          //   167: ldc -121
+          //   169: invokevirtual 133	java/lang/StringBuilder:append	(Ljava/lang/String;)Ljava/lang/StringBuilder;
+          //   172: pop
+          //   173: aload 4
+          //   175: aload_0
+          //   176: aload_1
+          //   177: invokespecial 137	com/facebook/soloader/SoLoader$1:getLibHash	(Ljava/lang/String;)Ljava/lang/String;
+          //   180: invokevirtual 133	java/lang/StringBuilder:append	(Ljava/lang/String;)Ljava/lang/StringBuilder;
+          //   183: pop
+          //   184: aload 4
+          //   186: ldc -117
+          //   188: invokevirtual 133	java/lang/StringBuilder:append	(Ljava/lang/String;)Ljava/lang/StringBuilder;
+          //   191: pop
+          //   192: aload 4
+          //   194: aload_3
+          //   195: invokevirtual 133	java/lang/StringBuilder:append	(Ljava/lang/String;)Ljava/lang/StringBuilder;
+          //   198: pop
+          //   199: ldc -115
+          //   201: aload 4
+          //   203: invokevirtual 142	java/lang/StringBuilder:toString	()Ljava/lang/String;
+          //   206: invokestatic 148	android/util/Log:e	(Ljava/lang/String;Ljava/lang/String;)I
+          //   209: pop
+          //   210: return
+          //   211: new 150	java/lang/UnsatisfiedLinkError
+          //   214: dup
+          //   215: aload 6
+          //   217: invokespecial 151	java/lang/UnsatisfiedLinkError:<init>	(Ljava/lang/String;)V
+          //   220: athrow
+          //   221: astore 8
+          //   223: goto +12 -> 235
+          //   226: astore 8
+          //   228: aload 5
+          //   230: astore_3
+          //   231: aload 4
+          //   233: astore 6
+          //   235: aload 6
+          //   237: astore 4
+          //   239: aload_3
+          //   240: astore 5
+          //   242: aload 11
+          //   244: monitorexit
+          //   245: aload 6
+          //   247: astore 5
+          //   249: aload_3
+          //   250: astore 4
+          //   252: aload 6
+          //   254: astore 7
+          //   256: aload_3
+          //   257: astore 6
+          //   259: aload 8
+          //   261: athrow
+          //   262: astore_3
+          //   263: goto +86 -> 349
+          //   266: astore 8
+          //   268: aload 7
+          //   270: astore 5
+          //   272: aload 6
+          //   274: astore 4
+          //   276: new 126	java/lang/StringBuilder
+          //   279: dup
+          //   280: invokespecial 127	java/lang/StringBuilder:<init>	()V
+          //   283: astore_3
+          //   284: aload 7
+          //   286: astore 5
+          //   288: aload 6
+          //   290: astore 4
+          //   292: aload_3
+          //   293: ldc -103
+          //   295: invokevirtual 133	java/lang/StringBuilder:append	(Ljava/lang/String;)Ljava/lang/StringBuilder;
+          //   298: pop
+          //   299: aload 7
+          //   301: astore 5
+          //   303: aload 6
+          //   305: astore 4
+          //   307: aload_3
+          //   308: aload_1
+          //   309: invokevirtual 133	java/lang/StringBuilder:append	(Ljava/lang/String;)Ljava/lang/StringBuilder;
+          //   312: pop
+          //   313: aload 7
+          //   315: astore 5
+          //   317: aload 6
+          //   319: astore 4
+          //   321: aload_3
+          //   322: invokevirtual 142	java/lang/StringBuilder:toString	()Ljava/lang/String;
+          //   325: astore_3
+          //   326: new 155	java/lang/RuntimeException
+          //   329: dup
+          //   330: aload_3
+          //   331: aload 8
+          //   333: invokespecial 158	java/lang/RuntimeException:<init>	(Ljava/lang/String;Ljava/lang/Throwable;)V
+          //   336: athrow
+          //   337: astore 7
+          //   339: aload_3
+          //   340: astore 5
+          //   342: aload 6
+          //   344: astore 4
+          //   346: aload 7
+          //   348: astore_3
+          //   349: aload 5
+          //   351: ifnull +74 -> 425
+          //   354: new 126	java/lang/StringBuilder
+          //   357: dup
+          //   358: invokespecial 127	java/lang/StringBuilder:<init>	()V
+          //   361: astore 6
+          //   363: aload 6
+          //   365: ldc -127
+          //   367: invokevirtual 133	java/lang/StringBuilder:append	(Ljava/lang/String;)Ljava/lang/StringBuilder;
+          //   370: pop
+          //   371: aload 6
+          //   373: aload 5
+          //   375: invokevirtual 133	java/lang/StringBuilder:append	(Ljava/lang/String;)Ljava/lang/StringBuilder;
+          //   378: pop
+          //   379: aload 6
+          //   381: ldc -121
+          //   383: invokevirtual 133	java/lang/StringBuilder:append	(Ljava/lang/String;)Ljava/lang/StringBuilder;
+          //   386: pop
+          //   387: aload 6
+          //   389: aload_0
+          //   390: aload_1
+          //   391: invokespecial 137	com/facebook/soloader/SoLoader$1:getLibHash	(Ljava/lang/String;)Ljava/lang/String;
+          //   394: invokevirtual 133	java/lang/StringBuilder:append	(Ljava/lang/String;)Ljava/lang/StringBuilder;
+          //   397: pop
+          //   398: aload 6
+          //   400: ldc -117
+          //   402: invokevirtual 133	java/lang/StringBuilder:append	(Ljava/lang/String;)Ljava/lang/StringBuilder;
+          //   405: pop
+          //   406: aload 6
+          //   408: aload 4
+          //   410: invokevirtual 133	java/lang/StringBuilder:append	(Ljava/lang/String;)Ljava/lang/StringBuilder;
+          //   413: pop
+          //   414: ldc -115
+          //   416: aload 6
+          //   418: invokevirtual 142	java/lang/StringBuilder:toString	()Ljava/lang/String;
+          //   421: invokestatic 148	android/util/Log:e	(Ljava/lang/String;Ljava/lang/String;)I
+          //   424: pop
+          //   425: aload_3
+          //   426: athrow
+          //   427: aload_1
+          //   428: invokestatic 162	java/lang/System:load	(Ljava/lang/String;)V
+          //   431: return
+          // Local variable table:
+          //   start	length	slot	name	signature
+          //   0	432	0	this	1
+          //   0	432	1	paramAnonymousString	String
+          //   0	432	2	paramAnonymousInt	int
+          //   29	228	3	localObject1	Object
+          //   262	1	3	localObject2	Object
+          //   283	143	3	localObject3	Object
+          //   52	357	4	localObject4	Object
+          //   49	325	5	localObject5	Object
+          //   59	358	6	localObject6	Object
+          //   56	258	7	localObject7	Object
+          //   337	10	7	localObject8	Object
+          //   45	40	8	localObject9	Object
+          //   221	1	8	localObject10	Object
+          //   226	34	8	localObject11	Object
+          //   266	66	8	localIllegalAccessException	IllegalAccessException
+          //   39	29	9	localObject12	Object
+          //   42	33	10	localObject13	Object
+          //   65	178	11	localRuntime	Runtime
+          // Exception table:
+          //   from	to	target	type
+          //   132	135	221	finally
+          //   211	221	221	finally
+          //   91	127	226	finally
+          //   242	245	226	finally
+          //   61	67	262	finally
+          //   81	84	262	finally
+          //   259	262	262	finally
+          //   276	284	262	finally
+          //   292	299	262	finally
+          //   307	313	262	finally
+          //   321	326	262	finally
+          //   61	67	266	java/lang/IllegalAccessException
+          //   61	67	266	java/lang/IllegalArgumentException
+          //   61	67	266	java/lang/reflect/InvocationTargetException
+          //   81	84	266	java/lang/IllegalAccessException
+          //   81	84	266	java/lang/IllegalArgumentException
+          //   81	84	266	java/lang/reflect/InvocationTargetException
+          //   259	262	266	java/lang/IllegalAccessException
+          //   259	262	266	java/lang/IllegalArgumentException
+          //   259	262	266	java/lang/reflect/InvocationTargetException
+          //   326	337	337	finally
+        }
+      };
+      return;
+      label69:
+      throw paramSoFileLoader;
+      bool = false;
+      break;
+      label79:
+      paramSoFileLoader = null;
+    }
+  }
+  
+  private static void initSoSources(Context paramContext, int paramInt, @Nullable SoFileLoader paramSoFileLoader)
+    throws IOException
+  {
+    sSoSourcesLock.writeLock().lock();
+    for (;;)
+    {
+      try
+      {
+        if (sSoSources == null)
+        {
+          Log.d("SoLoader", "init start");
+          sFlags = paramInt;
+          ArrayList localArrayList = new ArrayList();
+          Object localObject1 = System.getenv("LD_LIBRARY_PATH");
+          paramSoFileLoader = (SoFileLoader)localObject1;
+          if (localObject1 == null) {
+            paramSoFileLoader = "/vendor/lib:/system/lib";
+          }
+          paramSoFileLoader = paramSoFileLoader.split(":");
+          int i = 0;
+          if (i < paramSoFileLoader.length)
+          {
+            localObject1 = new StringBuilder();
+            ((StringBuilder)localObject1).append("adding system library source: ");
+            ((StringBuilder)localObject1).append(paramSoFileLoader[i]);
+            Log.d("SoLoader", ((StringBuilder)localObject1).toString());
+            localArrayList.add(new DirectorySoSource(new File(paramSoFileLoader[i]), 2));
+            i += 1;
+            continue;
+          }
+          if (paramContext != null) {
+            if ((paramInt & 0x1) != 0)
+            {
+              sBackupSoSources = null;
+              Log.d("SoLoader", "adding exo package source: lib-main");
+              localArrayList.add(0, new ExoSoSource(paramContext, "lib-main"));
+            }
+            else
+            {
+              paramSoFileLoader = paramContext.getApplicationInfo();
+              if (((flags & 0x1) == 0) || ((flags & 0x80) != 0)) {
+                break label758;
+              }
+              paramInt = 1;
+              break label760;
+              if (Build.VERSION.SDK_INT > 17) {
+                break label769;
+              }
+              paramInt = 1;
+              sApplicationSoSource = new ApplicationSoSource(paramContext, paramInt);
+              paramSoFileLoader = new StringBuilder();
+              paramSoFileLoader.append("adding application source: ");
+              paramSoFileLoader.append(sApplicationSoSource.toString());
+              Log.d("SoLoader", paramSoFileLoader.toString());
+              localArrayList.add(0, sApplicationSoSource);
+              paramInt = 1;
+              if ((sFlags & 0x8) != 0)
+              {
+                sBackupSoSources = null;
+              }
+              else
+              {
+                localObject1 = new File(getApplicationInfosourceDir);
+                paramSoFileLoader = new ArrayList();
+                localObject1 = new ApkSoSource(paramContext, (File)localObject1, "lib-main", paramInt);
+                paramSoFileLoader.add(localObject1);
+                Object localObject2 = new StringBuilder();
+                ((StringBuilder)localObject2).append("adding backup source from : ");
+                ((StringBuilder)localObject2).append(((ApkSoSource)localObject1).toString());
+                Log.d("SoLoader", ((StringBuilder)localObject2).toString());
+                if ((Build.VERSION.SDK_INT >= 21) && (getApplicationInfosplitSourceDirs != null))
+                {
+                  Log.d("SoLoader", "adding backup sources from split apks");
+                  localObject1 = getApplicationInfosplitSourceDirs;
+                  int k = localObject1.length;
+                  j = 0;
+                  i = 0;
+                  if (j < k)
+                  {
+                    localObject2 = new File(localObject1[j]);
+                    StringBuilder localStringBuilder = new StringBuilder();
+                    localStringBuilder.append("lib-");
+                    localStringBuilder.append(i);
+                    localObject2 = new ApkSoSource(paramContext, (File)localObject2, localStringBuilder.toString(), paramInt);
+                    localStringBuilder = new StringBuilder();
+                    localStringBuilder.append("adding backup source: ");
+                    localStringBuilder.append(((ApkSoSource)localObject2).toString());
+                    Log.d("SoLoader", localStringBuilder.toString());
+                    paramSoFileLoader.add(localObject2);
+                    j += 1;
+                    i += 1;
+                    continue;
+                  }
+                }
+                sBackupSoSources = (UnpackingSoSource[])paramSoFileLoader.toArray(new UnpackingSoSource[paramSoFileLoader.size()]);
+                localArrayList.addAll(0, paramSoFileLoader);
+              }
+            }
+          }
+          paramContext = (SoSource[])localArrayList.toArray(new SoSource[localArrayList.size()]);
+          int j = makePrepareFlags();
+          paramInt = paramContext.length;
+          i = paramInt - 1;
+          if (paramInt > 0)
+          {
+            paramSoFileLoader = new StringBuilder();
+            paramSoFileLoader.append("Preparing SO source: ");
+            paramSoFileLoader.append(paramContext[i]);
+            Log.d("SoLoader", paramSoFileLoader.toString());
+            paramContext[i].prepare(j);
+            paramInt = i;
+            continue;
+          }
+          sSoSources = paramContext;
+          sSoSourcesVersion += 1;
+          paramContext = new StringBuilder();
+          paramContext.append("init finish: ");
+          paramContext.append(sSoSources.length);
+          paramContext.append(" SO sources prepared");
+          Log.d("SoLoader", paramContext.toString());
+        }
+        else
+        {
+          return;
+        }
+      }
+      finally
+      {
+        Log.d("SoLoader", "init exiting");
+        sSoSourcesLock.writeLock().unlock();
+      }
+      label758:
+      paramInt = 0;
+      label760:
+      if (paramInt != 0)
+      {
+        paramInt = 0;
+        continue;
+        label769:
+        paramInt = 0;
+      }
+    }
+  }
+  
+  public static boolean loadLibrary(String paramString)
+  {
+    return loadLibrary(paramString, 0);
+  }
+  
+  public static boolean loadLibrary(String paramString, int paramInt)
+    throws UnsatisfiedLinkError
+  {
+    sSoSourcesLock.readLock().lock();
+    try
+    {
+      if (sSoSources == null) {
+        if ("http://www.android.com/".equals(System.getProperty("java.vendor.url"))) {
+          assertInitialized();
+        } else {
+          try
+          {
+            boolean bool = sLoadedLibraries.contains(paramString) ^ true;
+            if (bool) {
+              if (sSystemLoadLibraryWrapper != null) {
+                sSystemLoadLibraryWrapper.loadLibrary(paramString);
+              } else {
+                System.loadLibrary(paramString);
+              }
+            }
+            return bool;
+          }
+          finally {}
+        }
+      }
+      sSoSourcesLock.readLock().unlock();
+      String str2 = MergedSoMapping.mapLibName(paramString);
+      String str1;
+      if (str2 != null) {
+        str1 = str2;
+      } else {
+        str1 = paramString;
+      }
+      return loadLibraryBySoName(System.mapLibraryName(str1), paramString, str2, paramInt | 0x2, null);
+    }
+    finally
+    {
+      sSoSourcesLock.readLock().unlock();
+    }
+  }
+  
+  static void loadLibraryBySoName(String paramString, int paramInt, StrictMode.ThreadPolicy paramThreadPolicy)
+  {
+    loadLibraryBySoName(paramString, null, null, paramInt, paramThreadPolicy);
+  }
+  
+  private static boolean loadLibraryBySoName(String paramString1, @Nullable String paramString2, @Nullable String paramString3, int paramInt, @Nullable StrictMode.ThreadPolicy paramThreadPolicy)
+  {
+    boolean bool = TextUtils.isEmpty(paramString2);
+    int k = 0;
+    if ((!bool) && (sLoadedAndMergedLibraries.contains(paramString2))) {
+      return false;
+    }
+    for (;;)
+    {
+      Object localObject;
+      try
+      {
+        if (!sLoadedLibraries.contains(paramString1)) {
+          break label491;
+        }
+        if (paramString3 != null) {
+          break label485;
+        }
+        return false;
+      }
+      finally {}
+      if (sLoadingLibraries.containsKey(paramString1))
+      {
+        localObject = sLoadingLibraries.get(paramString1);
+      }
+      else
+      {
+        localObject = new Object();
+        sLoadingLibraries.put(paramString1, localObject);
+      }
+      int j = i;
+      if (i == 0) {}
+      try
+      {
+        try
+        {
+          if (sLoadedLibraries.contains(paramString1))
+          {
+            if (paramString3 == null) {
+              return false;
+            }
+            i = 1;
+          }
+          j = i;
+          if (i == 0) {
+            try
+            {
+              StringBuilder localStringBuilder = new StringBuilder();
+              localStringBuilder.append("About to load: ");
+              localStringBuilder.append(paramString1);
+              Log.d("SoLoader", localStringBuilder.toString());
+              doLoadLibraryBySoName(paramString1, paramInt, paramThreadPolicy);
+              try
+              {
+                paramThreadPolicy = new StringBuilder();
+                paramThreadPolicy.append("Loaded: ");
+                paramThreadPolicy.append(paramString1);
+                Log.d("SoLoader", paramThreadPolicy.toString());
+                sLoadedLibraries.add(paramString1);
+                j = i;
+              }
+              finally {}
+              paramString1 = finally;
+            }
+            catch (UnsatisfiedLinkError paramString1)
+            {
+              paramString2 = paramString1.getMessage();
+              if ((paramString2 != null) && (paramString2.contains("unexpected e_machine:"))) {
+                throw new WrongAbiError(paramString1);
+              }
+              throw paramString1;
+            }
+            catch (IOException paramString1)
+            {
+              throw new RuntimeException(paramString1);
+            }
+          }
+          paramInt = k;
+        }
+        finally {}
+        if (!TextUtils.isEmpty(paramString2))
+        {
+          paramInt = k;
+          if (sLoadedAndMergedLibraries.contains(paramString2)) {
+            paramInt = 1;
+          }
+        }
+        if ((paramString3 != null) && (paramInt == 0)) {
+          if (SYSTRACE_LIBRARY_LOADING)
+          {
+            paramString3 = new StringBuilder();
+            paramString3.append("MergedSoMapping.invokeJniOnload[");
+            paramString3.append(paramString2);
+            paramString3.append("]");
+            Api18TraceUtils.beginTraceSection(paramString3.toString());
+          }
+        }
+        try
+        {
+          paramString3 = new StringBuilder();
+          paramString3.append("About to merge: ");
+          paramString3.append(paramString2);
+          paramString3.append(" / ");
+          paramString3.append(paramString1);
+          Log.d("SoLoader", paramString3.toString());
+          MergedSoMapping.invokeJniOnload(paramString2);
+          sLoadedAndMergedLibraries.add(paramString2);
+          if (SYSTRACE_LIBRARY_LOADING) {
+            Api18TraceUtils.endSection();
+          }
+        }
+        finally
+        {
+          if (SYSTRACE_LIBRARY_LOADING) {
+            Api18TraceUtils.endSection();
+          }
+        }
+      }
+      finally
+      {
+        continue;
+      }
+      throw paramString1;
+      label485:
+      int i = 1;
+      continue;
+      label491:
+      i = 0;
+    }
+  }
+  
+  public static String makeLdLibraryPath()
+  {
+    sSoSourcesLock.readLock().lock();
+    try
+    {
+      assertInitialized();
+      Log.d("SoLoader", "makeLdLibraryPath");
+      Object localObject1 = new ArrayList();
+      Object localObject3 = sSoSources;
+      int i = 0;
+      while (i < localObject3.length)
+      {
+        localObject3[i].addToLdLibraryPath((Collection)localObject1);
+        i += 1;
+      }
+      localObject1 = TextUtils.join(":", (Iterable)localObject1);
+      localObject3 = new StringBuilder();
+      ((StringBuilder)localObject3).append("makeLdLibraryPath final path: ");
+      ((StringBuilder)localObject3).append((String)localObject1);
+      Log.d("SoLoader", ((StringBuilder)localObject3).toString());
+      return localObject1;
+    }
+    finally
+    {
+      sSoSourcesLock.readLock().unlock();
+    }
+  }
+  
+  @Nullable
+  public static String makeNonZipPath(String paramString)
+  {
+    if (paramString == null) {
+      return null;
+    }
+    paramString = paramString.split(":");
+    ArrayList localArrayList = new ArrayList(paramString.length);
+    int j = paramString.length;
+    int i = 0;
+    while (i < j)
+    {
+      Object localObject = paramString[i];
+      if (!localObject.contains("!")) {
+        localArrayList.add(localObject);
+      }
+      i += 1;
+    }
+    return TextUtils.join(":", localArrayList);
+  }
+  
+  private static int makePrepareFlags()
+  {
+    sSoSourcesLock.writeLock().lock();
+    try
+    {
+      int i = sFlags;
+      if ((i & 0x2) != 0) {
+        i = 1;
+      } else {
+        i = 0;
+      }
+      return i;
+    }
+    finally
+    {
+      sSoSourcesLock.writeLock().unlock();
+    }
+  }
+  
+  public static void prependSoSource(SoSource paramSoSource)
+    throws IOException
+  {
+    sSoSourcesLock.writeLock().lock();
+    try
+    {
+      Object localObject = new StringBuilder();
+      ((StringBuilder)localObject).append("Prepending to SO sources: ");
+      ((StringBuilder)localObject).append(paramSoSource);
+      Log.d("SoLoader", ((StringBuilder)localObject).toString());
+      assertInitialized();
+      paramSoSource.prepare(makePrepareFlags());
+      localObject = new SoSource[sSoSources.length + 1];
+      localObject[0] = paramSoSource;
+      System.arraycopy(sSoSources, 0, localObject, 1, sSoSources.length);
+      sSoSources = (SoSource[])localObject;
+      sSoSourcesVersion += 1;
+      localObject = new StringBuilder();
+      ((StringBuilder)localObject).append("Prepended to SO sources: ");
+      ((StringBuilder)localObject).append(paramSoSource);
+      Log.d("SoLoader", ((StringBuilder)localObject).toString());
+      return;
+    }
+    finally
+    {
+      sSoSourcesLock.writeLock().unlock();
+    }
+  }
+  
+  static void resetStatus()
+  {
+    try
+    {
+      sLoadedLibraries.clear();
+      sLoadingLibraries.clear();
+      sSoFileLoader = null;
+      setSoSources(null);
+      return;
+    }
+    finally {}
+  }
+  
+  public static void setInTestMode()
+  {
+    setSoSources(new SoSource[] { new NoopSoSource() });
+  }
+  
+  static void setSoFileLoader(SoFileLoader paramSoFileLoader)
+  {
+    sSoFileLoader = paramSoFileLoader;
+  }
+  
+  static void setSoSources(SoSource[] paramArrayOfSoSource)
+  {
+    sSoSourcesLock.writeLock().lock();
+    try
+    {
+      sSoSources = paramArrayOfSoSource;
+      sSoSourcesVersion += 1;
+      return;
+    }
+    finally
+    {
+      sSoSourcesLock.writeLock().unlock();
+    }
+  }
+  
+  public static void setSystemLoadLibraryWrapper(SystemLoadLibraryWrapper paramSystemLoadLibraryWrapper)
+  {
+    sSystemLoadLibraryWrapper = paramSystemLoadLibraryWrapper;
+  }
+  
+  public static File unpackLibraryAndDependencies(String paramString)
+    throws UnsatisfiedLinkError
+  {
+    
+    try
+    {
+      paramString = unpackLibraryBySoName(System.mapLibraryName(paramString));
+      return paramString;
+    }
+    catch (IOException paramString)
+    {
+      throw new RuntimeException(paramString);
+    }
+  }
+  
+  static File unpackLibraryBySoName(String paramString)
+    throws IOException
+  {
+    sSoSourcesLock.readLock().lock();
+    int i = 0;
+    try
+    {
+      while (i < sSoSources.length)
+      {
+        File localFile = sSoSources[i].unpackLibrary(paramString);
+        if (localFile != null)
+        {
+          sSoSourcesLock.readLock().unlock();
+          return localFile;
+        }
+        i += 1;
+      }
+      sSoSourcesLock.readLock().unlock();
+      throw new FileNotFoundException(paramString);
+    }
+    finally
+    {
+      sSoSourcesLock.readLock().unlock();
+    }
+  }
+  
+  @TargetApi(14)
+  @DoNotOptimize
+  private static class Api14Utils
+  {
+    private Api14Utils() {}
+    
+    public static String getClassLoaderLdLoadLibrary()
+    {
+      Object localObject = SoLoader.class.getClassLoader();
+      if ((localObject instanceof BaseDexClassLoader)) {
+        try
+        {
+          localObject = (BaseDexClassLoader)localObject;
+          localObject = (String)BaseDexClassLoader.class.getMethod("getLdLibraryPath", new Class[0]).invoke(localObject, new Object[0]);
+          return localObject;
+        }
+        catch (Exception localException)
+        {
+          throw new RuntimeException("Cannot call getLdLibraryPath", localException);
+        }
+      }
+      StringBuilder localStringBuilder = new StringBuilder();
+      localStringBuilder.append("ClassLoader ");
+      localStringBuilder.append(localException.getClass().getName());
+      localStringBuilder.append(" should be of type BaseDexClassLoader");
+      throw new IllegalStateException(localStringBuilder.toString());
+    }
+  }
+  
+  public static final class WrongAbiError
+    extends UnsatisfiedLinkError
+  {
+    WrongAbiError(Throwable paramThrowable)
+    {
+      super();
+      initCause(paramThrowable);
+    }
+  }
+}

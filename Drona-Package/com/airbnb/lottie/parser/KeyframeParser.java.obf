@@ -1,0 +1,166 @@
+package com.airbnb.lottie.parser;
+
+import android.graphics.PointF;
+import android.view.animation.Interpolator;
+import android.view.animation.LinearInterpolator;
+import androidx.annotation.Nullable;
+import androidx.collection.SparseArrayCompat;
+import androidx.core.view.animation.PathInterpolatorCompat;
+import com.airbnb.lottie.LottieComposition;
+import com.airbnb.lottie.parser.moshi.JsonReader;
+import com.airbnb.lottie.parser.moshi.JsonReader.Options;
+import com.airbnb.lottie.utils.MiscUtils;
+import com.airbnb.lottie.utils.Utils;
+import com.airbnb.lottie.value.Keyframe;
+import java.io.IOException;
+import java.lang.ref.WeakReference;
+
+class KeyframeParser
+{
+  private static final Interpolator LINEAR_INTERPOLATOR = new LinearInterpolator();
+  private static final float MAX_CP_VALUE = 100.0F;
+  static JsonReader.Options NAMES = JsonReader.Options.of(new String[] { "t", "s", "e", "o", "i", "h", "to", "ti" });
+  private static SparseArrayCompat<WeakReference<Interpolator>> pathInterpolatorCache;
+  
+  KeyframeParser() {}
+  
+  @Nullable
+  private static WeakReference<Interpolator> getInterpolator(int paramInt)
+  {
+    try
+    {
+      WeakReference localWeakReference = (WeakReference)pathInterpolatorCache().get(paramInt);
+      return localWeakReference;
+    }
+    finally {}
+  }
+  
+  static <T> Keyframe<T> parse(JsonReader paramJsonReader, LottieComposition paramLottieComposition, float paramFloat, ValueParser<T> paramValueParser, boolean paramBoolean)
+    throws IOException
+  {
+    if (paramBoolean) {
+      return parseKeyframe(paramLottieComposition, paramJsonReader, paramFloat, paramValueParser);
+    }
+    return parseStaticValue(paramJsonReader, paramFloat, paramValueParser);
+  }
+  
+  private static <T> Keyframe<T> parseKeyframe(LottieComposition paramLottieComposition, JsonReader paramJsonReader, float paramFloat, ValueParser<T> paramValueParser)
+    throws IOException
+  {
+    paramJsonReader.beginObject();
+    Object localObject5 = null;
+    PointF localPointF2 = null;
+    PointF localPointF1 = localPointF2;
+    Object localObject1 = localPointF1;
+    Object localObject2 = localObject1;
+    Object localObject3 = localObject2;
+    Object localObject4 = localObject3;
+    int i = 0;
+    float f1 = 0.0F;
+    while (paramJsonReader.hasNext()) {
+      switch (paramJsonReader.selectName(NAMES))
+      {
+      default: 
+        paramJsonReader.skipValue();
+        break;
+      case 7: 
+        localObject4 = JsonUtils.jsonToPoint(paramJsonReader, paramFloat);
+        break;
+      case 6: 
+        localObject3 = JsonUtils.jsonToPoint(paramJsonReader, paramFloat);
+        break;
+      case 5: 
+        if (paramJsonReader.nextInt() == 1) {
+          i = 1;
+        } else {
+          i = 0;
+        }
+        break;
+      case 4: 
+        localPointF1 = JsonUtils.jsonToPoint(paramJsonReader, paramFloat);
+        break;
+      case 3: 
+        localPointF2 = JsonUtils.jsonToPoint(paramJsonReader, paramFloat);
+        break;
+      case 2: 
+        localObject2 = paramValueParser.parse(paramJsonReader, paramFloat);
+        break;
+      case 1: 
+        localObject1 = paramValueParser.parse(paramJsonReader, paramFloat);
+        break;
+      case 0: 
+        f1 = (float)paramJsonReader.nextDouble();
+      }
+    }
+    paramJsonReader.endObject();
+    if (i != 0)
+    {
+      paramJsonReader = LINEAR_INTERPOLATOR;
+      localObject2 = localObject1;
+    }
+    else if ((localPointF2 != null) && (localPointF1 != null))
+    {
+      float f2 = x;
+      float f3 = -paramFloat;
+      x = MiscUtils.clamp(f2, f3, paramFloat);
+      y = MiscUtils.clamp(y, -100.0F, 100.0F);
+      x = MiscUtils.clamp(x, f3, paramFloat);
+      y = MiscUtils.clamp(y, -100.0F, 100.0F);
+      i = Utils.hashFor(x, y, x, y);
+      paramValueParser = getInterpolator(i);
+      paramJsonReader = localObject5;
+      if (paramValueParser != null) {
+        paramJsonReader = (Interpolator)paramValueParser.get();
+      }
+      if (paramValueParser != null)
+      {
+        paramValueParser = paramJsonReader;
+        if (paramJsonReader != null) {}
+      }
+      else
+      {
+        paramValueParser = PathInterpolatorCompat.create(x / paramFloat, y / paramFloat, x / paramFloat, y / paramFloat);
+      }
+    }
+    try
+    {
+      putInterpolator(i, new WeakReference(paramValueParser));
+      paramJsonReader = paramValueParser;
+      break label413;
+      paramJsonReader = LINEAR_INTERPOLATOR;
+      label413:
+      paramLottieComposition = new Keyframe(paramLottieComposition, localObject1, localObject2, paramJsonReader, f1, null);
+      pathCp1 = ((PointF)localObject3);
+      pathCp2 = ((PointF)localObject4);
+      return paramLottieComposition;
+    }
+    catch (ArrayIndexOutOfBoundsException paramJsonReader)
+    {
+      for (;;) {}
+    }
+  }
+  
+  private static <T> Keyframe<T> parseStaticValue(JsonReader paramJsonReader, float paramFloat, ValueParser<T> paramValueParser)
+    throws IOException
+  {
+    return new Keyframe(paramValueParser.parse(paramJsonReader, paramFloat));
+  }
+  
+  private static SparseArrayCompat<WeakReference<Interpolator>> pathInterpolatorCache()
+  {
+    if (pathInterpolatorCache == null) {
+      pathInterpolatorCache = new SparseArrayCompat();
+    }
+    return pathInterpolatorCache;
+  }
+  
+  private static void putInterpolator(int paramInt, WeakReference<Interpolator> paramWeakReference)
+  {
+    try
+    {
+      pathInterpolatorCache.put(paramInt, paramWeakReference);
+      return;
+    }
+    finally {}
+  }
+}

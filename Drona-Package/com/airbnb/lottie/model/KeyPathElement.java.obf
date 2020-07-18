@@ -1,0 +1,14 @@
+package com.airbnb.lottie.model;
+
+import androidx.annotation.Nullable;
+import androidx.annotation.RestrictTo;
+import com.airbnb.lottie.value.LottieValueCallback;
+import java.util.List;
+
+@RestrictTo({androidx.annotation.RestrictTo.Scope.LIBRARY})
+public abstract interface KeyPathElement
+{
+  public abstract <T> void addValueCallback(T paramT, @Nullable LottieValueCallback<T> paramLottieValueCallback);
+  
+  public abstract void resolveKeyPath(KeyPath paramKeyPath1, int paramInt, List<KeyPath> paramList, KeyPath paramKeyPath2);
+}

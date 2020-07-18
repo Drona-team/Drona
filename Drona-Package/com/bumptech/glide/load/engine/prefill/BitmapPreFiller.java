@@ -1,0 +1,87 @@
+package com.bumptech.glide.load.engine.prefill;
+
+import android.graphics.Bitmap.Config;
+import android.os.Handler;
+import android.os.Looper;
+import com.bumptech.glide.load.DecodeFormat;
+import com.bumptech.glide.load.engine.bitmap_recycle.BitmapPool;
+import com.bumptech.glide.load.engine.cache.MemoryCache;
+import com.bumptech.glide.util.Util;
+import java.util.HashMap;
+import java.util.Map;
+
+public final class BitmapPreFiller
+{
+  private final BitmapPool bitmapPool;
+  private BitmapPreFillRunner current;
+  private final DecodeFormat defaultFormat;
+  private final Handler handler = new Handler(Looper.getMainLooper());
+  private final MemoryCache memoryCache;
+  
+  public BitmapPreFiller(MemoryCache paramMemoryCache, BitmapPool paramBitmapPool, DecodeFormat paramDecodeFormat)
+  {
+    memoryCache = paramMemoryCache;
+    bitmapPool = paramBitmapPool;
+    defaultFormat = paramDecodeFormat;
+  }
+  
+  private static int getSizeInBytes(PreFillType paramPreFillType)
+  {
+    return Util.getBitmapByteSize(paramPreFillType.getWidth(), paramPreFillType.getHeight(), paramPreFillType.getConfig());
+  }
+  
+  PreFillQueue generateAllocationOrder(PreFillType... paramVarArgs)
+  {
+    long l1 = memoryCache.getMaxSize();
+    long l2 = memoryCache.getCurrentSize();
+    long l3 = bitmapPool.getMaxSize();
+    int m = paramVarArgs.length;
+    int k = 0;
+    int i = 0;
+    int j = 0;
+    while (i < m)
+    {
+      j += paramVarArgs[i].getWeight();
+      i += 1;
+    }
+    float f = (float)(l1 - l2 + l3) / j;
+    HashMap localHashMap = new HashMap();
+    j = paramVarArgs.length;
+    i = k;
+    while (i < j)
+    {
+      PreFillType localPreFillType = paramVarArgs[i];
+      localHashMap.put(localPreFillType, Integer.valueOf(Math.round(localPreFillType.getWeight() * f) / getSizeInBytes(localPreFillType)));
+      i += 1;
+    }
+    return new PreFillQueue(localHashMap);
+  }
+  
+  public void preFill(PreFillType.Builder... paramVarArgs)
+  {
+    if (current != null) {
+      current.cancel();
+    }
+    PreFillType[] arrayOfPreFillType = new PreFillType[paramVarArgs.length];
+    int i = 0;
+    while (i < paramVarArgs.length)
+    {
+      PreFillType.Builder localBuilder = paramVarArgs[i];
+      if (localBuilder.getConfig() == null)
+      {
+        Bitmap.Config localConfig;
+        if (defaultFormat == DecodeFormat.PREFER_ARGB_8888) {
+          localConfig = Bitmap.Config.ARGB_8888;
+        } else {
+          localConfig = Bitmap.Config.RGB_565;
+        }
+        localBuilder.setConfig(localConfig);
+      }
+      arrayOfPreFillType[i] = localBuilder.build();
+      i += 1;
+    }
+    paramVarArgs = generateAllocationOrder(arrayOfPreFillType);
+    current = new BitmapPreFillRunner(bitmapPool, memoryCache, paramVarArgs);
+    handler.post(current);
+  }
+}

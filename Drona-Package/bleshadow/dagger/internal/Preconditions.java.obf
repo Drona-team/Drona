@@ -1,0 +1,44 @@
+package bleshadow.dagger.internal;
+
+public final class Preconditions
+{
+  private Preconditions() {}
+  
+  public static <T> T checkNotNull(T paramT)
+  {
+    if (paramT != null) {
+      return paramT;
+    }
+    throw new NullPointerException();
+  }
+  
+  public static <T> T checkNotNull(T paramT, String paramString)
+  {
+    if (paramT != null) {
+      return paramT;
+    }
+    throw new NullPointerException(paramString);
+  }
+  
+  public static <T> T checkNotNull(T paramT, String paramString, Object paramObject)
+  {
+    if (paramT == null)
+    {
+      if (paramString.contains("%s"))
+      {
+        if (paramString.indexOf("%s") == paramString.lastIndexOf("%s"))
+        {
+          if ((paramObject instanceof Class)) {
+            paramT = ((Class)paramObject).getCanonicalName();
+          } else {
+            paramT = String.valueOf(paramObject);
+          }
+          throw new NullPointerException(paramString.replace("%s", paramT));
+        }
+        throw new IllegalArgumentException("errorMessageTemplate has more than one format specifier");
+      }
+      throw new IllegalArgumentException("errorMessageTemplate has no format specifiers");
+    }
+    return paramT;
+  }
+}

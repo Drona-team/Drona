@@ -1,0 +1,51 @@
+package com.facebook.react.bridge;
+
+import android.os.AsyncTask;
+
+public abstract class GuardedResultAsyncTask<Result>
+  extends AsyncTask<Void, Void, Result>
+{
+  private final NativeModuleCallExceptionHandler mExceptionHandler;
+  
+  protected GuardedResultAsyncTask(NativeModuleCallExceptionHandler paramNativeModuleCallExceptionHandler)
+  {
+    mExceptionHandler = paramNativeModuleCallExceptionHandler;
+  }
+  
+  @Deprecated
+  protected GuardedResultAsyncTask(ReactContext paramReactContext)
+  {
+    this(paramReactContext.getExceptionHandler());
+  }
+  
+  protected final Result doInBackground(Void... paramVarArgs)
+  {
+    try
+    {
+      paramVarArgs = doInBackgroundGuarded();
+      return paramVarArgs;
+    }
+    catch (RuntimeException paramVarArgs)
+    {
+      mExceptionHandler.handleException(paramVarArgs);
+      throw paramVarArgs;
+    }
+  }
+  
+  protected abstract Result doInBackgroundGuarded();
+  
+  protected final void onPostExecute(Result paramResult)
+  {
+    try
+    {
+      onPostExecuteGuarded(paramResult);
+      return;
+    }
+    catch (RuntimeException paramResult)
+    {
+      mExceptionHandler.handleException(paramResult);
+    }
+  }
+  
+  protected abstract void onPostExecuteGuarded(Result paramResult);
+}

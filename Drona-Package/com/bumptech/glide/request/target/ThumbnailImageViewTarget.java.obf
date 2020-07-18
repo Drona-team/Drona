@@ -1,0 +1,42 @@
+package com.bumptech.glide.request.target;
+
+import android.graphics.drawable.Drawable;
+import android.view.ViewGroup.LayoutParams;
+import android.widget.ImageView;
+import androidx.annotation.Nullable;
+
+public abstract class ThumbnailImageViewTarget<T>
+  extends ImageViewTarget<T>
+{
+  public ThumbnailImageViewTarget(ImageView paramImageView)
+  {
+    super(paramImageView);
+  }
+  
+  @Deprecated
+  public ThumbnailImageViewTarget(ImageView paramImageView, boolean paramBoolean)
+  {
+    super(paramImageView, paramBoolean);
+  }
+  
+  protected abstract Drawable getDrawable(T paramT);
+  
+  protected void setResource(@Nullable T paramT)
+  {
+    ViewGroup.LayoutParams localLayoutParams = ((ImageView)view).getLayoutParams();
+    Drawable localDrawable = getDrawable(paramT);
+    paramT = localDrawable;
+    if (localLayoutParams != null)
+    {
+      paramT = localDrawable;
+      if (width > 0)
+      {
+        paramT = localDrawable;
+        if (height > 0) {
+          paramT = new FixedSizeDrawable(localDrawable, width, height);
+        }
+      }
+    }
+    ((ImageView)view).setImageDrawable(paramT);
+  }
+}

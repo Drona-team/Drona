@@ -1,0 +1,51 @@
+package com.bumptech.glide;
+
+import android.graphics.Bitmap;
+import android.graphics.drawable.Drawable;
+import android.net.Uri;
+import androidx.annotation.CheckResult;
+import androidx.annotation.DrawableRes;
+import androidx.annotation.NonNull;
+import androidx.annotation.Nullable;
+import androidx.annotation.RawRes;
+import java.io.File;
+import java.net.URL;
+
+abstract interface ModelTypes<T>
+{
+  @CheckResult
+  @NonNull
+  public abstract T load(@Nullable Bitmap paramBitmap);
+  
+  @CheckResult
+  @NonNull
+  public abstract T load(@Nullable Drawable paramDrawable);
+  
+  @CheckResult
+  @NonNull
+  public abstract T load(@Nullable Uri paramUri);
+  
+  @CheckResult
+  @NonNull
+  public abstract T load(@Nullable File paramFile);
+  
+  @CheckResult
+  @NonNull
+  public abstract T load(@DrawableRes @Nullable @RawRes Integer paramInteger);
+  
+  @CheckResult
+  @NonNull
+  public abstract T load(@Nullable Object paramObject);
+  
+  @CheckResult
+  @NonNull
+  public abstract T load(@Nullable String paramString);
+  
+  @Deprecated
+  @CheckResult
+  public abstract T load(@Nullable URL paramURL);
+  
+  @CheckResult
+  @NonNull
+  public abstract T load(@Nullable byte[] paramArrayOfByte);
+}

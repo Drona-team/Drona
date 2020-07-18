@@ -1,0 +1,529 @@
+package com.google.android.exoplayer2.upstream.cache;
+
+import android.util.SparseArray;
+import com.google.android.exoplayer2.util.Assertions;
+import com.google.android.exoplayer2.util.AtomicFile;
+import com.google.android.exoplayer2.util.ReusableBufferedOutputStream;
+import com.google.android.exoplayer2.util.Util;
+import java.io.File;
+import java.security.NoSuchAlgorithmException;
+import java.util.Collection;
+import java.util.HashMap;
+import java.util.Set;
+import javax.crypto.Cipher;
+import javax.crypto.NoSuchPaddingException;
+import javax.crypto.spec.SecretKeySpec;
+
+class CachedContentIndex
+{
+  public static final String FILE_NAME = "cached_content_index.exi";
+  private static final int FLAG_ENCRYPTED_INDEX = 1;
+  private static final int VERSION = 2;
+  private final AtomicFile atomicFile;
+  private ReusableBufferedOutputStream bufferedOutputStream;
+  private boolean changed;
+  private final Cipher cipher;
+  private final boolean encrypt;
+  private final SparseArray<String> idToKey;
+  private final HashMap<String, CachedContent> keyToContent;
+  private final SecretKeySpec secretKeySpec;
+  
+  public CachedContentIndex(File paramFile)
+  {
+    this(paramFile, null);
+  }
+  
+  public CachedContentIndex(File paramFile, byte[] paramArrayOfByte)
+  {
+    this(paramFile, paramArrayOfByte, bool);
+  }
+  
+  public CachedContentIndex(File paramFile, byte[] paramArrayOfByte, boolean paramBoolean)
+  {
+    encrypt = paramBoolean;
+    boolean bool = true;
+    if (paramArrayOfByte != null)
+    {
+      if (paramArrayOfByte.length == 16) {
+        paramBoolean = bool;
+      } else {
+        paramBoolean = false;
+      }
+      Assertions.checkArgument(paramBoolean);
+      try
+      {
+        cipher = getCipher();
+        secretKeySpec = new SecretKeySpec(paramArrayOfByte, "AES");
+      }
+      catch (NoSuchAlgorithmException|NoSuchPaddingException paramFile)
+      {
+        throw new IllegalStateException(paramFile);
+      }
+    }
+    else
+    {
+      Assertions.checkState(paramBoolean ^ true);
+      cipher = null;
+      secretKeySpec = null;
+    }
+    keyToContent = new HashMap();
+    idToKey = new SparseArray();
+    atomicFile = new AtomicFile(new File(paramFile, "cached_content_index.exi"));
+  }
+  
+  private void add(CachedContent paramCachedContent)
+  {
+    keyToContent.put(key, paramCachedContent);
+    idToKey.put(id, key);
+  }
+  
+  private CachedContent addNew(String paramString)
+  {
+    paramString = new CachedContent(getNewId(idToKey), paramString);
+    add(paramString);
+    changed = true;
+    return paramString;
+  }
+  
+  private static Cipher getCipher()
+    throws NoSuchPaddingException, NoSuchAlgorithmException
+  {
+    if (Util.SDK_INT == 18) {}
+    try
+    {
+      Cipher localCipher = Cipher.getInstance("AES/CBC/PKCS5PADDING", "BC");
+      return localCipher;
+    }
+    catch (Throwable localThrowable)
+    {
+      for (;;) {}
+    }
+    return Cipher.getInstance("AES/CBC/PKCS5PADDING");
+  }
+  
+  public static int getNewId(SparseArray<String> paramSparseArray)
+  {
+    int k = paramSparseArray.size();
+    int i;
+    if (k == 0) {
+      i = 0;
+    } else {
+      i = paramSparseArray.keyAt(k - 1) + 1;
+    }
+    int j = i;
+    if (i < 0)
+    {
+      i = 0;
+      for (;;)
+      {
+        j = i;
+        if (i >= k) {
+          break;
+        }
+        if (i != paramSparseArray.keyAt(i)) {
+          return i;
+        }
+        i += 1;
+      }
+    }
+    return j;
+  }
+  
+  /* Error */
+  private boolean readFile()
+  {
+    // Byte code:
+    //   0: new 169	java/io/BufferedInputStream
+    //   3: dup
+    //   4: aload_0
+    //   5: getfield 98	com/google/android/exoplayer2/upstream/cache/CachedContentIndex:atomicFile	Lcom/google/android/exoplayer2/util/AtomicFile;
+    //   8: invokevirtual 173	com/google/android/exoplayer2/util/AtomicFile:openRead	()Ljava/io/InputStream;
+    //   11: invokespecial 176	java/io/BufferedInputStream:<init>	(Ljava/io/InputStream;)V
+    //   14: astore 5
+    //   16: new 178	java/io/DataInputStream
+    //   19: dup
+    //   20: aload 5
+    //   22: invokespecial 179	java/io/DataInputStream:<init>	(Ljava/io/InputStream;)V
+    //   25: astore 8
+    //   27: aload 8
+    //   29: astore 6
+    //   31: aload 8
+    //   33: astore 7
+    //   35: aload 8
+    //   37: invokevirtual 182	java/io/DataInputStream:readInt	()I
+    //   40: istore_3
+    //   41: iload_3
+    //   42: iflt +359 -> 401
+    //   45: iload_3
+    //   46: iconst_2
+    //   47: if_icmple +6 -> 53
+    //   50: goto +351 -> 401
+    //   53: aload 8
+    //   55: astore 6
+    //   57: aload 8
+    //   59: astore 7
+    //   61: aload 8
+    //   63: invokevirtual 182	java/io/DataInputStream:readInt	()I
+    //   66: iconst_1
+    //   67: iand
+    //   68: ifeq +152 -> 220
+    //   71: aload 8
+    //   73: astore 6
+    //   75: aload 8
+    //   77: astore 7
+    //   79: aload_0
+    //   80: getfield 60	com/google/android/exoplayer2/upstream/cache/CachedContentIndex:cipher	Ljavax/crypto/Cipher;
+    //   83: astore 9
+    //   85: aload 9
+    //   87: ifnonnull +10 -> 97
+    //   90: aload 8
+    //   92: invokestatic 186	com/google/android/exoplayer2/util/Util:closeQuietly	(Ljava/io/Closeable;)V
+    //   95: iconst_0
+    //   96: ireturn
+    //   97: aload 8
+    //   99: astore 6
+    //   101: aload 8
+    //   103: astore 7
+    //   105: bipush 16
+    //   107: newarray byte
+    //   109: astore 9
+    //   111: aload 8
+    //   113: astore 6
+    //   115: aload 8
+    //   117: astore 7
+    //   119: aload 8
+    //   121: aload 9
+    //   123: invokevirtual 190	java/io/DataInputStream:readFully	([B)V
+    //   126: aload 8
+    //   128: astore 6
+    //   130: aload 8
+    //   132: astore 7
+    //   134: new 192	javax/crypto/spec/IvParameterSpec
+    //   137: dup
+    //   138: aload 9
+    //   140: invokespecial 194	javax/crypto/spec/IvParameterSpec:<init>	([B)V
+    //   143: astore 9
+    //   145: aload 8
+    //   147: astore 6
+    //   149: aload 8
+    //   151: astore 7
+    //   153: aload_0
+    //   154: getfield 60	com/google/android/exoplayer2/upstream/cache/CachedContentIndex:cipher	Ljavax/crypto/Cipher;
+    //   157: iconst_2
+    //   158: aload_0
+    //   159: getfield 69	com/google/android/exoplayer2/upstream/cache/CachedContentIndex:secretKeySpec	Ljavax/crypto/spec/SecretKeySpec;
+    //   162: aload 9
+    //   164: invokevirtual 198	javax/crypto/Cipher:init	(ILjava/security/Key;Ljava/security/spec/AlgorithmParameterSpec;)V
+    //   167: aload 8
+    //   169: astore 6
+    //   171: aload 8
+    //   173: astore 7
+    //   175: new 178	java/io/DataInputStream
+    //   178: dup
+    //   179: new 200	javax/crypto/CipherInputStream
+    //   182: dup
+    //   183: aload 5
+    //   185: aload_0
+    //   186: getfield 60	com/google/android/exoplayer2/upstream/cache/CachedContentIndex:cipher	Ljavax/crypto/Cipher;
+    //   189: invokespecial 203	javax/crypto/CipherInputStream:<init>	(Ljava/io/InputStream;Ljavax/crypto/Cipher;)V
+    //   192: invokespecial 179	java/io/DataInputStream:<init>	(Ljava/io/InputStream;)V
+    //   195: astore 5
+    //   197: goto +59 -> 256
+    //   200: astore 5
+    //   202: aload 8
+    //   204: astore 6
+    //   206: aload 8
+    //   208: astore 7
+    //   210: new 71	java/lang/IllegalStateException
+    //   213: dup
+    //   214: aload 5
+    //   216: invokespecial 74	java/lang/IllegalStateException:<init>	(Ljava/lang/Throwable;)V
+    //   219: athrow
+    //   220: aload 8
+    //   222: astore 5
+    //   224: aload 8
+    //   226: astore 6
+    //   228: aload 8
+    //   230: astore 7
+    //   232: aload_0
+    //   233: getfield 48	com/google/android/exoplayer2/upstream/cache/CachedContentIndex:encrypt	Z
+    //   236: ifeq +20 -> 256
+    //   239: aload 8
+    //   241: astore 6
+    //   243: aload 8
+    //   245: astore 7
+    //   247: aload_0
+    //   248: iconst_1
+    //   249: putfield 128	com/google/android/exoplayer2/upstream/cache/CachedContentIndex:changed	Z
+    //   252: aload 8
+    //   254: astore 5
+    //   256: aload 5
+    //   258: astore 6
+    //   260: aload 5
+    //   262: astore 7
+    //   264: aload 5
+    //   266: invokevirtual 182	java/io/DataInputStream:readInt	()I
+    //   269: istore 4
+    //   271: iconst_0
+    //   272: istore_2
+    //   273: iconst_0
+    //   274: istore_1
+    //   275: iload_2
+    //   276: iload 4
+    //   278: if_icmpge +57 -> 335
+    //   281: aload 5
+    //   283: astore 6
+    //   285: aload 5
+    //   287: astore 7
+    //   289: iload_3
+    //   290: aload 5
+    //   292: invokestatic 207	com/google/android/exoplayer2/upstream/cache/CachedContent:readFromStream	(ILjava/io/DataInputStream;)Lcom/google/android/exoplayer2/upstream/cache/CachedContent;
+    //   295: astore 8
+    //   297: aload 5
+    //   299: astore 6
+    //   301: aload 5
+    //   303: astore 7
+    //   305: aload_0
+    //   306: aload 8
+    //   308: invokespecial 126	com/google/android/exoplayer2/upstream/cache/CachedContentIndex:add	(Lcom/google/android/exoplayer2/upstream/cache/CachedContent;)V
+    //   311: aload 5
+    //   313: astore 6
+    //   315: aload 5
+    //   317: astore 7
+    //   319: iload_1
+    //   320: aload 8
+    //   322: iload_3
+    //   323: invokevirtual 210	com/google/android/exoplayer2/upstream/cache/CachedContent:headerHashCode	(I)I
+    //   326: iadd
+    //   327: istore_1
+    //   328: iload_2
+    //   329: iconst_1
+    //   330: iadd
+    //   331: istore_2
+    //   332: goto -57 -> 275
+    //   335: aload 5
+    //   337: astore 6
+    //   339: aload 5
+    //   341: astore 7
+    //   343: aload 5
+    //   345: invokevirtual 182	java/io/DataInputStream:readInt	()I
+    //   348: istore_3
+    //   349: aload 5
+    //   351: astore 6
+    //   353: aload 5
+    //   355: astore 7
+    //   357: aload 5
+    //   359: invokevirtual 213	java/io/DataInputStream:read	()I
+    //   362: istore_2
+    //   363: iload_2
+    //   364: iconst_m1
+    //   365: if_icmpne +8 -> 373
+    //   368: iconst_1
+    //   369: istore_2
+    //   370: goto +5 -> 375
+    //   373: iconst_0
+    //   374: istore_2
+    //   375: iload_3
+    //   376: iload_1
+    //   377: if_icmpne +17 -> 394
+    //   380: iload_2
+    //   381: ifne +6 -> 387
+    //   384: goto +10 -> 394
+    //   387: aload 5
+    //   389: invokestatic 186	com/google/android/exoplayer2/util/Util:closeQuietly	(Ljava/io/Closeable;)V
+    //   392: iconst_1
+    //   393: ireturn
+    //   394: aload 5
+    //   396: invokestatic 186	com/google/android/exoplayer2/util/Util:closeQuietly	(Ljava/io/Closeable;)V
+    //   399: iconst_0
+    //   400: ireturn
+    //   401: aload 8
+    //   403: invokestatic 186	com/google/android/exoplayer2/util/Util:closeQuietly	(Ljava/io/Closeable;)V
+    //   406: iconst_0
+    //   407: ireturn
+    //   408: astore 5
+    //   410: goto +11 -> 421
+    //   413: goto +24 -> 437
+    //   416: astore 5
+    //   418: aconst_null
+    //   419: astore 6
+    //   421: aload 6
+    //   423: ifnull +8 -> 431
+    //   426: aload 6
+    //   428: invokestatic 186	com/google/android/exoplayer2/util/Util:closeQuietly	(Ljava/io/Closeable;)V
+    //   431: aload 5
+    //   433: athrow
+    //   434: aconst_null
+    //   435: astore 7
+    //   437: aload 7
+    //   439: ifnull +8 -> 447
+    //   442: aload 7
+    //   444: invokestatic 186	com/google/android/exoplayer2/util/Util:closeQuietly	(Ljava/io/Closeable;)V
+    //   447: iconst_0
+    //   448: ireturn
+    //   449: astore 5
+    //   451: goto -17 -> 434
+    //   454: astore 5
+    //   456: goto -43 -> 413
+    // Local variable table:
+    //   start	length	slot	name	signature
+    //   0	459	0	this	CachedContentIndex
+    //   274	104	1	i	int
+    //   272	109	2	j	int
+    //   40	338	3	k	int
+    //   269	10	4	m	int
+    //   14	182	5	localObject1	Object
+    //   200	15	5	localInvalidKeyException	java.security.InvalidKeyException
+    //   222	173	5	localObject2	Object
+    //   408	1	5	localObject3	Object
+    //   416	16	5	localObject4	Object
+    //   449	1	5	localIOException1	java.io.IOException
+    //   454	1	5	localIOException2	java.io.IOException
+    //   29	398	6	localObject5	Object
+    //   33	410	7	localObject6	Object
+    //   25	377	8	localObject7	Object
+    //   83	80	9	localObject8	Object
+    // Exception table:
+    //   from	to	target	type
+    //   153	167	200	java/security/InvalidKeyException
+    //   153	167	200	java/security/InvalidAlgorithmParameterException
+    //   35	41	408	finally
+    //   61	71	408	finally
+    //   79	85	408	finally
+    //   105	111	408	finally
+    //   119	126	408	finally
+    //   134	145	408	finally
+    //   153	167	408	finally
+    //   175	197	408	finally
+    //   210	220	408	finally
+    //   232	239	408	finally
+    //   247	252	408	finally
+    //   264	271	408	finally
+    //   289	297	408	finally
+    //   305	311	408	finally
+    //   319	328	408	finally
+    //   343	349	408	finally
+    //   357	363	408	finally
+    //   0	27	416	finally
+    //   0	27	449	java/io/IOException
+    //   35	41	454	java/io/IOException
+    //   61	71	454	java/io/IOException
+    //   79	85	454	java/io/IOException
+    //   105	111	454	java/io/IOException
+    //   119	126	454	java/io/IOException
+    //   134	145	454	java/io/IOException
+    //   153	167	454	java/io/IOException
+    //   175	197	454	java/io/IOException
+    //   210	220	454	java/io/IOException
+    //   232	239	454	java/io/IOException
+    //   247	252	454	java/io/IOException
+    //   264	271	454	java/io/IOException
+    //   289	297	454	java/io/IOException
+    //   305	311	454	java/io/IOException
+    //   319	328	454	java/io/IOException
+    //   343	349	454	java/io/IOException
+    //   357	363	454	java/io/IOException
+  }
+  
+  private void writeFile()
+    throws Cache.CacheException
+  {
+    throw new Runtime("d2j fail translate: java.lang.RuntimeException: can not merge I and Z\n\tat com.googlecode.dex2jar.ir.TypeClass.merge(TypeClass.java:100)\n\tat com.googlecode.dex2jar.ir.ts.TypeTransformer$TypeRef.updateTypeClass(TypeTransformer.java:174)\n\tat com.googlecode.dex2jar.ir.ts.TypeTransformer$TypeAnalyze.provideAs(TypeTransformer.java:780)\n\tat com.googlecode.dex2jar.ir.ts.TypeTransformer$TypeAnalyze.e1expr(TypeTransformer.java:496)\n\tat com.googlecode.dex2jar.ir.ts.TypeTransformer$TypeAnalyze.exExpr(TypeTransformer.java:713)\n\tat com.googlecode.dex2jar.ir.ts.TypeTransformer$TypeAnalyze.exExpr(TypeTransformer.java:703)\n\tat com.googlecode.dex2jar.ir.ts.TypeTransformer$TypeAnalyze.enexpr(TypeTransformer.java:698)\n\tat com.googlecode.dex2jar.ir.ts.TypeTransformer$TypeAnalyze.exExpr(TypeTransformer.java:719)\n\tat com.googlecode.dex2jar.ir.ts.TypeTransformer$TypeAnalyze.exExpr(TypeTransformer.java:703)\n\tat com.googlecode.dex2jar.ir.ts.TypeTransformer$TypeAnalyze.s1stmt(TypeTransformer.java:810)\n\tat com.googlecode.dex2jar.ir.ts.TypeTransformer$TypeAnalyze.sxStmt(TypeTransformer.java:840)\n\tat com.googlecode.dex2jar.ir.ts.TypeTransformer$TypeAnalyze.analyze(TypeTransformer.java:206)\n\tat com.googlecode.dex2jar.ir.ts.TypeTransformer.transform(TypeTransformer.java:44)\n\tat com.googlecode.d2j.dex.Dex2jar$2.optimize(Dex2jar.java:162)\n\tat com.googlecode.d2j.dex.Dex2Asm.convertCode(Dex2Asm.java:414)\n\tat com.googlecode.d2j.dex.ExDex2Asm.convertCode(ExDex2Asm.java:42)\n\tat com.googlecode.d2j.dex.Dex2jar$2.convertCode(Dex2jar.java:128)\n\tat com.googlecode.d2j.dex.Dex2Asm.convertMethod(Dex2Asm.java:509)\n\tat com.googlecode.d2j.dex.Dex2Asm.convertClass(Dex2Asm.java:406)\n\tat com.googlecode.d2j.dex.Dex2Asm.convertDex(Dex2Asm.java:422)\n\tat com.googlecode.d2j.dex.Dex2jar.doTranslate(Dex2jar.java:172)\n\tat com.googlecode.d2j.dex.Dex2jar.to(Dex2jar.java:272)\n\tat com.googlecode.dex2jar.tools.Dex2jarCmd.doCommandLine(Dex2jarCmd.java:108)\n\tat com.googlecode.dex2jar.tools.BaseCmd.doMain(BaseCmd.java:288)\n\tat com.googlecode.dex2jar.tools.Dex2jarCmd.main(Dex2jarCmd.java:32)\n");
+  }
+  
+  public void applyContentMetadataMutations(String paramString, ContentMetadataMutations paramContentMetadataMutations)
+  {
+    if (getOrAdd(paramString).applyMetadataMutations(paramContentMetadataMutations)) {
+      changed = true;
+    }
+  }
+  
+  public int assignIdForKey(String paramString)
+  {
+    return getOrAddid;
+  }
+  
+  public CachedContent get(String paramString)
+  {
+    return (CachedContent)keyToContent.get(paramString);
+  }
+  
+  public Collection<CachedContent> getAll()
+  {
+    return keyToContent.values();
+  }
+  
+  public ContentMetadata getContentMetadata(String paramString)
+  {
+    paramString = get(paramString);
+    if (paramString != null) {
+      return paramString.getMetadata();
+    }
+    return DefaultContentMetadata.EMPTY;
+  }
+  
+  public String getKeyForId(int paramInt)
+  {
+    return (String)idToKey.get(paramInt);
+  }
+  
+  public Set<String> getKeys()
+  {
+    return keyToContent.keySet();
+  }
+  
+  public CachedContent getOrAdd(String paramString)
+  {
+    CachedContent localCachedContent2 = (CachedContent)keyToContent.get(paramString);
+    CachedContent localCachedContent1 = localCachedContent2;
+    if (localCachedContent2 == null) {
+      localCachedContent1 = addNew(paramString);
+    }
+    return localCachedContent1;
+  }
+  
+  public void load()
+  {
+    Assertions.checkState(changed ^ true);
+    if (!readFile())
+    {
+      atomicFile.delete();
+      keyToContent.clear();
+      idToKey.clear();
+    }
+  }
+  
+  public void maybeRemove(String paramString)
+  {
+    CachedContent localCachedContent = (CachedContent)keyToContent.get(paramString);
+    if ((localCachedContent != null) && (localCachedContent.isEmpty()) && (!localCachedContent.isLocked()))
+    {
+      keyToContent.remove(paramString);
+      idToKey.remove(id);
+      changed = true;
+    }
+  }
+  
+  public void removeEmpty()
+  {
+    String[] arrayOfString = new String[keyToContent.size()];
+    keyToContent.keySet().toArray(arrayOfString);
+    int j = arrayOfString.length;
+    int i = 0;
+    while (i < j)
+    {
+      maybeRemove(arrayOfString[i]);
+      i += 1;
+    }
+  }
+  
+  public void store()
+    throws Cache.CacheException
+  {
+    if (!changed) {
+      return;
+    }
+    writeFile();
+    changed = false;
+  }
+}

@@ -1,0 +1,166 @@
+package com.bumptech.glide.disklrucache;
+
+import java.io.ByteArrayOutputStream;
+import java.io.Closeable;
+import java.io.EOFException;
+import java.io.IOException;
+import java.io.InputStream;
+import java.io.UnsupportedEncodingException;
+import java.nio.charset.Charset;
+
+class StrictLineReader
+  implements Closeable
+{
+  private static final byte CR = 13;
+  private static final byte LF = 10;
+  private byte[] buf;
+  private final Charset charset;
+  private int end;
+  private final InputStream in;
+  private int pos;
+  
+  public StrictLineReader(InputStream paramInputStream, int paramInt, Charset paramCharset)
+  {
+    if ((paramInputStream != null) && (paramCharset != null))
+    {
+      if (paramInt >= 0)
+      {
+        if (paramCharset.equals(Util.US_ASCII))
+        {
+          in = paramInputStream;
+          charset = paramCharset;
+          buf = new byte[paramInt];
+          return;
+        }
+        throw new IllegalArgumentException("Unsupported encoding");
+      }
+      throw new IllegalArgumentException("capacity <= 0");
+    }
+    throw new NullPointerException();
+  }
+  
+  public StrictLineReader(InputStream paramInputStream, Charset paramCharset)
+  {
+    this(paramInputStream, 8192, paramCharset);
+  }
+  
+  private void fillBuf()
+    throws IOException
+  {
+    int i = in.read(buf, 0, buf.length);
+    if (i != -1)
+    {
+      pos = 0;
+      end = i;
+      return;
+    }
+    throw new EOFException();
+  }
+  
+  public void close()
+    throws IOException
+  {
+    synchronized (in)
+    {
+      if (buf != null)
+      {
+        buf = null;
+        in.close();
+      }
+      return;
+    }
+  }
+  
+  public boolean hasUnterminatedLine()
+  {
+    return end == -1;
+  }
+  
+  public String readLine()
+    throws IOException
+  {
+    for (;;)
+    {
+      int i;
+      synchronized (in)
+      {
+        if (buf != null)
+        {
+          if (pos >= end) {
+            fillBuf();
+          }
+          i = pos;
+          Object localObject1;
+          if (i != end)
+          {
+            if (buf[i] != 10) {
+              break label270;
+            }
+            if (i != pos)
+            {
+              localObject1 = buf;
+              j = i - 1;
+              if (localObject1[j] == 13)
+              {
+                localObject1 = new String(buf, pos, j - pos, charset.name());
+                pos = (i + 1);
+                return localObject1;
+              }
+            }
+          }
+          else
+          {
+            localObject1 = new ByteArrayOutputStream(end - pos + 80)
+            {
+              public String toString()
+              {
+                int i;
+                if ((count > 0) && (buf[(count - 1)] == 13)) {
+                  i = count - 1;
+                } else {
+                  i = count;
+                }
+                try
+                {
+                  String str = new String(buf, 0, i, charset.name());
+                  return str;
+                }
+                catch (UnsupportedEncodingException localUnsupportedEncodingException)
+                {
+                  throw new AssertionError(localUnsupportedEncodingException);
+                }
+              }
+            };
+            ((ByteArrayOutputStream)localObject1).write(buf, pos, end - pos);
+            end = -1;
+            fillBuf();
+            i = pos;
+            if (i == end) {
+              continue;
+            }
+            if (buf[i] != 10) {
+              break label277;
+            }
+            if (i != pos) {
+              ((ByteArrayOutputStream)localObject1).write(buf, pos, i - pos);
+            }
+            pos = (i + 1);
+            localObject1 = ((ByteArrayOutputStream)localObject1).toString();
+            return localObject1;
+          }
+        }
+        else
+        {
+          throw new IOException("LineReader is closed");
+        }
+      }
+      int j = i;
+      continue;
+      label270:
+      i += 1;
+      continue;
+      label277:
+      i += 1;
+    }
+  }
+}

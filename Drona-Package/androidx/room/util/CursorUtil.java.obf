@@ -1,0 +1,86 @@
+package androidx.room.util;
+
+import android.database.Cursor;
+import android.database.MatrixCursor;
+import androidx.annotation.NonNull;
+import androidx.annotation.RestrictTo;
+
+@RestrictTo({androidx.annotation.RestrictTo.Scope.LIBRARY_GROUP_PREFIX})
+public class CursorUtil
+{
+  private CursorUtil() {}
+  
+  @NonNull
+  public static Cursor copyAndClose(@NonNull Cursor paramCursor)
+  {
+    for (;;)
+    {
+      Object[] arrayOfObject;
+      int i;
+      try
+      {
+        MatrixCursor localMatrixCursor = new MatrixCursor(paramCursor.getColumnNames(), paramCursor.getCount());
+        if (paramCursor.moveToNext())
+        {
+          arrayOfObject = new Object[paramCursor.getColumnCount()];
+          i = 0;
+          if (i >= paramCursor.getColumnCount()) {}
+        }
+        switch (paramCursor.getType(i))
+        {
+        case 4: 
+          continue;
+          arrayOfObject[i] = paramCursor.getBlob(i);
+          break;
+        case 3: 
+          arrayOfObject[i] = paramCursor.getString(i);
+          break;
+        case 2: 
+          arrayOfObject[i] = Double.valueOf(paramCursor.getDouble(i));
+          break;
+        case 1: 
+          arrayOfObject[i] = Long.valueOf(paramCursor.getLong(i));
+          break label193;
+          throw new IllegalStateException();
+          localMatrixCursor.addRow(arrayOfObject);
+          continue;
+          return localMatrixCursor;
+        }
+      }
+      finally
+      {
+        paramCursor.close();
+      }
+      continue;
+      arrayOfObject[i] = null;
+      label193:
+      i += 1;
+    }
+  }
+  
+  public static int getColumnIndex(@NonNull Cursor paramCursor, @NonNull String paramString)
+  {
+    int i = paramCursor.getColumnIndex(paramString);
+    if (i >= 0) {
+      return i;
+    }
+    StringBuilder localStringBuilder = new StringBuilder();
+    localStringBuilder.append("`");
+    localStringBuilder.append(paramString);
+    localStringBuilder.append("`");
+    return paramCursor.getColumnIndex(localStringBuilder.toString());
+  }
+  
+  public static int getColumnIndexOrThrow(@NonNull Cursor paramCursor, @NonNull String paramString)
+  {
+    int i = paramCursor.getColumnIndex(paramString);
+    if (i >= 0) {
+      return i;
+    }
+    StringBuilder localStringBuilder = new StringBuilder();
+    localStringBuilder.append("`");
+    localStringBuilder.append(paramString);
+    localStringBuilder.append("`");
+    return paramCursor.getColumnIndexOrThrow(localStringBuilder.toString());
+  }
+}

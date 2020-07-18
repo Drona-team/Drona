@@ -1,0 +1,21 @@
+package com.google.ads.mediation;
+
+import android.os.Bundle;
+import com.google.android.gms.ads.InterstitialAd;
+import com.google.android.gms.ads.reward.AdMetadataListener;
+import com.google.android.gms.ads.reward.mediation.MediationRewardedVideoAdListener;
+
+final class zzb
+  extends AdMetadataListener
+{
+  zzb(AbstractAdViewAdapter paramAbstractAdViewAdapter) {}
+  
+  public final void onAdMetadataChanged()
+  {
+    if ((AbstractAdViewAdapter.zzb(zzmk) != null) && (AbstractAdViewAdapter.zza(zzmk) != null))
+    {
+      Bundle localBundle = AbstractAdViewAdapter.zzb(zzmk).getAdMetadata();
+      AbstractAdViewAdapter.zza(zzmk).zzb(localBundle);
+    }
+  }
+}

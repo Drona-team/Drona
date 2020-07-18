@@ -1,0 +1,139 @@
+package com.google.android.exoplayer2.util;
+
+public final class TimestampAdjuster
+{
+  public static final long DO_NOT_OFFSET = Long.MAX_VALUE;
+  private static final long MAX_PTS_PLUS_ONE = 8589934592L;
+  private long firstSampleTimestampUs;
+  private volatile long lastSampleTimestampUs = -9223372036854775807L;
+  private long timestampOffsetUs;
+  
+  public TimestampAdjuster(long paramLong)
+  {
+    setFirstSampleTimestampUs(paramLong);
+  }
+  
+  public static long ptsToUs(long paramLong)
+  {
+    return paramLong * 1000000L / 90000L;
+  }
+  
+  public static long usToPts(long paramLong)
+  {
+    return paramLong * 90000L / 1000000L;
+  }
+  
+  public long adjustSampleTimestamp(long paramLong)
+  {
+    if (paramLong == -9223372036854775807L) {
+      return -9223372036854775807L;
+    }
+    if (lastSampleTimestampUs != -9223372036854775807L) {
+      lastSampleTimestampUs = paramLong;
+    } else if (firstSampleTimestampUs != Long.MAX_VALUE) {
+      timestampOffsetUs = (firstSampleTimestampUs - paramLong);
+    }
+    try
+    {
+      lastSampleTimestampUs = paramLong;
+      notifyAll();
+      return paramLong + timestampOffsetUs;
+    }
+    catch (Throwable localThrowable)
+    {
+      throw localThrowable;
+    }
+  }
+  
+  public long adjustTsTimestamp(long paramLong)
+  {
+    if (paramLong == -9223372036854775807L) {
+      return -9223372036854775807L;
+    }
+    long l1 = paramLong;
+    if (lastSampleTimestampUs != -9223372036854775807L)
+    {
+      long l3 = usToPts(lastSampleTimestampUs);
+      l1 = (4294967296L + l3) / 8589934592L;
+      long l2 = (l1 - 1L) * 8589934592L + paramLong;
+      paramLong += l1 * 8589934592L;
+      l1 = paramLong;
+      if (Math.abs(l2 - l3) < Math.abs(paramLong - l3)) {
+        l1 = l2;
+      }
+    }
+    return adjustSampleTimestamp(ptsToUs(l1));
+  }
+  
+  public long getFirstSampleTimestampUs()
+  {
+    return firstSampleTimestampUs;
+  }
+  
+  public long getLastAdjustedTimestampUs()
+  {
+    if (lastSampleTimestampUs != -9223372036854775807L)
+    {
+      long l = lastSampleTimestampUs;
+      return timestampOffsetUs + l;
+    }
+    if (firstSampleTimestampUs != Long.MAX_VALUE) {
+      return firstSampleTimestampUs;
+    }
+    return -9223372036854775807L;
+  }
+  
+  public long getTimestampOffsetUs()
+  {
+    if (firstSampleTimestampUs == Long.MAX_VALUE) {
+      return 0L;
+    }
+    if (lastSampleTimestampUs == -9223372036854775807L) {
+      return -9223372036854775807L;
+    }
+    return timestampOffsetUs;
+  }
+  
+  public void reset()
+  {
+    lastSampleTimestampUs = -9223372036854775807L;
+  }
+  
+  public void setFirstSampleTimestampUs(long paramLong)
+  {
+    for (;;)
+    {
+      try
+      {
+        if (lastSampleTimestampUs == -9223372036854775807L)
+        {
+          bool = true;
+          Assertions.checkState(bool);
+          firstSampleTimestampUs = paramLong;
+          return;
+        }
+      }
+      catch (Throwable localThrowable)
+      {
+        throw localThrowable;
+      }
+      boolean bool = false;
+    }
+  }
+  
+  public void waitUntilInitialized()
+    throws InterruptedException
+  {
+    try
+    {
+      while (lastSampleTimestampUs == -9223372036854775807L) {
+        wait();
+      }
+      return;
+    }
+    catch (Throwable localThrowable)
+    {
+      throw localThrowable;
+    }
+  }
+}

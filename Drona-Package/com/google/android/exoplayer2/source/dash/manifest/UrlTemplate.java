@@ -1,0 +1,184 @@
+package com.google.android.exoplayer2.source.dash.manifest;
+
+import java.util.Locale;
+
+public final class UrlTemplate
+{
+  private static final String BANDWIDTH = "Bandwidth";
+  private static final int BANDWIDTH_ID = 3;
+  private static final String DEFAULT_FORMAT_TAG = "%01d";
+  private static final String ESCAPED_DOLLAR = "$$";
+  private static final String NUMBER = "Number";
+  private static final int NUMBER_ID = 2;
+  private static final String REPRESENTATION = "RepresentationID";
+  private static final int REPRESENTATION_ID = 1;
+  private static final String TIME = "Time";
+  private static final int TIME_ID = 4;
+  private final int identifierCount;
+  private final String[] identifierFormatTags;
+  private final int[] identifiers;
+  private final String[] urlPieces;
+  
+  private UrlTemplate(String[] paramArrayOfString1, int[] paramArrayOfInt, String[] paramArrayOfString2, int paramInt)
+  {
+    urlPieces = paramArrayOfString1;
+    identifiers = paramArrayOfInt;
+    identifierFormatTags = paramArrayOfString2;
+    identifierCount = paramInt;
+  }
+  
+  public static UrlTemplate compile(String paramString)
+  {
+    String[] arrayOfString1 = new String[5];
+    int[] arrayOfInt = new int[4];
+    String[] arrayOfString2 = new String[4];
+    return new UrlTemplate(arrayOfString1, arrayOfInt, arrayOfString2, parseTemplate(paramString, arrayOfString1, arrayOfInt, arrayOfString2));
+  }
+  
+  private static int parseTemplate(String paramString, String[] paramArrayOfString1, int[] paramArrayOfInt, String[] paramArrayOfString2)
+  {
+    paramArrayOfString1[0] = "";
+    int i = 0;
+    int j = 0;
+    while (i < paramString.length())
+    {
+      int n = paramString.indexOf("$", i);
+      int k = n;
+      int m = -1;
+      Object localObject1;
+      if (n == -1)
+      {
+        localObject1 = new StringBuilder();
+        ((StringBuilder)localObject1).append(paramArrayOfString1[j]);
+        ((StringBuilder)localObject1).append(paramString.substring(i));
+        paramArrayOfString1[j] = ((StringBuilder)localObject1).toString();
+        i = paramString.length();
+      }
+      else
+      {
+        if (n != i)
+        {
+          localObject1 = new StringBuilder();
+          ((StringBuilder)localObject1).append(paramArrayOfString1[j]);
+          ((StringBuilder)localObject1).append(paramString.substring(i, n));
+          paramArrayOfString1[j] = ((StringBuilder)localObject1).toString();
+        }
+        for (i = k;; i = k + 1)
+        {
+          break;
+          if (paramString.startsWith("$$", i))
+          {
+            localObject1 = new StringBuilder();
+            ((StringBuilder)localObject1).append(paramArrayOfString1[j]);
+            ((StringBuilder)localObject1).append("$");
+            paramArrayOfString1[j] = ((StringBuilder)localObject1).toString();
+            i += 2;
+            break;
+          }
+          i += 1;
+          k = paramString.indexOf("$", i);
+          String str = paramString.substring(i, k);
+          localObject1 = str;
+          if (str.equals("RepresentationID"))
+          {
+            paramArrayOfInt[j] = 1;
+          }
+          else
+          {
+            i = str.indexOf("%0");
+            Object localObject2 = "%01d";
+            if (i != -1)
+            {
+              localObject2 = str.substring(i);
+              localObject1 = localObject2;
+              if (!((String)localObject2).endsWith("d"))
+              {
+                localObject1 = new StringBuilder();
+                ((StringBuilder)localObject1).append((String)localObject2);
+                ((StringBuilder)localObject1).append("d");
+                localObject1 = ((StringBuilder)localObject1).toString();
+              }
+              str = str.substring(0, i);
+              localObject2 = localObject1;
+              localObject1 = str;
+            }
+            i = ((String)localObject1).hashCode();
+            if (i != -1950496919)
+            {
+              if (i != 2606829)
+              {
+                if (i != 38199441)
+                {
+                  i = m;
+                }
+                else
+                {
+                  i = m;
+                  if (((String)localObject1).equals("Bandwidth")) {
+                    i = 1;
+                  }
+                }
+              }
+              else
+              {
+                i = m;
+                if (((String)localObject1).equals("Time")) {
+                  i = 2;
+                }
+              }
+            }
+            else
+            {
+              i = m;
+              if (((String)localObject1).equals("Number")) {
+                i = 0;
+              }
+            }
+            switch (i)
+            {
+            default: 
+              paramArrayOfString1 = new StringBuilder();
+              paramArrayOfString1.append("Invalid template: ");
+              paramArrayOfString1.append(paramString);
+              throw new IllegalArgumentException(paramArrayOfString1.toString());
+            case 2: 
+              paramArrayOfInt[j] = 4;
+              break;
+            case 1: 
+              paramArrayOfInt[j] = 3;
+              break;
+            case 0: 
+              paramArrayOfInt[j] = 2;
+            }
+            paramArrayOfString2[j] = localObject2;
+          }
+          j += 1;
+          paramArrayOfString1[j] = "";
+        }
+      }
+    }
+    return j;
+  }
+  
+  public String buildUri(String paramString, long paramLong1, int paramInt, long paramLong2)
+  {
+    StringBuilder localStringBuilder = new StringBuilder();
+    int i = 0;
+    while (i < identifierCount)
+    {
+      localStringBuilder.append(urlPieces[i]);
+      if (identifiers[i] == 1) {
+        localStringBuilder.append(paramString);
+      } else if (identifiers[i] == 2) {
+        localStringBuilder.append(String.format(Locale.US, identifierFormatTags[i], new Object[] { Long.valueOf(paramLong1) }));
+      } else if (identifiers[i] == 3) {
+        localStringBuilder.append(String.format(Locale.US, identifierFormatTags[i], new Object[] { Integer.valueOf(paramInt) }));
+      } else if (identifiers[i] == 4) {
+        localStringBuilder.append(String.format(Locale.US, identifierFormatTags[i], new Object[] { Long.valueOf(paramLong2) }));
+      }
+      i += 1;
+    }
+    localStringBuilder.append(urlPieces[identifierCount]);
+    return localStringBuilder.toString();
+  }
+}

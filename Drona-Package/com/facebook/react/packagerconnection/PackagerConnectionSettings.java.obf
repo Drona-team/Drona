@@ -1,0 +1,62 @@
+package com.facebook.react.packagerconnection;
+
+import android.content.Context;
+import android.content.SharedPreferences;
+import android.content.SharedPreferences.Editor;
+import android.preference.PreferenceManager;
+import android.text.TextUtils;
+import androidx.annotation.Nullable;
+import com.facebook.common.logging.FLog;
+import com.facebook.infer.annotation.Assertions;
+import com.facebook.react.modules.systeminfo.AndroidInfoHelpers;
+
+public class PackagerConnectionSettings
+{
+  private static final String PREFS_DEBUG_SERVER_HOST_KEY = "debug_http_host";
+  private static final String TAG = "PackagerConnectionSettings";
+  private final Context mAppContext;
+  private final String mPackageName;
+  private final SharedPreferences mPreferences;
+  
+  public PackagerConnectionSettings(Context paramContext)
+  {
+    mPreferences = PreferenceManager.getDefaultSharedPreferences(paramContext);
+    mPackageName = paramContext.getPackageName();
+    mAppContext = paramContext;
+  }
+  
+  public String getDebugServerHost()
+  {
+    String str1 = mPreferences.getString("debug_http_host", null);
+    if (!TextUtils.isEmpty(str1)) {
+      return (String)Assertions.assertNotNull(str1);
+    }
+    str1 = AndroidInfoHelpers.getServerHost(mAppContext);
+    if (str1.equals("localhost"))
+    {
+      String str2 = TAG;
+      StringBuilder localStringBuilder = new StringBuilder();
+      localStringBuilder.append("You seem to be running on device. Run '");
+      localStringBuilder.append(AndroidInfoHelpers.getAdbReverseTcpCommand(mAppContext));
+      localStringBuilder.append("' to forward the debug server's port to the device.");
+      FLog.w(str2, localStringBuilder.toString());
+    }
+    return str1;
+  }
+  
+  public String getInspectorServerHost()
+  {
+    return AndroidInfoHelpers.getInspectorProxyHost(mAppContext);
+  }
+  
+  @Nullable
+  public String getPackageName()
+  {
+    return mPackageName;
+  }
+  
+  public void setDebugServerHost(String paramString)
+  {
+    mPreferences.edit().putString("debug_http_host", paramString).apply();
+  }
+}

@@ -1,0 +1,6 @@
+package com.android.billingclient.api;
+
+public abstract interface PriceChangeConfirmationListener
+{
+  public abstract void onPriceChangeConfirmationResult(BillingResult paramBillingResult);
+}

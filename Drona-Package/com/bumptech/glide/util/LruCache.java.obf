@@ -1,0 +1,189 @@
+package com.bumptech.glide.util;
+
+import androidx.annotation.NonNull;
+import androidx.annotation.Nullable;
+import java.util.Iterator;
+import java.util.LinkedHashMap;
+import java.util.Map;
+import java.util.Map.Entry;
+import java.util.Set;
+
+public class LruCache<T, Y>
+{
+  private final Map<T, Y> cache = new LinkedHashMap(100, 0.75F, true);
+  private long currentSize;
+  private final long initialMaxSize;
+  private long maxSize;
+  
+  public LruCache(long paramLong)
+  {
+    initialMaxSize = paramLong;
+    maxSize = paramLong;
+  }
+  
+  private void evict()
+  {
+    trimToSize(maxSize);
+  }
+  
+  public void clearMemory()
+  {
+    trimToSize(0L);
+  }
+  
+  public boolean contains(@NonNull T paramT)
+  {
+    try
+    {
+      boolean bool = cache.containsKey(paramT);
+      return bool;
+    }
+    finally
+    {
+      paramT = finally;
+      throw paramT;
+    }
+  }
+  
+  @Nullable
+  public Y get(@NonNull T paramT)
+  {
+    try
+    {
+      paramT = cache.get(paramT);
+      return paramT;
+    }
+    finally
+    {
+      paramT = finally;
+      throw paramT;
+    }
+  }
+  
+  protected int getCount()
+  {
+    try
+    {
+      int i = cache.size();
+      return i;
+    }
+    finally
+    {
+      localObject = finally;
+      throw localObject;
+    }
+  }
+  
+  public long getCurrentSize()
+  {
+    try
+    {
+      long l = currentSize;
+      return l;
+    }
+    finally
+    {
+      localObject = finally;
+      throw localObject;
+    }
+  }
+  
+  public long getMaxSize()
+  {
+    try
+    {
+      long l = maxSize;
+      return l;
+    }
+    finally
+    {
+      localObject = finally;
+      throw localObject;
+    }
+  }
+  
+  protected int getSize(@Nullable Y paramY)
+  {
+    return 1;
+  }
+  
+  protected void onItemEvicted(@NonNull T paramT, @Nullable Y paramY) {}
+  
+  @Nullable
+  public Y put(@NonNull T paramT, @Nullable Y paramY)
+  {
+    try
+    {
+      long l = getSize(paramY);
+      if (l >= maxSize)
+      {
+        onItemEvicted(paramT, paramY);
+        return null;
+      }
+      if (paramY != null) {
+        currentSize += l;
+      }
+      Object localObject = cache.put(paramT, paramY);
+      if (localObject != null)
+      {
+        currentSize -= getSize(localObject);
+        if (!localObject.equals(paramY)) {
+          onItemEvicted(paramT, localObject);
+        }
+      }
+      evict();
+      return localObject;
+    }
+    finally {}
+  }
+  
+  @Nullable
+  public Y remove(@NonNull T paramT)
+  {
+    try
+    {
+      paramT = cache.remove(paramT);
+      if (paramT != null) {
+        currentSize -= getSize(paramT);
+      }
+      return paramT;
+    }
+    finally {}
+  }
+  
+  public void setSizeMultiplier(float paramFloat)
+  {
+    if (paramFloat >= 0.0F) {}
+    try
+    {
+      maxSize = Math.round((float)initialMaxSize * paramFloat);
+      evict();
+      return;
+    }
+    finally {}
+    throw new IllegalArgumentException("Multiplier must be >= 0");
+  }
+  
+  protected void trimToSize(long paramLong)
+  {
+    try
+    {
+      while (currentSize > paramLong)
+      {
+        Iterator localIterator = cache.entrySet().iterator();
+        Object localObject3 = (Map.Entry)localIterator.next();
+        Object localObject2 = ((Map.Entry)localObject3).getValue();
+        currentSize -= getSize(localObject2);
+        localObject3 = ((Map.Entry)localObject3).getKey();
+        localIterator.remove();
+        onItemEvicted(localObject3, localObject2);
+      }
+      return;
+    }
+    finally
+    {
+      localObject1 = finally;
+      throw localObject1;
+    }
+  }
+}

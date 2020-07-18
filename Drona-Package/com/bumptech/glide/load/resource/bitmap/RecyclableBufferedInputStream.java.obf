@@ -1,0 +1,400 @@
+package com.bumptech.glide.load.resource.bitmap;
+
+import androidx.annotation.NonNull;
+import androidx.annotation.VisibleForTesting;
+import com.bumptech.glide.load.engine.bitmap_recycle.ArrayPool;
+import java.io.FilterInputStream;
+import java.io.IOException;
+import java.io.InputStream;
+
+public class RecyclableBufferedInputStream
+  extends FilterInputStream
+{
+  private volatile byte[] buf;
+  private final ArrayPool byteArrayPool;
+  private int count;
+  private int marklimit;
+  private int markpos = -1;
+  private int pos;
+  
+  public RecyclableBufferedInputStream(@NonNull InputStream paramInputStream, @NonNull ArrayPool paramArrayPool)
+  {
+    this(paramInputStream, paramArrayPool, 65536);
+  }
+  
+  @VisibleForTesting
+  RecyclableBufferedInputStream(@NonNull InputStream paramInputStream, @NonNull ArrayPool paramArrayPool, int paramInt)
+  {
+    super(paramInputStream);
+    byteArrayPool = paramArrayPool;
+    buf = ((byte[])paramArrayPool.get(paramInt, [B.class));
+  }
+  
+  private int fillbuf(InputStream paramInputStream, byte[] paramArrayOfByte)
+    throws IOException
+  {
+    if ((markpos != -1) && (pos - markpos < marklimit))
+    {
+      byte[] arrayOfByte;
+      if ((markpos == 0) && (marklimit > paramArrayOfByte.length) && (count == paramArrayOfByte.length))
+      {
+        j = paramArrayOfByte.length * 2;
+        i = j;
+        if (j > marklimit) {
+          i = marklimit;
+        }
+        arrayOfByte = (byte[])byteArrayPool.get(i, [B.class);
+        System.arraycopy(paramArrayOfByte, 0, arrayOfByte, 0, paramArrayOfByte.length);
+        buf = arrayOfByte;
+        byteArrayPool.put(paramArrayOfByte);
+      }
+      else
+      {
+        arrayOfByte = paramArrayOfByte;
+        if (markpos > 0)
+        {
+          System.arraycopy(paramArrayOfByte, markpos, paramArrayOfByte, 0, paramArrayOfByte.length - markpos);
+          arrayOfByte = paramArrayOfByte;
+        }
+      }
+      pos -= markpos;
+      markpos = 0;
+      count = 0;
+      int j = paramInputStream.read(arrayOfByte, pos, arrayOfByte.length - pos);
+      if (j <= 0) {
+        i = pos;
+      } else {
+        i = pos + j;
+      }
+      count = i;
+      return j;
+    }
+    int i = paramInputStream.read(paramArrayOfByte);
+    if (i > 0)
+    {
+      markpos = -1;
+      pos = 0;
+      count = i;
+    }
+    return i;
+  }
+  
+  private static IOException streamClosed()
+    throws IOException
+  {
+    throw new IOException("BufferedInputStream is closed");
+  }
+  
+  public int available()
+    throws IOException
+  {
+    try
+    {
+      InputStream localInputStream = in;
+      if ((buf != null) && (localInputStream != null))
+      {
+        int i = count;
+        int j = pos;
+        int k = localInputStream.available();
+        return i - j + k;
+      }
+      throw streamClosed();
+    }
+    finally {}
+  }
+  
+  public void close()
+    throws IOException
+  {
+    if (buf != null)
+    {
+      byteArrayPool.put(buf);
+      buf = null;
+    }
+    InputStream localInputStream = in;
+    in = null;
+    if (localInputStream != null) {
+      localInputStream.close();
+    }
+  }
+  
+  public void fixMarkLimit()
+  {
+    try
+    {
+      marklimit = buf.length;
+      return;
+    }
+    finally
+    {
+      localObject = finally;
+      throw localObject;
+    }
+  }
+  
+  public void mark(int paramInt)
+  {
+    try
+    {
+      marklimit = Math.max(marklimit, paramInt);
+      markpos = pos;
+      return;
+    }
+    finally
+    {
+      localObject = finally;
+      throw localObject;
+    }
+  }
+  
+  public boolean markSupported()
+  {
+    return true;
+  }
+  
+  public int read()
+    throws IOException
+  {
+    try
+    {
+      byte[] arrayOfByte = buf;
+      Object localObject1 = in;
+      if ((arrayOfByte != null) && (localObject1 != null))
+      {
+        int i;
+        if (pos >= count)
+        {
+          i = fillbuf((InputStream)localObject1, arrayOfByte);
+          if (i == -1) {
+            return -1;
+          }
+        }
+        localObject1 = arrayOfByte;
+        if (arrayOfByte != buf)
+        {
+          localObject1 = buf;
+          if (localObject1 == null) {
+            throw streamClosed();
+          }
+        }
+        if (count - pos > 0)
+        {
+          i = pos;
+          pos = (i + 1);
+          i = localObject1[i];
+          return i & 0xFF;
+        }
+        return -1;
+      }
+      throw streamClosed();
+    }
+    finally {}
+  }
+  
+  public int read(@NonNull byte[] paramArrayOfByte, int paramInt1, int paramInt2)
+    throws IOException
+  {
+    try
+    {
+      Object localObject1 = buf;
+      if (localObject1 != null)
+      {
+        if (paramInt2 == 0) {
+          return 0;
+        }
+        InputStream localInputStream = in;
+        if (localInputStream != null)
+        {
+          int i;
+          int j;
+          if (pos < count)
+          {
+            if (count - pos >= paramInt2) {
+              i = paramInt2;
+            } else {
+              i = count - pos;
+            }
+            System.arraycopy(localObject1, pos, paramArrayOfByte, paramInt1, i);
+            pos += i;
+            if (i != paramInt2)
+            {
+              j = localInputStream.available();
+              if (j != 0)
+              {
+                j = paramInt1 + i;
+                paramInt1 = paramInt2 - i;
+                i = j;
+                break label150;
+              }
+            }
+            return i;
+          }
+          else
+          {
+            j = paramInt2;
+            i = paramInt1;
+            paramInt1 = j;
+          }
+          for (;;)
+          {
+            label150:
+            int k = markpos;
+            j = -1;
+            if ((k == -1) && (paramInt1 >= localObject1.length))
+            {
+              int m = localInputStream.read(paramArrayOfByte, i, paramInt1);
+              k = m;
+              if (m == -1)
+              {
+                if (paramInt1 != paramInt2) {
+                  j = paramInt2 - paramInt1;
+                }
+                return j;
+              }
+            }
+            else
+            {
+              k = fillbuf(localInputStream, (byte[])localObject1);
+              if (k == -1)
+              {
+                if (paramInt1 != paramInt2) {
+                  j = paramInt2 - paramInt1;
+                }
+                return j;
+              }
+              Object localObject2 = localObject1;
+              if (localObject1 != buf)
+              {
+                localObject2 = buf;
+                if (localObject2 == null) {
+                  throw streamClosed();
+                }
+              }
+              if (count - pos >= paramInt1) {
+                j = paramInt1;
+              } else {
+                j = count - pos;
+              }
+              System.arraycopy(localObject2, pos, paramArrayOfByte, i, j);
+              pos += j;
+              k = j;
+              localObject1 = localObject2;
+            }
+            paramInt1 -= k;
+            if (paramInt1 == 0) {
+              return paramInt2;
+            }
+            j = localInputStream.available();
+            if (j == 0) {
+              return paramInt2 - paramInt1;
+            }
+            i += k;
+          }
+        }
+        throw streamClosed();
+      }
+      throw streamClosed();
+    }
+    finally {}
+  }
+  
+  public void release()
+  {
+    try
+    {
+      if (buf != null)
+      {
+        byteArrayPool.put(buf);
+        buf = null;
+      }
+      return;
+    }
+    finally
+    {
+      localObject = finally;
+      throw localObject;
+    }
+  }
+  
+  public void reset()
+    throws IOException
+  {
+    try
+    {
+      if (buf != null)
+      {
+        if (-1 != markpos)
+        {
+          pos = markpos;
+          return;
+        }
+        StringBuilder localStringBuilder = new StringBuilder();
+        localStringBuilder.append("Mark has been invalidated, pos: ");
+        localStringBuilder.append(pos);
+        localStringBuilder.append(" markLimit: ");
+        localStringBuilder.append(marklimit);
+        throw new InvalidMarkException(localStringBuilder.toString());
+      }
+      throw new IOException("Stream is closed");
+    }
+    finally {}
+  }
+  
+  public long skip(long paramLong)
+    throws IOException
+  {
+    if (paramLong < 1L) {
+      return 0L;
+    }
+    try
+    {
+      byte[] arrayOfByte = buf;
+      if (arrayOfByte != null)
+      {
+        InputStream localInputStream = in;
+        if (localInputStream != null)
+        {
+          if (count - pos >= paramLong)
+          {
+            pos = ((int)(pos + paramLong));
+            return paramLong;
+          }
+          long l1 = count - pos;
+          pos = count;
+          if ((markpos != -1) && (paramLong <= marklimit))
+          {
+            int i = fillbuf(localInputStream, arrayOfByte);
+            if (i == -1) {
+              return l1;
+            }
+            if (count - pos >= paramLong - l1)
+            {
+              pos = ((int)(pos + paramLong - l1));
+              return paramLong;
+            }
+            paramLong = count;
+            long l2 = pos;
+            pos = count;
+            return l1 + paramLong - l2;
+          }
+          paramLong = localInputStream.skip(paramLong - l1);
+          return l1 + paramLong;
+        }
+        throw streamClosed();
+      }
+      throw streamClosed();
+    }
+    finally {}
+  }
+  
+  static class InvalidMarkException
+    extends IOException
+  {
+    private static final long serialVersionUID = -4338378848813561757L;
+    
+    InvalidMarkException(String paramString)
+    {
+      super();
+    }
+  }
+}

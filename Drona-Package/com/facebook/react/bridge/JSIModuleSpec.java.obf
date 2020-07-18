@@ -1,0 +1,8 @@
+package com.facebook.react.bridge;
+
+public abstract interface JSIModuleSpec<T extends JSIModule>
+{
+  public abstract JSIModuleProvider<T> getJSIModuleProvider();
+  
+  public abstract JSIModuleType getJSIModuleType();
+}

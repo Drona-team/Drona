@@ -1,0 +1,276 @@
+package com.google.android.gms.ads;
+
+import android.os.RemoteException;
+import androidx.annotation.Nullable;
+import com.google.android.gms.common.annotation.KeepForSdk;
+import com.google.android.gms.common.internal.Preconditions;
+import com.google.android.gms.internal.ads.zzaar;
+import com.google.android.gms.internal.ads.zzacc;
+import com.google.android.gms.internal.ads.zzard;
+import com.google.android.gms.internal.ads.zzbad;
+import javax.annotation.concurrent.GuardedBy;
+
+@zzard
+public final class VideoController
+{
+  @KeepForSdk
+  public static final int PLAYBACK_STATE_ENDED = 3;
+  @KeepForSdk
+  public static final int PLAYBACK_STATE_PAUSED = 2;
+  @KeepForSdk
+  public static final int PLAYBACK_STATE_PLAYING = 1;
+  @KeepForSdk
+  public static final int PLAYBACK_STATE_READY = 5;
+  @KeepForSdk
+  public static final int PLAYBACK_STATE_UNKNOWN = 0;
+  private final Object lock = new Object();
+  @Nullable
+  @GuardedBy("lock")
+  private zzaar zzaav;
+  @Nullable
+  @GuardedBy("lock")
+  private VideoLifecycleCallbacks zzaaw;
+  
+  public VideoController() {}
+  
+  public final float getAspectRatio()
+  {
+    synchronized (lock)
+    {
+      if (zzaav == null) {
+        return 0.0F;
+      }
+      try
+      {
+        float f = zzaav.getAspectRatio();
+        return f;
+      }
+      catch (RemoteException localRemoteException)
+      {
+        zzbad.zzc("Unable to call getAspectRatio on video controller.", localRemoteException);
+        return 0.0F;
+      }
+    }
+  }
+  
+  @KeepForSdk
+  public final int getPlaybackState()
+  {
+    synchronized (lock)
+    {
+      if (zzaav == null) {
+        return 0;
+      }
+      try
+      {
+        int i = zzaav.getPlaybackState();
+        return i;
+      }
+      catch (RemoteException localRemoteException)
+      {
+        zzbad.zzc("Unable to call getPlaybackState on video controller.", localRemoteException);
+        return 0;
+      }
+    }
+  }
+  
+  @Nullable
+  public final VideoLifecycleCallbacks getVideoLifecycleCallbacks()
+  {
+    synchronized (lock)
+    {
+      VideoLifecycleCallbacks localVideoLifecycleCallbacks = zzaaw;
+      return localVideoLifecycleCallbacks;
+    }
+  }
+  
+  public final boolean hasVideoContent()
+  {
+    for (;;)
+    {
+      synchronized (lock)
+      {
+        if (zzaav != null)
+        {
+          bool = true;
+          return bool;
+        }
+      }
+      boolean bool = false;
+    }
+  }
+  
+  public final boolean isClickToExpandEnabled()
+  {
+    synchronized (lock)
+    {
+      if (zzaav == null) {
+        return false;
+      }
+      try
+      {
+        boolean bool = zzaav.isClickToExpandEnabled();
+        return bool;
+      }
+      catch (RemoteException localRemoteException)
+      {
+        zzbad.zzc("Unable to call isClickToExpandEnabled.", localRemoteException);
+        return false;
+      }
+    }
+  }
+  
+  public final boolean isCustomControlsEnabled()
+  {
+    synchronized (lock)
+    {
+      if (zzaav == null) {
+        return false;
+      }
+      try
+      {
+        boolean bool = zzaav.isCustomControlsEnabled();
+        return bool;
+      }
+      catch (RemoteException localRemoteException)
+      {
+        zzbad.zzc("Unable to call isUsingCustomPlayerControls.", localRemoteException);
+        return false;
+      }
+    }
+  }
+  
+  public final boolean isMuted()
+  {
+    synchronized (lock)
+    {
+      if (zzaav == null) {
+        return true;
+      }
+      try
+      {
+        boolean bool = zzaav.isMuted();
+        return bool;
+      }
+      catch (RemoteException localRemoteException)
+      {
+        zzbad.zzc("Unable to call isMuted on video controller.", localRemoteException);
+        return true;
+      }
+    }
+  }
+  
+  public final void mute(boolean paramBoolean)
+  {
+    synchronized (lock)
+    {
+      if (zzaav == null) {
+        return;
+      }
+      try
+      {
+        zzaav.mute(paramBoolean);
+      }
+      catch (RemoteException localRemoteException)
+      {
+        zzbad.zzc("Unable to call mute on video controller.", localRemoteException);
+      }
+      return;
+    }
+  }
+  
+  public final void pause()
+  {
+    synchronized (lock)
+    {
+      if (zzaav == null) {
+        return;
+      }
+      try
+      {
+        zzaav.pause();
+      }
+      catch (RemoteException localRemoteException)
+      {
+        zzbad.zzc("Unable to call pause on video controller.", localRemoteException);
+      }
+      return;
+    }
+  }
+  
+  public final void play()
+  {
+    synchronized (lock)
+    {
+      if (zzaav == null) {
+        return;
+      }
+      try
+      {
+        zzaav.play();
+      }
+      catch (RemoteException localRemoteException)
+      {
+        zzbad.zzc("Unable to call play on video controller.", localRemoteException);
+      }
+      return;
+    }
+  }
+  
+  public final void setVideoLifecycleCallbacks(VideoLifecycleCallbacks paramVideoLifecycleCallbacks)
+  {
+    Preconditions.checkNotNull(paramVideoLifecycleCallbacks, "VideoLifecycleCallbacks may not be null.");
+    synchronized (lock)
+    {
+      zzaaw = paramVideoLifecycleCallbacks;
+      if (zzaav == null) {
+        return;
+      }
+      try
+      {
+        zzaav.zza(new zzacc(paramVideoLifecycleCallbacks));
+      }
+      catch (RemoteException paramVideoLifecycleCallbacks)
+      {
+        zzbad.zzc("Unable to call setVideoLifecycleCallbacks on video controller.", paramVideoLifecycleCallbacks);
+      }
+      return;
+    }
+  }
+  
+  public final void zza(zzaar paramZzaar)
+  {
+    synchronized (lock)
+    {
+      zzaav = paramZzaar;
+      if (zzaaw != null) {
+        setVideoLifecycleCallbacks(zzaaw);
+      }
+      return;
+    }
+  }
+  
+  public final zzaar zzdh()
+  {
+    synchronized (lock)
+    {
+      zzaar localZzaar = zzaav;
+      return localZzaar;
+    }
+  }
+  
+  public static class VideoLifecycleCallbacks
+  {
+    public VideoLifecycleCallbacks() {}
+    
+    public void onVideoEnd() {}
+    
+    public void onVideoMute(boolean paramBoolean) {}
+    
+    public void onVideoPause() {}
+    
+    public void onVideoPlay() {}
+    
+    public void onVideoStart() {}
+  }
+}

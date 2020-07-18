@@ -1,0 +1,102 @@
+package bleshadow.dagger.internal;
+
+import bleshadow.javax.inject.Provider;
+import java.lang.ref.WeakReference;
+
+@GwtIncompatible
+public final class ReferenceReleasingProvider<T>
+  implements Provider<T>
+{
+  private static final Object NULL = new Object();
+  private final Provider<T> provider;
+  private volatile Object strongReference;
+  private volatile WeakReference<T> weakReference;
+  
+  private ReferenceReleasingProvider(Provider<T> paramProvider)
+  {
+    provider = paramProvider;
+  }
+  
+  public static <T> ReferenceReleasingProvider<T> create(Provider<T> paramProvider, ReferenceReleasingProviderManager paramReferenceReleasingProviderManager)
+  {
+    paramProvider = new ReferenceReleasingProvider((Provider)Preconditions.checkNotNull(paramProvider));
+    paramReferenceReleasingProviderManager.addProvider(paramProvider);
+    return paramProvider;
+  }
+  
+  private Object currentValue()
+  {
+    Object localObject = strongReference;
+    if (localObject != null) {
+      return localObject;
+    }
+    if (weakReference != null) {
+      return weakReference.get();
+    }
+    return null;
+  }
+  
+  public T get()
+  {
+    Object localObject3 = currentValue();
+    Object localObject1 = localObject3;
+    if (localObject3 == null) {
+      try
+      {
+        localObject3 = currentValue();
+        localObject1 = localObject3;
+        if (localObject3 == null)
+        {
+          localObject3 = provider.get();
+          localObject1 = localObject3;
+          if (localObject3 == null) {
+            localObject1 = NULL;
+          }
+          strongReference = localObject1;
+        }
+      }
+      finally {}
+    }
+    localObject3 = localObject2;
+    if (localObject2 == NULL) {
+      localObject3 = null;
+    }
+    return localObject3;
+  }
+  
+  public void releaseStrongReference()
+  {
+    Object localObject1 = strongReference;
+    if ((localObject1 != null) && (localObject1 != NULL)) {
+      try
+      {
+        weakReference = new WeakReference(localObject1);
+        strongReference = null;
+        return;
+      }
+      finally {}
+    }
+  }
+  
+  public void restoreStrongReference()
+  {
+    Object localObject1 = strongReference;
+    if ((weakReference != null) && (localObject1 == null)) {
+      try
+      {
+        localObject1 = strongReference;
+        if ((weakReference != null) && (localObject1 == null))
+        {
+          localObject1 = weakReference.get();
+          if (localObject1 != null)
+          {
+            strongReference = localObject1;
+            weakReference = null;
+          }
+        }
+        return;
+      }
+      finally {}
+    }
+  }
+}

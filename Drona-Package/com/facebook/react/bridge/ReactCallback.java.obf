@@ -1,0 +1,16 @@
+package com.facebook.react.bridge;
+
+import com.facebook.proguard.annotations.DoNotStrip;
+
+@DoNotStrip
+abstract interface ReactCallback
+{
+  @DoNotStrip
+  public abstract void decrementPendingJSCalls();
+  
+  @DoNotStrip
+  public abstract void incrementPendingJSCalls();
+  
+  @DoNotStrip
+  public abstract void onBatchComplete();
+}

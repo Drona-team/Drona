@@ -1,0 +1,76 @@
+package com.airbnb.android.react.maps;
+
+import android.content.res.Resources;
+import android.os.Build.VERSION;
+import android.util.DisplayMetrics;
+import android.view.Display;
+import android.view.WindowManager;
+import com.facebook.react.bridge.ReactApplicationContext;
+import com.facebook.react.bridge.ReadableMap;
+import com.facebook.react.uimanager.ThemedReactContext;
+import com.facebook.react.uimanager.ViewGroupManager;
+import com.facebook.react.uimanager.annotations.ReactProp;
+import com.google.android.gms.maps.model.LatLng;
+
+public class AirMapCircleManager
+  extends ViewGroupManager<AirMapCircle>
+{
+  private final DisplayMetrics metrics;
+  
+  public AirMapCircleManager(ReactApplicationContext paramReactApplicationContext)
+  {
+    if (Build.VERSION.SDK_INT >= 17)
+    {
+      metrics = new DisplayMetrics();
+      ((WindowManager)paramReactApplicationContext.getSystemService("window")).getDefaultDisplay().getRealMetrics(metrics);
+      return;
+    }
+    metrics = paramReactApplicationContext.getResources().getDisplayMetrics();
+  }
+  
+  public AirMapCircle createViewInstance(ThemedReactContext paramThemedReactContext)
+  {
+    return new AirMapCircle(paramThemedReactContext);
+  }
+  
+  public String getName()
+  {
+    return "AIRMapCircle";
+  }
+  
+  @ReactProp(name="center")
+  public void setCenter(AirMapCircle paramAirMapCircle, ReadableMap paramReadableMap)
+  {
+    paramAirMapCircle.setCenter(new LatLng(paramReadableMap.getDouble("latitude"), paramReadableMap.getDouble("longitude")));
+  }
+  
+  @ReactProp(customType="Color", defaultInt=-65536, name="fillColor")
+  public void setFillColor(AirMapCircle paramAirMapCircle, int paramInt)
+  {
+    paramAirMapCircle.setFillColor(paramInt);
+  }
+  
+  @ReactProp(defaultDouble=0.0D, name="radius")
+  public void setRadius(AirMapCircle paramAirMapCircle, double paramDouble)
+  {
+    paramAirMapCircle.setRadius(paramDouble);
+  }
+  
+  @ReactProp(customType="Color", defaultInt=-65536, name="strokeColor")
+  public void setStrokeColor(AirMapCircle paramAirMapCircle, int paramInt)
+  {
+    paramAirMapCircle.setStrokeColor(paramInt);
+  }
+  
+  @ReactProp(defaultFloat=1.0F, name="strokeWidth")
+  public void setStrokeWidth(AirMapCircle paramAirMapCircle, float paramFloat)
+  {
+    paramAirMapCircle.setStrokeWidth(metrics.density * paramFloat);
+  }
+  
+  @ReactProp(defaultFloat=1.0F, name="zIndex")
+  public void setZIndex(AirMapCircle paramAirMapCircle, float paramFloat)
+  {
+    paramAirMapCircle.setZIndex(paramFloat);
+  }
+}

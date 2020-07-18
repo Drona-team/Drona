@@ -1,0 +1,9 @@
+package com.android.billingclient.api;
+
+import androidx.annotation.Nullable;
+import java.util.List;
+
+public abstract interface PurchasesUpdatedListener
+{
+  public abstract void onPurchasesUpdated(BillingResult paramBillingResult, @Nullable List<Purchase> paramList);
+}

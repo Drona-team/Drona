@@ -1,0 +1,228 @@
+package com.google.android.gms.clearcut;
+
+import android.content.Context;
+import android.content.pm.PackageInfo;
+import android.content.pm.PackageManager;
+import android.content.pm.PackageManager.NameNotFoundException;
+import android.util.Log;
+import com.google.android.gms.common.annotation.KeepForSdk;
+import com.google.android.gms.common.api.Api;
+import com.google.android.gms.common.api.Api.AbstractClientBuilder;
+import com.google.android.gms.common.api.Api.ApiOptions.NoOptions;
+import com.google.android.gms.common.api.Api.ClientKey;
+import com.google.android.gms.common.api.PendingResults;
+import com.google.android.gms.common.api.Status;
+import com.google.android.gms.common.internal.Preconditions;
+import com.google.android.gms.common.util.Clock;
+import com.google.android.gms.common.util.DefaultClock;
+import com.google.android.gms.common.util.VisibleForTesting;
+import com.google.android.gms.internal.clearcut.zzaa;
+import com.google.android.gms.internal.clearcut.zzge.zzv.zzb;
+import com.google.android.gms.internal.clearcut.zzha;
+import com.google.android.gms.internal.clearcut.zzj;
+import com.google.android.gms.internal.clearcut.zzp;
+import com.google.android.gms.internal.clearcut.zzr;
+import com.google.android.gms.phenotype.ExperimentTokens;
+import java.util.ArrayList;
+import java.util.TimeZone;
+import javax.annotation.Nullable;
+
+@KeepForSdk
+public final class ClearcutLogger
+{
+  @Deprecated
+  public static final Api<Api.ApiOptions.NoOptions> API = new Api("ClearcutLogger.API", CLIENT_BUILDER, CLIENT_KEY);
+  private static final Api.AbstractClientBuilder<zzj, Api.ApiOptions.NoOptions> CLIENT_BUILDER;
+  private static final Api.ClientKey<zzj> CLIENT_KEY = new Api.ClientKey();
+  private static final ExperimentTokens[] zze = new ExperimentTokens[0];
+  private static final String[] zzf = new String[0];
+  private static final byte[][] zzg = new byte[0][];
+  private final String packageName;
+  private final Context zzh;
+  private final int zzi;
+  private String zzj;
+  private int zzk = -1;
+  private String zzl;
+  private String zzm;
+  private final boolean zzn;
+  private zzge.zzv.zzb zzo = zzge.zzv.zzb.zzbhk;
+  private final zzb zzp;
+  private final Clock zzq;
+  private zzc zzr;
+  private final zza zzs;
+  
+  static
+  {
+    CLIENT_BUILDER = new zza();
+  }
+  
+  @VisibleForTesting
+  private ClearcutLogger(Context paramContext, int paramInt, String paramString1, String paramString2, String paramString3, boolean paramBoolean, zzb paramZzb, Clock paramClock, zzc paramZzc, zza paramZza)
+  {
+    zzh = paramContext;
+    packageName = paramContext.getPackageName();
+    zzi = zza(paramContext);
+    zzk = -1;
+    zzj = paramString1;
+    zzl = paramString2;
+    zzm = null;
+    zzn = paramBoolean;
+    zzp = paramZzb;
+    zzq = paramClock;
+    zzr = new zzc();
+    zzo = zzge.zzv.zzb.zzbhk;
+    zzs = paramZza;
+    if (paramBoolean)
+    {
+      if (paramString2 == null) {
+        paramBoolean = true;
+      } else {
+        paramBoolean = false;
+      }
+      Preconditions.checkArgument(paramBoolean, "can't be anonymous with an upload account");
+    }
+  }
+  
+  @KeepForSdk
+  public ClearcutLogger(Context paramContext, String paramString1, @Nullable String paramString2)
+  {
+    this(paramContext, -1, paramString1, paramString2, null, false, com.google.android.gms.internal.clearcut.zze.zzb(paramContext), DefaultClock.getInstance(), null, new zzp(paramContext));
+  }
+  
+  @KeepForSdk
+  public static ClearcutLogger anonymousLogger(Context paramContext, String paramString)
+  {
+    return new ClearcutLogger(paramContext, -1, paramString, null, null, true, com.google.android.gms.internal.clearcut.zze.zzb(paramContext), DefaultClock.getInstance(), null, new zzp(paramContext));
+  }
+  
+  private static int zza(Context paramContext)
+  {
+    try
+    {
+      int i = getPackageManagergetPackageInfogetPackageName0versionCode;
+      return i;
+    }
+    catch (PackageManager.NameNotFoundException paramContext)
+    {
+      Log.wtf("ClearcutLogger", "This can't happen.", paramContext);
+    }
+    return 0;
+  }
+  
+  private static int[] zza(ArrayList<Integer> paramArrayList)
+  {
+    if (paramArrayList == null) {
+      return null;
+    }
+    int[] arrayOfInt = new int[paramArrayList.size()];
+    paramArrayList = (ArrayList)paramArrayList;
+    int k = paramArrayList.size();
+    int j = 0;
+    int i = 0;
+    while (j < k)
+    {
+      Object localObject = paramArrayList.get(j);
+      j += 1;
+      arrayOfInt[i] = ((Integer)localObject).intValue();
+      i += 1;
+    }
+    return arrayOfInt;
+  }
+  
+  @KeepForSdk
+  public final LogEventBuilder newEvent(@Nullable byte[] paramArrayOfByte)
+  {
+    return new LogEventBuilder(paramArrayOfByte, null);
+  }
+  
+  public class LogEventBuilder
+  {
+    private final zzha zzaa;
+    private boolean zzab;
+    private String zzj = ClearcutLogger.zzb(ClearcutLogger.this);
+    private int zzk = ClearcutLogger.zza(ClearcutLogger.this);
+    private String zzl = ClearcutLogger.zzc(ClearcutLogger.this);
+    private String zzm;
+    private zzge.zzv.zzb zzo;
+    private final ClearcutLogger.zzb zzt;
+    private ArrayList<Integer> zzu;
+    private ArrayList<String> zzv;
+    private ArrayList<Integer> zzw;
+    private ArrayList<ExperimentTokens> zzx;
+    private ArrayList<byte[]> zzy;
+    private boolean zzz;
+    
+    private LogEventBuilder(byte[] paramArrayOfByte)
+    {
+      this(paramArrayOfByte, null);
+    }
+    
+    private LogEventBuilder(byte[] paramArrayOfByte, ClearcutLogger.zzb paramZzb)
+    {
+      paramZzb = ClearcutLogger.this;
+      zzm = null;
+      zzo = ClearcutLogger.zzd(ClearcutLogger.this);
+      zzu = null;
+      zzv = null;
+      zzw = null;
+      zzx = null;
+      zzy = null;
+      zzz = true;
+      zzaa = new zzha();
+      zzab = false;
+      zzl = ClearcutLogger.zzc(ClearcutLogger.this);
+      zzm = null;
+      zzaa.zzbkc = zzaa.zze(ClearcutLogger.zze(ClearcutLogger.this));
+      zzaa.zzbjf = ClearcutLogger.zzf(ClearcutLogger.this).currentTimeMillis();
+      zzaa.zzbjg = ClearcutLogger.zzf(ClearcutLogger.this).elapsedRealtime();
+      paramZzb = zzaa;
+      ClearcutLogger.zzg(ClearcutLogger.this);
+      long l = zzaa.zzbjf;
+      zzbju = (TimeZone.getDefault().getOffset(l) / 1000);
+      if (paramArrayOfByte != null) {
+        zzaa.zzbjp = paramArrayOfByte;
+      }
+      zzt = null;
+    }
+    
+    @KeepForSdk
+    public void log()
+    {
+      if (!zzab)
+      {
+        zzab = true;
+        zze localZze = new zze(new zzr(ClearcutLogger.zzi(ClearcutLogger.this), ClearcutLogger.zzj(ClearcutLogger.this), zzk, zzj, zzl, zzm, ClearcutLogger.zzh(ClearcutLogger.this), zzo), zzaa, null, null, ClearcutLogger.zzb(null), null, ClearcutLogger.zzb(null), null, null, zzz);
+        if (ClearcutLogger.zzk(ClearcutLogger.this).zza(localZze))
+        {
+          ClearcutLogger.zzl(ClearcutLogger.this).zzb(localZze);
+          return;
+        }
+        PendingResults.immediatePendingResult(Status.RESULT_SUCCESS, null);
+        return;
+      }
+      throw new IllegalStateException("do not reuse LogEventBuilder");
+    }
+    
+    @KeepForSdk
+    public LogEventBuilder setEventCode(int paramInt)
+    {
+      zzaa.zzbji = paramInt;
+      return this;
+    }
+  }
+  
+  public static abstract interface zza
+  {
+    public abstract boolean zza(zze paramZze);
+  }
+  
+  public static abstract interface zzb
+  {
+    public abstract byte[] zza();
+  }
+  
+  public static final class zzc
+  {
+    public zzc() {}
+  }
+}

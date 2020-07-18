@@ -1,0 +1,18 @@
+package com.facebook.imagepipeline.platform;
+
+import android.annotation.TargetApi;
+import android.graphics.Bitmap.Config;
+import com.facebook.soloader.DoNotOptimize;
+
+@DoNotOptimize
+class PreverificationHelper
+{
+  PreverificationHelper() {}
+  
+  @TargetApi(26)
+  @DoNotOptimize
+  boolean shouldUseHardwareBitmapConfig(Bitmap.Config paramConfig)
+  {
+    return paramConfig == Bitmap.Config.HARDWARE;
+  }
+}

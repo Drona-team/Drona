@@ -1,0 +1,389 @@
+package ai.api.services;
+
+import ai.api.AIServiceException;
+import ai.api.RequestExtras;
+import ai.api.android.AIConfiguration;
+import ai.api.android.AIDataService;
+import ai.api.android.AIService;
+import ai.api.model.AIContext;
+import ai.api.model.AIError;
+import ai.api.model.AIResponse;
+import ai.api.util.VoiceActivityDetector;
+import ai.api.util.VoiceActivityDetector.SpeechEventsListener;
+import android.content.Context;
+import android.content.res.AssetFileDescriptor;
+import android.media.AudioRecord;
+import android.media.MediaPlayer;
+import android.media.MediaPlayer.OnCompletionListener;
+import android.media.MediaPlayer.OnErrorListener;
+import android.os.AsyncTask;
+import android.util.Log;
+import androidx.annotation.NonNull;
+import java.io.IOException;
+import java.io.InputStream;
+import java.nio.ByteBuffer;
+import java.nio.ByteOrder;
+import java.nio.ShortBuffer;
+import java.util.List;
+import java.util.concurrent.ExecutorService;
+import java.util.concurrent.Executors;
+
+@Deprecated
+public class SpeaktoitRecognitionServiceImpl
+  extends AIService
+  implements VoiceActivityDetector.SpeechEventsListener, MediaPlayer.OnCompletionListener, MediaPlayer.OnErrorListener
+{
+  private static final int AUDIO_FORMAT = 2;
+  private static final int CHANNEL_CONFIG = 16;
+  private static final int SAMPLE_RATE_IN_HZ = 16000;
+  public static final String TAG = "ai.api.services.SpeaktoitRecognitionServiceImpl";
+  private AudioRecord audioRecord;
+  private final ExecutorService eventsExecutor = Executors.newSingleThreadExecutor();
+  private RequestExtras extras;
+  private volatile boolean isRecording = false;
+  private MediaPlayer mediaPlayer;
+  private RecognizeTask recognizeTask;
+  private final Object recognizerLock = new Object();
+  private final VoiceActivityDetector vad = new VoiceActivityDetector(16000);
+  
+  public SpeaktoitRecognitionServiceImpl(Context paramContext, AIConfiguration paramAIConfiguration)
+  {
+    super(paramAIConfiguration, paramContext);
+    init();
+  }
+  
+  private void init()
+  {
+    synchronized (recognizerLock)
+    {
+      audioRecord = new AudioRecord(1, 16000, 16, 2, AudioRecord.getMinBufferSize(16000, 16, 2));
+      vad.setEnabled(config.isVoiceActivityDetectionEnabled());
+      vad.setSpeechListener(this);
+      mediaPlayer = new MediaPlayer();
+      mediaPlayer.setOnErrorListener(this);
+      mediaPlayer.setOnCompletionListener(this);
+      return;
+    }
+  }
+  
+  private boolean playSound(AssetFileDescriptor paramAssetFileDescriptor)
+  {
+    try
+    {
+      mediaPlayer.stop();
+      mediaPlayer.reset();
+      mediaPlayer.setDataSource(paramAssetFileDescriptor.getFileDescriptor(), paramAssetFileDescriptor.getStartOffset(), paramAssetFileDescriptor.getLength());
+      mediaPlayer.prepare();
+      mediaPlayer.start();
+      return true;
+    }
+    catch (IOException paramAssetFileDescriptor)
+    {
+      for (;;) {}
+    }
+    return false;
+  }
+  
+  private void startRecording(RequestExtras paramRequestExtras)
+  {
+    vad.reset();
+    audioRecord.startRecording();
+    onListeningStarted();
+    recognizeTask = new RecognizeTask(new RecorderStream(audioRecord, null), paramRequestExtras, null);
+    recognizeTask.execute(new Void[0]);
+  }
+  
+  public void cancel()
+  {
+    synchronized (recognizerLock)
+    {
+      if (isRecording)
+      {
+        audioRecord.stop();
+        isRecording = false;
+        AssetFileDescriptor localAssetFileDescriptor = config.getRecognizerCancelSound();
+        if (localAssetFileDescriptor != null) {
+          playSound(localAssetFileDescriptor);
+        }
+      }
+      if (recognizeTask != null) {
+        recognizeTask.cancel(true);
+      }
+      onListeningCancelled();
+      return;
+    }
+  }
+  
+  public void onCompletion(MediaPlayer paramMediaPlayer)
+  {
+    if (isRecording) {
+      startRecording(extras);
+    }
+  }
+  
+  public boolean onError(MediaPlayer paramMediaPlayer, int paramInt1, int paramInt2)
+  {
+    if (isRecording) {
+      startRecording(extras);
+    }
+    return false;
+  }
+  
+  public void onSpeechBegin() {}
+  
+  public void onSpeechCancel()
+  {
+    eventsExecutor.submit(new Runnable()
+    {
+      public void run()
+      {
+        cancel();
+      }
+    });
+  }
+  
+  public void onSpeechEnd()
+  {
+    eventsExecutor.submit(new Runnable()
+    {
+      public void run()
+      {
+        stopListening();
+      }
+    });
+  }
+  
+  public void pause()
+  {
+    synchronized (recognizerLock)
+    {
+      if (isRecording)
+      {
+        audioRecord.stop();
+        isRecording = false;
+      }
+      audioRecord.release();
+      audioRecord = null;
+      mediaPlayer.stop();
+      mediaPlayer.release();
+      mediaPlayer = null;
+      return;
+    }
+  }
+  
+  public void resume()
+  {
+    init();
+  }
+  
+  public void startListening()
+  {
+    startListening(new RequestExtras());
+  }
+  
+  public void startListening(RequestExtras paramRequestExtras)
+  {
+    synchronized (recognizerLock)
+    {
+      if (!isRecording)
+      {
+        if (!checkPermissions())
+        {
+          onError(new AIError("RECORD_AUDIO permission is denied. Please request permission from user."));
+          return;
+        }
+        isRecording = true;
+        extras = paramRequestExtras;
+        paramRequestExtras = config.getRecognizerStartSound();
+        if (paramRequestExtras != null)
+        {
+          if (!playSound(paramRequestExtras)) {
+            startRecording(extras);
+          }
+        }
+        else {
+          startRecording(extras);
+        }
+      }
+      else
+      {
+        Log.w(TAG, "Trying start listening when it already active");
+      }
+      return;
+    }
+  }
+  
+  public void startListening(List<AIContext> paramList)
+  {
+    startListening(new RequestExtras(paramList, null));
+  }
+  
+  public void stopListening()
+  {
+    synchronized (recognizerLock)
+    {
+      boolean bool = isRecording;
+      if (bool) {}
+      try
+      {
+        audioRecord.stop();
+        isRecording = false;
+        AssetFileDescriptor localAssetFileDescriptor = config.getRecognizerStopSound();
+        if (localAssetFileDescriptor != null) {
+          playSound(localAssetFileDescriptor);
+        }
+        onListeningFinished();
+      }
+      catch (IllegalStateException localIllegalStateException)
+      {
+        for (;;) {}
+      }
+      Log.w(TAG, "Attempt to stop audioRecord when it is stopped");
+      return;
+    }
+  }
+  
+  private class RecognizeTask
+    extends AsyncTask<Void, Void, AIResponse>
+  {
+    private AIError aiError;
+    private final SpeaktoitRecognitionServiceImpl.RecorderStream recorderStream;
+    private final RequestExtras requestExtras;
+    
+    private RecognizeTask(SpeaktoitRecognitionServiceImpl.RecorderStream paramRecorderStream, RequestExtras paramRequestExtras)
+    {
+      recorderStream = paramRecorderStream;
+      requestExtras = paramRequestExtras;
+    }
+    
+    protected AIResponse doInBackground(Void... paramVarArgs)
+    {
+      try
+      {
+        paramVarArgs = aiDataService.voiceRequest(recorderStream, requestExtras);
+        return paramVarArgs;
+      }
+      catch (AIServiceException paramVarArgs)
+      {
+        aiError = new AIError(paramVarArgs);
+      }
+      return null;
+    }
+    
+    protected void onPostExecute(AIResponse paramAIResponse)
+    {
+      if (isCancelled()) {
+        return;
+      }
+      if (paramAIResponse != null)
+      {
+        onResult(paramAIResponse);
+        return;
+      }
+      cancel();
+      onError(aiError);
+    }
+  }
+  
+  private class RecorderStream
+    extends InputStream
+  {
+    float alignment = 0.0F;
+    private final AudioRecord audioRecord;
+    private byte[] bytes;
+    private final Object bytesLock = new Object();
+    float count = 1.0F;
+    private final float dbLevel = (float)Math.pow(10.0D, -0.05D);
+    int extent;
+    int max = 0;
+    int min = 0;
+    int offset = 0;
+    
+    private RecorderStream(AudioRecord paramAudioRecord)
+    {
+      audioRecord = paramAudioRecord;
+    }
+    
+    private void normalize(@NonNull byte[] paramArrayOfByte, int paramInt)
+    {
+      int k = 4800 - offset;
+      if (paramInt >= k)
+      {
+        paramArrayOfByte = ByteBuffer.wrap(paramArrayOfByte, k, paramInt - k).order(ByteOrder.LITTLE_ENDIAN);
+        ShortBuffer localShortBuffer = paramArrayOfByte.asShortBuffer();
+        int j = 0;
+        int i = 0;
+        while (i < localShortBuffer.limit())
+        {
+          int m = localShortBuffer.get(i);
+          max = Math.max(max, m);
+          min = Math.min(min, m);
+          alignment = ((count - 1.0F) / count * alignment + m / count);
+          count += 1.0F;
+          i += 1;
+        }
+        extent = Math.max(Math.abs(max), Math.abs(min));
+        float f = dbLevel * 32767.0F / extent;
+        i = j;
+        while (i < localShortBuffer.limit())
+        {
+          paramArrayOfByte.putShort((short)(int)((localShortBuffer.get(i) - alignment) * f));
+          i += 1;
+        }
+      }
+      offset += Math.min(paramInt, k);
+    }
+    
+    public int read()
+      throws IOException
+    {
+      byte[] arrayOfByte = new byte[1];
+      audioRecord.read(arrayOfByte, 0, 1);
+      return arrayOfByte[0];
+    }
+    
+    public int read(@NonNull byte[] paramArrayOfByte, int paramInt1, int paramInt2)
+      throws IOException
+    {
+      paramInt2 = audioRecord.read(paramArrayOfByte, paramInt1, paramInt2);
+      if (paramInt2 > 0) {}
+      for (;;)
+      {
+        synchronized (bytesLock)
+        {
+          if (config.isNormalizeInputSound()) {
+            normalize(paramArrayOfByte, paramInt2);
+          }
+          byte[] arrayOfByte = bytes;
+          if (arrayOfByte == null) {
+            break label215;
+          }
+          paramInt1 = arrayOfByte.length;
+          bytes = new byte[paramInt1 + paramInt2];
+          if (paramInt1 > 0) {
+            System.arraycopy(arrayOfByte, 0, bytes, 0, paramInt1);
+          }
+          System.arraycopy(paramArrayOfByte, 0, bytes, paramInt1, paramInt2);
+          if (bytes.length >= 320)
+          {
+            paramArrayOfByte = new byte['?'];
+            System.arraycopy(bytes, 0, paramArrayOfByte, 0, 320);
+            vad.processBuffer(paramArrayOfByte, 320);
+            paramArrayOfByte = bytes;
+            paramInt1 = paramArrayOfByte.length - 320;
+            bytes = new byte[paramInt1];
+            System.arraycopy(paramArrayOfByte, 320, bytes, 0, paramInt1);
+            continue;
+          }
+          onAudioLevelChanged((float)vad.calculateRms());
+        }
+        if (paramInt2 != 0) {
+          return paramInt2;
+        }
+        return -3;
+        label215:
+        paramInt1 = 0;
+      }
+    }
+  }
+}

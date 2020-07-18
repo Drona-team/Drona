@@ -1,0 +1,89 @@
+package com.google.android.exoplayer2.util;
+
+import java.io.IOException;
+import java.util.Collections;
+import java.util.PriorityQueue;
+
+public final class PriorityTaskManager
+{
+  private int highestPriority = Integer.MIN_VALUE;
+  private final Object lock = new Object();
+  private final PriorityQueue<Integer> queue = new PriorityQueue(10, Collections.reverseOrder());
+  
+  public PriorityTaskManager() {}
+  
+  public void add(int paramInt)
+  {
+    synchronized (lock)
+    {
+      queue.add(Integer.valueOf(paramInt));
+      highestPriority = Math.max(highestPriority, paramInt);
+      return;
+    }
+  }
+  
+  public void proceed(int paramInt)
+    throws InterruptedException
+  {
+    synchronized (lock)
+    {
+      while (highestPriority != paramInt) {
+        lock.wait();
+      }
+      return;
+    }
+  }
+  
+  public boolean proceedNonBlocking(int paramInt)
+  {
+    for (;;)
+    {
+      synchronized (lock)
+      {
+        if (highestPriority == paramInt)
+        {
+          bool = true;
+          return bool;
+        }
+      }
+      boolean bool = false;
+    }
+  }
+  
+  public void proceedOrThrow(int paramInt)
+    throws PriorityTaskManager.PriorityTooLowException
+  {
+    synchronized (lock)
+    {
+      if (highestPriority == paramInt) {
+        return;
+      }
+      throw new PriorityTooLowException(paramInt, highestPriority);
+    }
+  }
+  
+  public void remove(int paramInt)
+  {
+    synchronized (lock)
+    {
+      queue.remove(Integer.valueOf(paramInt));
+      if (queue.isEmpty()) {
+        paramInt = Integer.MIN_VALUE;
+      } else {
+        paramInt = ((Integer)Util.castNonNull(queue.peek())).intValue();
+      }
+      highestPriority = paramInt;
+      lock.notifyAll();
+      return;
+    }
+  }
+  
+  public static class PriorityTooLowException
+    extends IOException
+  {
+    public PriorityTooLowException(int paramInt1, int paramInt2)
+    {
+      super();
+    }
+  }
+}

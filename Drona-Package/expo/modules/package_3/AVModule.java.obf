@@ -1,0 +1,155 @@
+package expo.modules.av;
+
+import android.content.Context;
+import org.unimodules.core.ExportedModule;
+import org.unimodules.core.ModuleRegistry;
+import org.unimodules.core.Promise;
+import org.unimodules.core.arguments.ReadableArguments;
+import org.unimodules.core.interfaces.ExpoMethod;
+import org.unimodules.interfaces.permissions.Permissions;
+import org.unimodules.interfaces.permissions.Permissions.-CC;
+
+public class AVModule
+  extends ExportedModule
+{
+  private AVManagerInterface mAVManager;
+  private ModuleRegistry mModuleRegistry;
+  
+  public AVModule(Context paramContext)
+  {
+    super(paramContext);
+  }
+  
+  @ExpoMethod
+  public void getAudioRecordingStatus(Promise paramPromise)
+  {
+    mAVManager.getAudioRecordingStatus(paramPromise);
+  }
+  
+  public String getName()
+  {
+    return "ExponentAV";
+  }
+  
+  @ExpoMethod
+  public void getPermissionsAsync(Promise paramPromise)
+  {
+    Permissions.-CC.getPermissionsWithPermissionsManager((Permissions)mModuleRegistry.getModule(Permissions.class), paramPromise, new String[] { "android.permission.RECORD_AUDIO" });
+  }
+  
+  @ExpoMethod
+  public void getStatusForSound(Integer paramInteger, Promise paramPromise)
+  {
+    mAVManager.getStatusForSound(paramInteger, paramPromise);
+  }
+  
+  @ExpoMethod
+  public void getStatusForVideo(Integer paramInteger, Promise paramPromise)
+  {
+    mAVManager.getStatusForVideo(paramInteger, paramPromise);
+  }
+  
+  @ExpoMethod
+  public void loadForSound(ReadableArguments paramReadableArguments1, ReadableArguments paramReadableArguments2, Promise paramPromise)
+  {
+    mAVManager.loadForSound(paramReadableArguments1, paramReadableArguments2, paramPromise);
+  }
+  
+  @ExpoMethod
+  public void loadForVideo(Integer paramInteger, ReadableArguments paramReadableArguments1, ReadableArguments paramReadableArguments2, Promise paramPromise)
+  {
+    mAVManager.loadForVideo(paramInteger, paramReadableArguments1, paramReadableArguments2, paramPromise);
+  }
+  
+  public void onCreate(ModuleRegistry paramModuleRegistry)
+  {
+    mModuleRegistry = paramModuleRegistry;
+    mAVManager = ((AVManagerInterface)paramModuleRegistry.getModule(AVManagerInterface.class));
+  }
+  
+  @ExpoMethod
+  public void pauseAudioRecording(Promise paramPromise)
+  {
+    mAVManager.pauseAudioRecording(paramPromise);
+  }
+  
+  @ExpoMethod
+  public void prepareAudioRecorder(ReadableArguments paramReadableArguments, Promise paramPromise)
+  {
+    mAVManager.prepareAudioRecorder(paramReadableArguments, paramPromise);
+  }
+  
+  @ExpoMethod
+  public void replaySound(Integer paramInteger, ReadableArguments paramReadableArguments, Promise paramPromise)
+  {
+    mAVManager.replaySound(paramInteger, paramReadableArguments, paramPromise);
+  }
+  
+  @ExpoMethod
+  public void replayVideo(Integer paramInteger, ReadableArguments paramReadableArguments, Promise paramPromise)
+  {
+    mAVManager.replayVideo(paramInteger, paramReadableArguments, paramPromise);
+  }
+  
+  @ExpoMethod
+  public void requestPermissionsAsync(Promise paramPromise)
+  {
+    Permissions.-CC.askForPermissionsWithPermissionsManager((Permissions)mModuleRegistry.getModule(Permissions.class), paramPromise, new String[] { "android.permission.RECORD_AUDIO" });
+  }
+  
+  @ExpoMethod
+  public void setAudioIsEnabled(Boolean paramBoolean, Promise paramPromise)
+  {
+    mAVManager.setAudioIsEnabled(paramBoolean);
+    paramPromise.resolve(null);
+  }
+  
+  @ExpoMethod
+  public void setAudioMode(ReadableArguments paramReadableArguments, Promise paramPromise)
+  {
+    mAVManager.setAudioMode(paramReadableArguments);
+    paramPromise.resolve(null);
+  }
+  
+  @ExpoMethod
+  public void setStatusForSound(Integer paramInteger, ReadableArguments paramReadableArguments, Promise paramPromise)
+  {
+    mAVManager.setStatusForSound(paramInteger, paramReadableArguments, paramPromise);
+  }
+  
+  @ExpoMethod
+  public void setStatusForVideo(Integer paramInteger, ReadableArguments paramReadableArguments, Promise paramPromise)
+  {
+    mAVManager.setStatusForVideo(paramInteger, paramReadableArguments, paramPromise);
+  }
+  
+  @ExpoMethod
+  public void startAudioRecording(Promise paramPromise)
+  {
+    mAVManager.startAudioRecording(paramPromise);
+  }
+  
+  @ExpoMethod
+  public void stopAudioRecording(Promise paramPromise)
+  {
+    mAVManager.stopAudioRecording(paramPromise);
+  }
+  
+  @ExpoMethod
+  public void unloadAudioRecorder(Promise paramPromise)
+  {
+    mAVManager.unloadAudioRecorder(paramPromise);
+  }
+  
+  @ExpoMethod
+  public void unloadForSound(Integer paramInteger, Promise paramPromise)
+  {
+    mAVManager.unloadForSound(paramInteger, paramPromise);
+  }
+  
+  @ExpoMethod
+  public void unloadForVideo(Integer paramInteger, Promise paramPromise)
+  {
+    mAVManager.unloadForVideo(paramInteger, paramPromise);
+  }
+}

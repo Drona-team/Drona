@@ -1,0 +1,53 @@
+package com.android.billingclient.upgrade;
+
+import android.os.BaseBundle;
+import android.os.Bundle;
+import com.android.billingclient.util.BillingHelper;
+import java.util.ArrayList;
+
+final class PurchaseApiResponseChecker
+{
+  PurchaseApiResponseChecker() {}
+  
+  static BillingResult checkPurchasesBundleValidity(Bundle paramBundle, String paramString1, String paramString2)
+  {
+    BillingResult localBillingResult = BillingResults.INTERNAL_ERROR;
+    if (paramBundle == null)
+    {
+      BillingHelper.logWarn(paramString1, String.format("%s got null owned items list", new Object[] { paramString2 }));
+      return localBillingResult;
+    }
+    int i = BillingHelper.getResponseCodeFromBundle(paramBundle, paramString1);
+    Object localObject = BillingHelper.getDebugMessageFromBundle(paramBundle, paramString1);
+    localObject = BillingResult.newBuilder().setResponseCode(i).setDebugMessage((String)localObject).build();
+    if (i != 0)
+    {
+      BillingHelper.logWarn(paramString1, String.format("%s failed. Response code: %s", new Object[] { paramString2, Integer.valueOf(i) }));
+      return localObject;
+    }
+    if ((paramBundle.containsKey("INAPP_PURCHASE_ITEM_LIST")) && (paramBundle.containsKey("INAPP_PURCHASE_DATA_LIST")) && (paramBundle.containsKey("INAPP_DATA_SIGNATURE_LIST")))
+    {
+      localObject = paramBundle.getStringArrayList("INAPP_PURCHASE_ITEM_LIST");
+      ArrayList localArrayList = paramBundle.getStringArrayList("INAPP_PURCHASE_DATA_LIST");
+      paramBundle = paramBundle.getStringArrayList("INAPP_DATA_SIGNATURE_LIST");
+      if (localObject == null)
+      {
+        BillingHelper.logWarn(paramString1, String.format("Bundle returned from %s contains null SKUs list.", new Object[] { paramString2 }));
+        return localBillingResult;
+      }
+      if (localArrayList == null)
+      {
+        BillingHelper.logWarn(paramString1, String.format("Bundle returned from %s contains null purchases list.", new Object[] { paramString2 }));
+        return localBillingResult;
+      }
+      if (paramBundle == null)
+      {
+        BillingHelper.logWarn(paramString1, String.format("Bundle returned from %s contains null signatures list.", new Object[] { paramString2 }));
+        return localBillingResult;
+      }
+      return BillingResults.seq;
+    }
+    BillingHelper.logWarn(paramString1, String.format("Bundle returned from %s doesn't contain required fields.", new Object[] { paramString2 }));
+    return localBillingResult;
+  }
+}

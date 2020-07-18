@@ -1,0 +1,103 @@
+package com.facebook.react.fabric;
+
+import com.facebook.react.bridge.CatalystInstance;
+import com.facebook.react.bridge.JSIModuleProvider;
+import com.facebook.react.bridge.JavaScriptContextHolder;
+import com.facebook.react.bridge.ReactApplicationContext;
+import com.facebook.react.bridge.ReactContext;
+import com.facebook.react.bridge.UIManager;
+import com.facebook.react.bridge.queue.MessageQueueThread;
+import com.facebook.react.bridge.queue.ReactQueueConfiguration;
+import com.facebook.react.fabric.events.EventBeatManager;
+import com.facebook.react.fabric.events.EventEmitterWrapper;
+import com.facebook.react.fabric.events.FabricEventEmitter;
+import com.facebook.react.fabric.mounting.LayoutMetricsConversions;
+import com.facebook.react.fabric.mounting.MountingManager;
+import com.facebook.react.fabric.mounting.mountitems.BatchMountItem;
+import com.facebook.react.fabric.mounting.mountitems.DeleteMountItem;
+import com.facebook.react.fabric.mounting.mountitems.DispatchCommandMountItem;
+import com.facebook.react.fabric.mounting.mountitems.DispatchStringCommandMountItem;
+import com.facebook.react.fabric.mounting.mountitems.InsertMountItem;
+import com.facebook.react.fabric.mounting.mountitems.MountItem;
+import com.facebook.react.fabric.mounting.mountitems.PreAllocateViewMountItem;
+import com.facebook.react.fabric.mounting.mountitems.RemoveMountItem;
+import com.facebook.react.fabric.mounting.mountitems.UpdateEventEmitterMountItem;
+import com.facebook.react.fabric.mounting.mountitems.UpdateLayoutMountItem;
+import com.facebook.react.fabric.mounting.mountitems.UpdateLocalDataMountItem;
+import com.facebook.react.fabric.mounting.mountitems.UpdatePropsMountItem;
+import com.facebook.react.uimanager.StateWrapper;
+import com.facebook.react.uimanager.UIManagerModule;
+import com.facebook.react.uimanager.events.BatchEventDispatchedListener;
+import com.facebook.react.uimanager.events.EventDispatcher;
+import com.facebook.systrace.Systrace;
+
+public class FabricJSIModuleProvider
+  implements JSIModuleProvider<UIManager>
+{
+  private final ComponentFactoryDelegate mComponentFactoryDelegate;
+  private final ReactNativeConfig mConfig;
+  private final JavaScriptContextHolder mJSContext;
+  private final ReactApplicationContext mReactApplicationContext;
+  
+  public FabricJSIModuleProvider(ReactApplicationContext paramReactApplicationContext, JavaScriptContextHolder paramJavaScriptContextHolder, ComponentFactoryDelegate paramComponentFactoryDelegate, ReactNativeConfig paramReactNativeConfig)
+  {
+    mReactApplicationContext = paramReactApplicationContext;
+    mJSContext = paramJavaScriptContextHolder;
+    mComponentFactoryDelegate = paramComponentFactoryDelegate;
+    mConfig = paramReactNativeConfig;
+  }
+  
+  private FabricUIManager createUIManager(EventBeatManager paramEventBeatManager)
+  {
+    Systrace.beginSection(0L, "FabricJSIModuleProvider.createUIManager");
+    UIManagerModule localUIManagerModule = (UIManagerModule)mReactApplicationContext.getNativeModule(UIManagerModule.class);
+    EventDispatcher localEventDispatcher = localUIManagerModule.getEventDispatcher();
+    paramEventBeatManager = new FabricUIManager(mReactApplicationContext, localUIManagerModule.getViewManagerRegistry_DO_NOT_USE(), localEventDispatcher, paramEventBeatManager);
+    Systrace.endSection(0L);
+    return paramEventBeatManager;
+  }
+  
+  private static void loadClasses()
+  {
+    BatchEventDispatchedListener.class.getClass();
+    ReactNativeConfig.class.getClass();
+    FabricComponents.class.getClass();
+    StateWrapper.class.getClass();
+    FabricEventEmitter.class.getClass();
+    FabricUIManager.class.getClass();
+    GuardedFrameCallback.class.getClass();
+    BatchMountItem.class.getClass();
+    DeleteMountItem.class.getClass();
+    DispatchCommandMountItem.class.getClass();
+    DispatchStringCommandMountItem.class.getClass();
+    InsertMountItem.class.getClass();
+    MountItem.class.getClass();
+    RemoveMountItem.class.getClass();
+    UpdateEventEmitterMountItem.class.getClass();
+    UpdateLayoutMountItem.class.getClass();
+    UpdateLocalDataMountItem.class.getClass();
+    UpdatePropsMountItem.class.getClass();
+    LayoutMetricsConversions.class.getClass();
+    MountingManager.class.getClass();
+    Binding.class.getClass();
+    ComponentFactoryDelegate.class.getClass();
+    EventBeatManager.class.getClass();
+    EventEmitterWrapper.class.getClass();
+    StateWrapperImpl.class.getClass();
+    FabricSoLoader.class.getClass();
+    PreAllocateViewMountItem.class.getClass();
+  }
+  
+  public UIManager isFeatureEnabled()
+  {
+    EventBeatManager localEventBeatManager = new EventBeatManager(mReactApplicationContext);
+    FabricUIManager localFabricUIManager = createUIManager(localEventBeatManager);
+    Systrace.beginSection(0L, "FabricJSIModuleProvider.registerBinding");
+    Binding localBinding = new Binding();
+    loadClasses();
+    MessageQueueThread localMessageQueueThread = mReactApplicationContext.getCatalystInstance().getReactQueueConfiguration().getJSQueueThread();
+    localBinding.register(mJSContext, localFabricUIManager, localEventBeatManager, localMessageQueueThread, mComponentFactoryDelegate, mConfig);
+    Systrace.endSection(0L);
+    return localFabricUIManager;
+  }
+}

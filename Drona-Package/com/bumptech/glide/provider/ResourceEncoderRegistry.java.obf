@@ -1,0 +1,81 @@
+package com.bumptech.glide.provider;
+
+import androidx.annotation.NonNull;
+import androidx.annotation.Nullable;
+import com.bumptech.glide.load.ResourceEncoder;
+import java.util.ArrayList;
+import java.util.List;
+
+public class ResourceEncoderRegistry
+{
+  private final List<Entry<?>> encoders = new ArrayList();
+  
+  public ResourceEncoderRegistry() {}
+  
+  public <Z> void append(@NonNull Class<Z> paramClass, @NonNull ResourceEncoder<Z> paramResourceEncoder)
+  {
+    try
+    {
+      encoders.add(new Entry(paramClass, paramResourceEncoder));
+      return;
+    }
+    finally
+    {
+      paramClass = finally;
+      throw paramClass;
+    }
+  }
+  
+  @Nullable
+  public <Z> ResourceEncoder<Z> get(@NonNull Class<Z> paramClass)
+  {
+    int i = 0;
+    try
+    {
+      int j = encoders.size();
+      while (i < j)
+      {
+        Entry localEntry = (Entry)encoders.get(i);
+        if (localEntry.handles(paramClass))
+        {
+          paramClass = encoder;
+          return paramClass;
+        }
+        i += 1;
+      }
+      return null;
+    }
+    finally {}
+  }
+  
+  public <Z> void prepend(@NonNull Class<Z> paramClass, @NonNull ResourceEncoder<Z> paramResourceEncoder)
+  {
+    try
+    {
+      encoders.add(0, new Entry(paramClass, paramResourceEncoder));
+      return;
+    }
+    finally
+    {
+      paramClass = finally;
+      throw paramClass;
+    }
+  }
+  
+  private static final class Entry<T>
+  {
+    final ResourceEncoder<T> encoder;
+    private final Class<T> resourceClass;
+    
+    Entry(@NonNull Class<T> paramClass, @NonNull ResourceEncoder<T> paramResourceEncoder)
+    {
+      resourceClass = paramClass;
+      encoder = paramResourceEncoder;
+    }
+    
+    boolean handles(@NonNull Class<?> paramClass)
+    {
+      return resourceClass.isAssignableFrom(paramClass);
+    }
+  }
+}

@@ -1,0 +1,88 @@
+package com.google.android.exoplayer2.extractor.configurations;
+
+import com.google.android.exoplayer2.Format;
+import com.google.android.exoplayer2.extractor.ExtractorOutput;
+import com.google.android.exoplayer2.extractor.TrackOutput;
+import com.google.android.exoplayer2.util.Log;
+import com.google.android.exoplayer2.util.ParsableByteArray;
+
+public final class Id3Reader
+  implements ElementaryStreamReader
+{
+  private static final int ID3_HEADER_SIZE = 10;
+  private static final String TAG = "Id3Reader";
+  private final ParsableByteArray id3Header = new ParsableByteArray(10);
+  private TrackOutput output;
+  private int sampleBytesRead;
+  private int sampleSize;
+  private long sampleTimeUs;
+  private boolean writingSample;
+  
+  public Id3Reader() {}
+  
+  public void consume(ParsableByteArray paramParsableByteArray)
+  {
+    if (!writingSample) {
+      return;
+    }
+    int i = paramParsableByteArray.bytesLeft();
+    if (sampleBytesRead < 10)
+    {
+      int j = Math.min(i, 10 - sampleBytesRead);
+      System.arraycopy(data, paramParsableByteArray.getPosition(), id3Header.data, sampleBytesRead, j);
+      if (sampleBytesRead + j == 10)
+      {
+        id3Header.setPosition(0);
+        if ((73 == id3Header.readUnsignedByte()) && (68 == id3Header.readUnsignedByte()) && (51 == id3Header.readUnsignedByte()))
+        {
+          id3Header.skipBytes(3);
+          sampleSize = (id3Header.readSynchSafeInt() + 10);
+        }
+        else
+        {
+          Log.w("Id3Reader", "Discarding invalid ID3 tag");
+          writingSample = false;
+          return;
+        }
+      }
+    }
+    i = Math.min(i, sampleSize - sampleBytesRead);
+    output.sampleData(paramParsableByteArray, i);
+    sampleBytesRead += i;
+  }
+  
+  public void createTracks(ExtractorOutput paramExtractorOutput, TsPayloadReader.TrackIdGenerator paramTrackIdGenerator)
+  {
+    paramTrackIdGenerator.generateNewId();
+    output = paramExtractorOutput.track(paramTrackIdGenerator.getTrackId(), 4);
+    output.format(Format.createSampleFormat(paramTrackIdGenerator.getFormatId(), "application/id3", null, -1, null));
+  }
+  
+  public void packetFinished()
+  {
+    if ((writingSample) && (sampleSize != 0))
+    {
+      if (sampleBytesRead != sampleSize) {
+        return;
+      }
+      output.sampleMetadata(sampleTimeUs, 1, sampleSize, 0, null);
+      writingSample = false;
+    }
+  }
+  
+  public void packetStarted(long paramLong, boolean paramBoolean)
+  {
+    if (!paramBoolean) {
+      return;
+    }
+    writingSample = true;
+    sampleTimeUs = paramLong;
+    sampleSize = 0;
+    sampleBytesRead = 0;
+  }
+  
+  public void seek()
+  {
+    writingSample = false;
+  }
+}

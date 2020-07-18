@@ -1,0 +1,644 @@
+package com.airbnb.android.react.maps;
+
+import android.animation.ObjectAnimator;
+import android.animation.TypeEvaluator;
+import android.content.Context;
+import android.content.res.Resources;
+import android.graphics.Bitmap;
+import android.graphics.Bitmap.Config;
+import android.graphics.BitmapFactory;
+import android.graphics.Canvas;
+import android.graphics.drawable.Animatable;
+import android.graphics.drawable.Drawable;
+import android.net.Uri;
+import android.util.Property;
+import android.view.View;
+import android.view.ViewGroup;
+import android.widget.LinearLayout;
+import android.widget.LinearLayout.LayoutParams;
+import com.facebook.common.references.CloseableReference;
+import com.facebook.datasource.DataSource;
+import com.facebook.drawee.backends.pipeline.Fresco;
+import com.facebook.drawee.backends.pipeline.PipelineDraweeControllerBuilder;
+import com.facebook.drawee.controller.AbstractDraweeControllerBuilder;
+import com.facebook.drawee.controller.BaseControllerListener;
+import com.facebook.drawee.controller.ControllerListener;
+import com.facebook.drawee.drawable.ScalingUtils.ScaleType;
+import com.facebook.drawee.generic.GenericDraweeHierarchy;
+import com.facebook.drawee.generic.GenericDraweeHierarchyBuilder;
+import com.facebook.drawee.view.DraweeHolder;
+import com.facebook.imagepipeline.core.ImagePipeline;
+import com.facebook.imagepipeline.image.CloseableImage;
+import com.facebook.imagepipeline.image.CloseableStaticBitmap;
+import com.facebook.imagepipeline.image.ImageInfo;
+import com.facebook.imagepipeline.request.ImageRequestBuilder;
+import com.facebook.react.bridge.ReadableMap;
+import com.facebook.react.views.view.ReactViewGroup;
+import com.google.android.gms.maps.GoogleMap;
+import com.google.android.gms.maps.model.BitmapDescriptor;
+import com.google.android.gms.maps.model.BitmapDescriptorFactory;
+import com.google.android.gms.maps.model.LatLng;
+import com.google.android.gms.maps.model.Marker;
+import com.google.android.gms.maps.model.MarkerOptions;
+
+public class AirMapMarker
+  extends AirMapFeature
+{
+  private boolean anchorIsSet;
+  private float anchorX;
+  private float anchorY;
+  private boolean calloutAnchorIsSet;
+  private float calloutAnchorX;
+  private float calloutAnchorY;
+  private AirMapCallout calloutView;
+  private final Context context;
+  private DataSource<CloseableReference<CloseableImage>> dataSource;
+  private boolean draggable = false;
+  private boolean flat = false;
+  private boolean hasCustomMarkerView = false;
+  private boolean hasViewChanges = true;
+  private int height;
+  private Bitmap iconBitmap;
+  private BitmapDescriptor iconBitmapDescriptor;
+  private String identifier;
+  private String imageUri;
+  private final DraweeHolder<?> logoHolder;
+  private Bitmap mLastBitmapCreated = null;
+  private final ControllerListener<ImageInfo> mLogoControllerListener = new BaseControllerListener()
+  {
+    public void onFinalImageSet(String paramAnonymousString, ImageInfo paramAnonymousImageInfo, Animatable paramAnonymousAnimatable)
+    {
+      try
+      {
+        paramAnonymousString = (CloseableReference)dataSource.getResult();
+        if (paramAnonymousString != null) {
+          try
+          {
+            paramAnonymousImageInfo = (CloseableImage)paramAnonymousString.get();
+            if (paramAnonymousImageInfo != null)
+            {
+              boolean bool = paramAnonymousImageInfo instanceof CloseableStaticBitmap;
+              if (bool)
+              {
+                paramAnonymousImageInfo = ((CloseableStaticBitmap)paramAnonymousImageInfo).getUnderlyingBitmap();
+                if (paramAnonymousImageInfo != null)
+                {
+                  paramAnonymousImageInfo = paramAnonymousImageInfo.copy(Bitmap.Config.ARGB_8888, true);
+                  AirMapMarker.access$102(AirMapMarker.this, paramAnonymousImageInfo);
+                  AirMapMarker.access$202(AirMapMarker.this, BitmapDescriptorFactory.fromBitmap(paramAnonymousImageInfo));
+                }
+              }
+            }
+          }
+          catch (Throwable paramAnonymousImageInfo)
+          {
+            break label179;
+          }
+        }
+        dataSource.close();
+        if (paramAnonymousString != null) {
+          CloseableReference.closeSafely(paramAnonymousString);
+        }
+        if ((markerManager != null) && (imageUri != null)) {
+          markerManager.getSharedIcon(imageUri).updateIcon(iconBitmapDescriptor, iconBitmap);
+        }
+        update(true);
+        return;
+      }
+      catch (Throwable paramAnonymousImageInfo)
+      {
+        paramAnonymousString = null;
+        label179:
+        dataSource.close();
+        if (paramAnonymousString != null) {
+          CloseableReference.closeSafely(paramAnonymousString);
+        }
+        throw paramAnonymousImageInfo;
+      }
+    }
+  };
+  private Marker marker;
+  private float markerHue = 0.0F;
+  private final AirMapMarkerManager markerManager;
+  private MarkerOptions markerOptions;
+  private float opacity = 1.0F;
+  private LatLng position;
+  private float rotation = 0.0F;
+  private String snippet;
+  private String title;
+  private boolean tracksViewChanges = true;
+  private boolean tracksViewChangesActive = false;
+  private int width;
+  private View wrappedCalloutView;
+  private int zIndex = 0;
+  
+  public AirMapMarker(Context paramContext, AirMapMarkerManager paramAirMapMarkerManager)
+  {
+    super(paramContext);
+    context = paramContext;
+    markerManager = paramAirMapMarkerManager;
+    logoHolder = DraweeHolder.create(createDraweeHierarchy(), paramContext);
+    logoHolder.onAttach();
+  }
+  
+  public AirMapMarker(Context paramContext, MarkerOptions paramMarkerOptions, AirMapMarkerManager paramAirMapMarkerManager)
+  {
+    super(paramContext);
+    context = paramContext;
+    markerManager = paramAirMapMarkerManager;
+    logoHolder = DraweeHolder.create(createDraweeHierarchy(), paramContext);
+    logoHolder.onAttach();
+    position = paramMarkerOptions.getPosition();
+    setAnchor(paramMarkerOptions.getAnchorU(), paramMarkerOptions.getAnchorV());
+    setCalloutAnchor(paramMarkerOptions.getInfoWindowAnchorU(), paramMarkerOptions.getInfoWindowAnchorV());
+    setTitle(paramMarkerOptions.getTitle());
+    setSnippet(paramMarkerOptions.getSnippet());
+    setRotation(paramMarkerOptions.getRotation());
+    setFlat(paramMarkerOptions.isFlat());
+    setDraggable(paramMarkerOptions.isDraggable());
+    setZIndex(Math.round(paramMarkerOptions.getZIndex()));
+    setAlpha(paramMarkerOptions.getAlpha());
+    iconBitmapDescriptor = paramMarkerOptions.getIcon();
+  }
+  
+  private void clearDrawableCache()
+  {
+    mLastBitmapCreated = null;
+  }
+  
+  private Bitmap createDrawable()
+  {
+    int i = width;
+    int j = 100;
+    if (i <= 0) {
+      i = 100;
+    } else {
+      i = width;
+    }
+    if (height > 0) {
+      j = height;
+    }
+    buildDrawingCache();
+    Object localObject = mLastBitmapCreated;
+    if ((localObject != null) && (!((Bitmap)localObject).isRecycled()) && (((Bitmap)localObject).getWidth() == i) && (((Bitmap)localObject).getHeight() == j))
+    {
+      ((Bitmap)localObject).eraseColor(0);
+    }
+    else
+    {
+      Bitmap localBitmap = Bitmap.createBitmap(i, j, Bitmap.Config.ARGB_8888);
+      localObject = localBitmap;
+      mLastBitmapCreated = localBitmap;
+    }
+    draw(new Canvas((Bitmap)localObject));
+    return localObject;
+  }
+  
+  private GenericDraweeHierarchy createDraweeHierarchy()
+  {
+    return new GenericDraweeHierarchyBuilder(getResources()).setActualImageScaleType(ScalingUtils.ScaleType.FIT_CENTER).setFadeDuration(0).build();
+  }
+  
+  private MarkerOptions fillMarkerOptions(MarkerOptions paramMarkerOptions)
+  {
+    paramMarkerOptions.position(position);
+    if (anchorIsSet) {
+      paramMarkerOptions.anchor(anchorX, anchorY);
+    }
+    if (calloutAnchorIsSet) {
+      paramMarkerOptions.infoWindowAnchor(calloutAnchorX, calloutAnchorY);
+    }
+    paramMarkerOptions.title(title);
+    paramMarkerOptions.snippet(snippet);
+    paramMarkerOptions.rotation(rotation);
+    paramMarkerOptions.flat(flat);
+    paramMarkerOptions.draggable(draggable);
+    paramMarkerOptions.zIndex(zIndex);
+    paramMarkerOptions.alpha(opacity);
+    paramMarkerOptions.icon(getIcon());
+    return paramMarkerOptions;
+  }
+  
+  private BitmapDescriptor getBitmapDescriptorByName(String paramString)
+  {
+    return BitmapDescriptorFactory.fromResource(getDrawableResourceByName(paramString));
+  }
+  
+  private int getDrawableResourceByName(String paramString)
+  {
+    return getResources().getIdentifier(paramString, "drawable", getContext().getPackageName());
+  }
+  
+  private BitmapDescriptor getIcon()
+  {
+    if (hasCustomMarkerView)
+    {
+      if (iconBitmapDescriptor != null)
+      {
+        Bitmap localBitmap1 = createDrawable();
+        Bitmap localBitmap2 = Bitmap.createBitmap(Math.max(iconBitmap.getWidth(), localBitmap1.getWidth()), Math.max(iconBitmap.getHeight(), localBitmap1.getHeight()), iconBitmap.getConfig());
+        Canvas localCanvas = new Canvas(localBitmap2);
+        localCanvas.drawBitmap(iconBitmap, 0.0F, 0.0F, null);
+        localCanvas.drawBitmap(localBitmap1, 0.0F, 0.0F, null);
+        return BitmapDescriptorFactory.fromBitmap(localBitmap2);
+      }
+      return BitmapDescriptorFactory.fromBitmap(createDrawable());
+    }
+    if (iconBitmapDescriptor != null) {
+      return iconBitmapDescriptor;
+    }
+    return BitmapDescriptorFactory.defaultMarker(markerHue);
+  }
+  
+  private void updateTracksViewChanges()
+  {
+    boolean bool;
+    if ((tracksViewChanges) && (hasCustomMarkerView) && (marker != null)) {
+      bool = true;
+    } else {
+      bool = false;
+    }
+    if (bool == tracksViewChangesActive) {
+      return;
+    }
+    tracksViewChangesActive = bool;
+    if (bool)
+    {
+      ViewChangesTracker.getInstance().addMarker(this);
+      return;
+    }
+    ViewChangesTracker.getInstance().removeMarker(this);
+    updateMarkerIcon();
+  }
+  
+  private void wrapCalloutView()
+  {
+    if (calloutView != null)
+    {
+      if (calloutView.getChildCount() == 0) {
+        return;
+      }
+      LinearLayout localLinearLayout1 = new LinearLayout(context);
+      localLinearLayout1.setOrientation(1);
+      localLinearLayout1.setLayoutParams(new LinearLayout.LayoutParams(calloutView.width, calloutView.height, 0.0F));
+      LinearLayout localLinearLayout2 = new LinearLayout(context);
+      localLinearLayout2.setOrientation(0);
+      localLinearLayout2.setLayoutParams(new LinearLayout.LayoutParams(calloutView.width, calloutView.height, 0.0F));
+      localLinearLayout1.addView(localLinearLayout2);
+      localLinearLayout2.addView(calloutView);
+      wrappedCalloutView = localLinearLayout1;
+    }
+  }
+  
+  public void addToMap(GoogleMap paramGoogleMap)
+  {
+    marker = paramGoogleMap.addMarker(getMarkerOptions());
+    updateTracksViewChanges();
+  }
+  
+  public void addView(View paramView, int paramInt)
+  {
+    super.addView(paramView, paramInt);
+    if (!(paramView instanceof AirMapCallout))
+    {
+      hasCustomMarkerView = true;
+      updateTracksViewChanges();
+    }
+    update(true);
+  }
+  
+  public void animateToCoodinate(LatLng paramLatLng, Integer paramInteger)
+  {
+    TypeEvaluator local2 = new TypeEvaluator()
+    {
+      public LatLng evaluate(float paramAnonymousFloat, LatLng paramAnonymousLatLng1, LatLng paramAnonymousLatLng2)
+      {
+        return interpolate(paramAnonymousFloat, paramAnonymousLatLng1, paramAnonymousLatLng2);
+      }
+    };
+    Property localProperty = Property.of(Marker.class, LatLng.class, "position");
+    paramLatLng = ObjectAnimator.ofObject(marker, localProperty, local2, new LatLng[] { paramLatLng });
+    paramLatLng.setDuration(paramInteger.intValue());
+    paramLatLng.start();
+  }
+  
+  public View getCallout()
+  {
+    if (calloutView == null) {
+      return null;
+    }
+    if (wrappedCalloutView == null) {
+      wrapCalloutView();
+    }
+    if (calloutView.getTooltip()) {
+      return wrappedCalloutView;
+    }
+    return null;
+  }
+  
+  public AirMapCallout getCalloutView()
+  {
+    return calloutView;
+  }
+  
+  public Object getFeature()
+  {
+    return marker;
+  }
+  
+  public String getIdentifier()
+  {
+    return identifier;
+  }
+  
+  public View getInfoContents()
+  {
+    if (calloutView == null) {
+      return null;
+    }
+    if (wrappedCalloutView == null) {
+      wrapCalloutView();
+    }
+    if (calloutView.getTooltip()) {
+      return null;
+    }
+    return wrappedCalloutView;
+  }
+  
+  public MarkerOptions getMarkerOptions()
+  {
+    if (markerOptions == null) {
+      markerOptions = new MarkerOptions();
+    }
+    fillMarkerOptions(markerOptions);
+    return markerOptions;
+  }
+  
+  public LatLng interpolate(float paramFloat, LatLng paramLatLng1, LatLng paramLatLng2)
+  {
+    double d1 = latitude;
+    double d2 = latitude;
+    double d3 = paramFloat;
+    return new LatLng((d1 - d2) * d3 + latitude, (longitude - longitude) * d3 + longitude);
+  }
+  
+  public void removeFromMap(GoogleMap paramGoogleMap)
+  {
+    if (marker == null) {
+      return;
+    }
+    marker.remove();
+    marker = null;
+    updateTracksViewChanges();
+  }
+  
+  public void requestLayout()
+  {
+    super.requestLayout();
+    if ((getChildCount() == 0) && (hasCustomMarkerView))
+    {
+      hasCustomMarkerView = false;
+      clearDrawableCache();
+      updateTracksViewChanges();
+      update(true);
+    }
+  }
+  
+  public void setAnchor(double paramDouble1, double paramDouble2)
+  {
+    anchorIsSet = true;
+    anchorX = ((float)paramDouble1);
+    anchorY = ((float)paramDouble2);
+    if (marker != null) {
+      marker.setAnchor(anchorX, anchorY);
+    }
+    update(false);
+  }
+  
+  public void setCalloutAnchor(double paramDouble1, double paramDouble2)
+  {
+    calloutAnchorIsSet = true;
+    calloutAnchorX = ((float)paramDouble1);
+    calloutAnchorY = ((float)paramDouble2);
+    if (marker != null) {
+      marker.setInfoWindowAnchor(calloutAnchorX, calloutAnchorY);
+    }
+    update(false);
+  }
+  
+  public void setCalloutView(AirMapCallout paramAirMapCallout)
+  {
+    calloutView = paramAirMapCallout;
+  }
+  
+  public void setCoordinate(ReadableMap paramReadableMap)
+  {
+    position = new LatLng(paramReadableMap.getDouble("latitude"), paramReadableMap.getDouble("longitude"));
+    if (marker != null) {
+      marker.setPosition(position);
+    }
+    update(false);
+  }
+  
+  public void setDraggable(boolean paramBoolean)
+  {
+    draggable = paramBoolean;
+    if (marker != null) {
+      marker.setDraggable(paramBoolean);
+    }
+    update(false);
+  }
+  
+  public void setFlat(boolean paramBoolean)
+  {
+    flat = paramBoolean;
+    if (marker != null) {
+      marker.setFlat(paramBoolean);
+    }
+    update(false);
+  }
+  
+  public void setIconBitmap(Bitmap paramBitmap)
+  {
+    iconBitmap = paramBitmap;
+  }
+  
+  public void setIconBitmapDescriptor(BitmapDescriptor paramBitmapDescriptor, Bitmap paramBitmap)
+  {
+    iconBitmapDescriptor = paramBitmapDescriptor;
+    iconBitmap = paramBitmap;
+    hasViewChanges = true;
+    update(true);
+  }
+  
+  public void setIdentifier(String paramString)
+  {
+    identifier = paramString;
+    update(false);
+  }
+  
+  public void setImage(String paramString)
+  {
+    hasViewChanges = true;
+    Object localObject;
+    if (markerManager != null)
+    {
+      if (imageUri != null)
+      {
+        markerManager.getSharedIcon(imageUri).removeMarker(this);
+        markerManager.removeSharedIconIfEmpty(imageUri);
+      }
+      if (paramString != null)
+      {
+        localObject = markerManager.getSharedIcon(paramString);
+        ((AirMapMarkerManager.AirMapMarkerSharedIcon)localObject).addMarker(this);
+        bool = ((AirMapMarkerManager.AirMapMarkerSharedIcon)localObject).shouldLoadImage();
+        break label76;
+      }
+    }
+    boolean bool = true;
+    label76:
+    imageUri = paramString;
+    if (!bool) {
+      return;
+    }
+    if (paramString == null)
+    {
+      iconBitmapDescriptor = null;
+      update(true);
+      return;
+    }
+    if ((!paramString.startsWith("http://")) && (!paramString.startsWith("https://")) && (!paramString.startsWith("file://")) && (!paramString.startsWith("asset://")) && (!paramString.startsWith("data:")))
+    {
+      iconBitmapDescriptor = getBitmapDescriptorByName(paramString);
+      if (iconBitmapDescriptor != null)
+      {
+        int i = getDrawableResourceByName(paramString);
+        iconBitmap = BitmapFactory.decodeResource(getResources(), i);
+        if (iconBitmap == null)
+        {
+          localObject = getResources().getDrawable(i);
+          iconBitmap = Bitmap.createBitmap(((Drawable)localObject).getIntrinsicWidth(), ((Drawable)localObject).getIntrinsicHeight(), Bitmap.Config.ARGB_8888);
+          ((Drawable)localObject).setBounds(0, 0, ((Drawable)localObject).getIntrinsicWidth(), ((Drawable)localObject).getIntrinsicHeight());
+          ((Drawable)localObject).draw(new Canvas(iconBitmap));
+        }
+      }
+      if ((markerManager != null) && (paramString != null)) {
+        markerManager.getSharedIcon(paramString).updateIcon(iconBitmapDescriptor, iconBitmap);
+      }
+      update(true);
+      return;
+    }
+    paramString = ImageRequestBuilder.newBuilderWithSource(Uri.parse(paramString)).build();
+    dataSource = Fresco.getImagePipeline().fetchDecodedImage(paramString, this);
+    paramString = ((PipelineDraweeControllerBuilder)((PipelineDraweeControllerBuilder)((PipelineDraweeControllerBuilder)Fresco.newDraweeControllerBuilder().setImageRequest(paramString)).setControllerListener(mLogoControllerListener)).setOldController(logoHolder.getController())).build();
+    logoHolder.setController(paramString);
+  }
+  
+  public void setMarkerHue(float paramFloat)
+  {
+    markerHue = paramFloat;
+    update(false);
+  }
+  
+  public void setOpacity(float paramFloat)
+  {
+    opacity = paramFloat;
+    if (marker != null) {
+      marker.setAlpha(paramFloat);
+    }
+    update(false);
+  }
+  
+  public void setRotation(float paramFloat)
+  {
+    rotation = paramFloat;
+    if (marker != null) {
+      marker.setRotation(paramFloat);
+    }
+    update(false);
+  }
+  
+  public void setSnippet(String paramString)
+  {
+    snippet = paramString;
+    if (marker != null) {
+      marker.setSnippet(paramString);
+    }
+    update(false);
+  }
+  
+  public void setTitle(String paramString)
+  {
+    title = paramString;
+    if (marker != null) {
+      marker.setTitle(paramString);
+    }
+    update(false);
+  }
+  
+  public void setTracksViewChanges(boolean paramBoolean)
+  {
+    tracksViewChanges = paramBoolean;
+    updateTracksViewChanges();
+  }
+  
+  public void setZIndex(int paramInt)
+  {
+    zIndex = paramInt;
+    if (marker != null) {
+      marker.setZIndex(paramInt);
+    }
+    update(false);
+  }
+  
+  public void update(int paramInt1, int paramInt2)
+  {
+    width = paramInt1;
+    height = paramInt2;
+    update(true);
+  }
+  
+  public void update(boolean paramBoolean)
+  {
+    if (marker == null) {
+      return;
+    }
+    if (paramBoolean) {
+      updateMarkerIcon();
+    }
+    if (anchorIsSet) {
+      marker.setAnchor(anchorX, anchorY);
+    } else {
+      marker.setAnchor(0.5F, 1.0F);
+    }
+    if (calloutAnchorIsSet)
+    {
+      marker.setInfoWindowAnchor(calloutAnchorX, calloutAnchorY);
+      return;
+    }
+    marker.setInfoWindowAnchor(0.5F, 0.0F);
+  }
+  
+  public boolean updateCustomForTracking()
+  {
+    if (!tracksViewChangesActive) {
+      return false;
+    }
+    updateMarkerIcon();
+    return true;
+  }
+  
+  public void updateMarkerIcon()
+  {
+    if (marker == null) {
+      return;
+    }
+    if (!hasCustomMarkerView) {
+      hasViewChanges = false;
+    }
+    if (marker != null) {
+      marker.setIcon(getIcon());
+    }
+  }
+}

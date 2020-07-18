@@ -1,0 +1,11 @@
+package com.google.android.gms.ads.mediation.rtb;
+
+import javax.annotation.ParametersAreNonnullByDefault;
+
+@ParametersAreNonnullByDefault
+public abstract interface SignalCallbacks
+{
+  public abstract void onFailure(String paramString);
+  
+  public abstract void onSuccess(String paramString);
+}

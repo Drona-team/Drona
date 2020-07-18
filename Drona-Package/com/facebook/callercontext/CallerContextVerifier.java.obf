@@ -1,0 +1,8 @@
+package com.facebook.callercontext;
+
+import javax.annotation.Nullable;
+
+public abstract interface CallerContextVerifier
+{
+  public abstract void verifyCallerContext(@Nullable Object paramObject);
+}

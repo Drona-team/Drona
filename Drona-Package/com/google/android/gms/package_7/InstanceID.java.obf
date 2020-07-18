@@ -1,0 +1,324 @@
+package com.google.android.gms.iid;
+
+import android.content.Context;
+import android.content.pm.PackageInfo;
+import android.content.pm.PackageManager;
+import android.content.pm.PackageManager.NameNotFoundException;
+import android.os.Bundle;
+import android.os.Looper;
+import android.util.Base64;
+import android.util.Log;
+import androidx.collection.ArrayMap;
+import com.google.android.gms.common.annotation.KeepForSdk;
+import com.google.android.gms.common.internal.ShowFirstParty;
+import java.io.IOException;
+import java.security.KeyPair;
+import java.security.MessageDigest;
+import java.security.NoSuchAlgorithmException;
+import java.security.PublicKey;
+import java.util.Map;
+import java.util.concurrent.TimeUnit;
+
+@Deprecated
+public class InstanceID
+{
+  public static final String ERROR_MAIN_THREAD = "MAIN_THREAD";
+  public static final String ERROR_MISSING_INSTANCEID_SERVICE = "MISSING_INSTANCEID_SERVICE";
+  public static final String ERROR_SERVICE_NOT_AVAILABLE = "SERVICE_NOT_AVAILABLE";
+  public static final String ERROR_TIMEOUT = "TIMEOUT";
+  private static final zzaj<Boolean> zzbu = zzai.zzy().zzd("gcm_check_for_different_iid_in_token", true);
+  private static Map<String, InstanceID> zzbv = new ArrayMap();
+  private static final long zzbw = TimeUnit.DAYS.toMillis(7L);
+  private static zzak zzbx;
+  private static zzaf zzby;
+  private static String zzbz;
+  private String zzca = "";
+  private Context zzl;
+  
+  @ShowFirstParty
+  private InstanceID(Context paramContext, String paramString)
+  {
+    zzl = paramContext.getApplicationContext();
+    zzca = paramString;
+  }
+  
+  @Deprecated
+  public static InstanceID getInstance(Context paramContext)
+  {
+    return getInstance(paramContext, null);
+  }
+  
+  @KeepForSdk
+  public static InstanceID getInstance(Context paramContext, Bundle paramBundle)
+  {
+    if (paramBundle == null) {
+      paramBundle = "";
+    }
+    for (;;)
+    {
+      try
+      {
+        paramBundle = paramBundle.getString("subtype");
+      }
+      finally
+      {
+        Context localContext;
+        continue;
+      }
+      localContext = paramContext.getApplicationContext();
+      if (zzbx == null)
+      {
+        paramContext = localContext.getPackageName();
+        paramBundle = new StringBuilder(String.valueOf(paramContext).length() + 73);
+        paramBundle.append("Instance ID SDK is deprecated, ");
+        paramBundle.append(paramContext);
+        paramBundle.append(" should update to use Firebase Instance ID");
+        Log.w("InstanceID", paramBundle.toString());
+        zzbx = new zzak(localContext);
+        zzby = new zzaf(localContext);
+      }
+      zzbz = Integer.toString(zzg(localContext));
+      paramBundle = (InstanceID)zzbv.get(localObject);
+      paramContext = paramBundle;
+      if (paramBundle == null)
+      {
+        paramContext = new InstanceID(localContext, (String)localObject);
+        zzbv.put(localObject, paramContext);
+      }
+      return paramContext;
+      throw paramContext;
+      Object localObject = paramBundle;
+      if (paramBundle == null) {
+        localObject = "";
+      }
+    }
+  }
+  
+  private final KeyPair getKeyPair()
+  {
+    return zzbx.zzj(zzca).getKeyPair();
+  }
+  
+  static String zzd(KeyPair paramKeyPair)
+  {
+    paramKeyPair = paramKeyPair.getPublic().getEncoded();
+    try
+    {
+      paramKeyPair = MessageDigest.getInstance("SHA1").digest(paramKeyPair);
+      paramKeyPair[0] = ((byte)((paramKeyPair[0] & 0xF) + 112));
+      paramKeyPair = Base64.encodeToString(paramKeyPair, 0, 8, 11);
+      return paramKeyPair;
+    }
+    catch (NoSuchAlgorithmException paramKeyPair)
+    {
+      for (;;) {}
+    }
+    Log.w("InstanceID", "Unexpected error, device missing required algorithms");
+    return null;
+  }
+  
+  static int zzg(Context paramContext)
+  {
+    try
+    {
+      int i = getPackageManagergetPackageInfogetPackageName0versionCode;
+      return i;
+    }
+    catch (PackageManager.NameNotFoundException paramContext)
+    {
+      paramContext = String.valueOf(paramContext);
+      StringBuilder localStringBuilder = new StringBuilder(String.valueOf(paramContext).length() + 38);
+      localStringBuilder.append("Never happens: can't find own package ");
+      localStringBuilder.append(paramContext);
+      Log.w("InstanceID", localStringBuilder.toString());
+    }
+    return 0;
+  }
+  
+  static String zzh(Context paramContext)
+  {
+    try
+    {
+      paramContext = getPackageManagergetPackageInfogetPackageName0versionName;
+      return paramContext;
+    }
+    catch (PackageManager.NameNotFoundException paramContext)
+    {
+      paramContext = String.valueOf(paramContext);
+      StringBuilder localStringBuilder = new StringBuilder(String.valueOf(paramContext).length() + 38);
+      localStringBuilder.append("Never happens: can't find own package ");
+      localStringBuilder.append(paramContext);
+      Log.w("InstanceID", localStringBuilder.toString());
+    }
+    return null;
+  }
+  
+  public static zzak zzp()
+  {
+    return zzbx;
+  }
+  
+  @Deprecated
+  public void deleteInstanceID()
+    throws IOException
+  {
+    zzd("*", "*", null);
+    zzo();
+  }
+  
+  @Deprecated
+  public void deleteToken(String paramString1, String paramString2)
+    throws IOException
+  {
+    zzd(paramString1, paramString2, null);
+  }
+  
+  @Deprecated
+  public long getCreationTime()
+  {
+    return zzbx.zzj(zzca).getCreationTime();
+  }
+  
+  @Deprecated
+  public String getId()
+  {
+    return zzd(getKeyPair());
+  }
+  
+  @KeepForSdk
+  public String getSubtype()
+  {
+    return zzca;
+  }
+  
+  @Deprecated
+  public String getToken(String paramString1, String paramString2)
+    throws IOException
+  {
+    return getToken(paramString1, paramString2, null);
+  }
+  
+  @Deprecated
+  public String getToken(String paramString1, String paramString2, Bundle paramBundle)
+    throws IOException
+  {
+    if (Looper.getMainLooper() != Looper.myLooper())
+    {
+      Object localObject = null;
+      String str = zzbx.get("appVersion");
+      int j = 1;
+      int i = j;
+      if (str != null) {
+        if (!str.equals(zzbz))
+        {
+          i = j;
+        }
+        else
+        {
+          long l = zzbx.zzg(zzca, paramString1, paramString2);
+          if (l < 0L) {
+            i = j;
+          } else if (System.currentTimeMillis() - l >= zzbw) {
+            i = j;
+          } else {
+            i = 0;
+          }
+        }
+      }
+      if (i == 0) {
+        localObject = zzbx.zzf(zzca, paramString1, paramString2);
+      }
+      if (localObject == null)
+      {
+        localObject = paramBundle;
+        if (paramBundle == null) {
+          localObject = new Bundle();
+        }
+        localObject = zze(paramString1, paramString2, (Bundle)localObject);
+        if ((((Boolean)zzbu.get()).booleanValue()) && (((String)localObject).contains(":")) && (!((String)localObject).startsWith(String.valueOf(getId()).concat(":"))))
+        {
+          InstanceIDListenerService.zzd(zzl, zzbx);
+          throw new IOException("SERVICE_NOT_AVAILABLE");
+        }
+        paramBundle = (Bundle)localObject;
+        if (localObject != null)
+        {
+          zzbx.zzd(zzca, paramString1, paramString2, (String)localObject, zzbz);
+          return localObject;
+        }
+      }
+      else
+      {
+        paramBundle = (Bundle)localObject;
+      }
+      return paramBundle;
+    }
+    throw new IOException("MAIN_THREAD");
+  }
+  
+  @ShowFirstParty
+  public final void zzd(String paramString1, String paramString2, Bundle paramBundle)
+    throws IOException
+  {
+    if (Looper.getMainLooper() != Looper.myLooper())
+    {
+      zzbx.zzh(zzca, paramString1, paramString2);
+      Bundle localBundle = paramBundle;
+      if (paramBundle == null) {
+        localBundle = new Bundle();
+      }
+      localBundle.putString("sender", paramString1);
+      if (paramString2 != null) {
+        localBundle.putString("scope", paramString2);
+      }
+      localBundle.putString("subscription", paramString1);
+      localBundle.putString("delete", "1");
+      localBundle.putString("X-delete", "1");
+      if ("".equals(zzca)) {
+        paramString2 = paramString1;
+      } else {
+        paramString2 = zzca;
+      }
+      localBundle.putString("subtype", paramString2);
+      if (!"".equals(zzca)) {
+        paramString1 = zzca;
+      }
+      localBundle.putString("X-subtype", paramString1);
+      zzaf.zzi(zzby.zzd(localBundle, getKeyPair()));
+      return;
+    }
+    throw new IOException("MAIN_THREAD");
+  }
+  
+  public final String zze(String paramString1, String paramString2, Bundle paramBundle)
+    throws IOException
+  {
+    if (paramString2 != null) {
+      paramBundle.putString("scope", paramString2);
+    }
+    paramBundle.putString("sender", paramString1);
+    if ("".equals(zzca)) {
+      paramString2 = paramString1;
+    } else {
+      paramString2 = zzca;
+    }
+    if (!paramBundle.containsKey("legacy.register"))
+    {
+      paramBundle.putString("subscription", paramString1);
+      paramBundle.putString("subtype", paramString2);
+      paramBundle.putString("X-subscription", paramString1);
+      paramBundle.putString("X-subtype", paramString2);
+    }
+    paramString1 = zzaf.zzi(zzby.zzd(paramBundle, getKeyPair()));
+    if ((!"RST".equals(paramString1)) && (!paramString1.startsWith("RST|"))) {
+      return paramString1;
+    }
+    InstanceIDListenerService.zzd(zzl, zzbx);
+    throw new IOException("SERVICE_NOT_AVAILABLE");
+  }
+  
+  final void zzo()
+  {
+    zzbx.zzk(zzca);
+  }
+}

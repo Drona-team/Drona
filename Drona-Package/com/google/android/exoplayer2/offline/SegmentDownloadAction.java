@@ -1,0 +1,111 @@
+package com.google.android.exoplayer2.offline;
+
+import android.net.Uri;
+import com.google.android.exoplayer2.util.Assertions;
+import java.io.DataInputStream;
+import java.io.DataOutputStream;
+import java.io.IOException;
+import java.util.ArrayList;
+import java.util.Collections;
+import java.util.List;
+
+public abstract class SegmentDownloadAction
+  extends DownloadAction
+{
+  public final List<StreamKey> keys;
+  
+  protected SegmentDownloadAction(String paramString, int paramInt, Uri paramUri, boolean paramBoolean, byte[] paramArrayOfByte, List paramList)
+  {
+    super(paramString, paramInt, paramUri, paramBoolean, paramArrayOfByte);
+    if (paramBoolean)
+    {
+      Assertions.checkArgument(paramList.isEmpty());
+      keys = Collections.emptyList();
+      return;
+    }
+    paramString = new ArrayList(paramList);
+    Collections.sort(paramString);
+    keys = Collections.unmodifiableList(paramString);
+  }
+  
+  private void writeKey(DataOutputStream paramDataOutputStream, StreamKey paramStreamKey)
+    throws IOException
+  {
+    paramDataOutputStream.writeInt(periodIndex);
+    paramDataOutputStream.writeInt(groupIndex);
+    paramDataOutputStream.writeInt(trackIndex);
+  }
+  
+  public boolean equals(Object paramObject)
+  {
+    if (this == paramObject) {
+      return true;
+    }
+    if (!super.equals(paramObject)) {
+      return false;
+    }
+    paramObject = (SegmentDownloadAction)paramObject;
+    return keys.equals(keys);
+  }
+  
+  public List getKeys()
+  {
+    return keys;
+  }
+  
+  public int hashCode()
+  {
+    return super.hashCode() * 31 + keys.hashCode();
+  }
+  
+  public final void writeToStream(DataOutputStream paramDataOutputStream)
+    throws IOException
+  {
+    paramDataOutputStream.writeUTF(uuid.toString());
+    paramDataOutputStream.writeBoolean(isRemoveAction);
+    paramDataOutputStream.writeInt(data.length);
+    paramDataOutputStream.write(data);
+    paramDataOutputStream.writeInt(keys.size());
+    int i = 0;
+    while (i < keys.size())
+    {
+      writeKey(paramDataOutputStream, (StreamKey)keys.get(i));
+      i += 1;
+    }
+  }
+  
+  protected static abstract class SegmentDownloadActionDeserializer
+    extends DownloadAction.Deserializer
+  {
+    public SegmentDownloadActionDeserializer(String paramString, int paramInt)
+    {
+      super(paramInt);
+    }
+    
+    protected abstract DownloadAction createDownloadAction(Uri paramUri, boolean paramBoolean, byte[] paramArrayOfByte, List paramList);
+    
+    public final DownloadAction readFromStream(int paramInt, DataInputStream paramDataInputStream)
+      throws IOException
+    {
+      Uri localUri = Uri.parse(paramDataInputStream.readUTF());
+      boolean bool = paramDataInputStream.readBoolean();
+      byte[] arrayOfByte = new byte[paramDataInputStream.readInt()];
+      paramDataInputStream.readFully(arrayOfByte);
+      int j = paramDataInputStream.readInt();
+      ArrayList localArrayList = new ArrayList();
+      int i = 0;
+      while (i < j)
+      {
+        localArrayList.add(readKey(paramInt, paramDataInputStream));
+        i += 1;
+      }
+      return createDownloadAction(localUri, bool, arrayOfByte, localArrayList);
+    }
+    
+    protected StreamKey readKey(int paramInt, DataInputStream paramDataInputStream)
+      throws IOException
+    {
+      return new StreamKey(paramDataInputStream.readInt(), paramDataInputStream.readInt(), paramDataInputStream.readInt());
+    }
+  }
+}

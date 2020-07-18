@@ -1,0 +1,72 @@
+package com.google.android.exoplayer2.offline;
+
+import androidx.annotation.Nullable;
+import com.google.android.exoplayer2.upstream.DataSink;
+import com.google.android.exoplayer2.upstream.DataSink.Factory;
+import com.google.android.exoplayer2.upstream.DataSource;
+import com.google.android.exoplayer2.upstream.DataSource.Factory;
+import com.google.android.exoplayer2.upstream.DummyDataSource;
+import com.google.android.exoplayer2.upstream.FileDataSource;
+import com.google.android.exoplayer2.upstream.PriorityDataSource;
+import com.google.android.exoplayer2.upstream.cache.Cache;
+import com.google.android.exoplayer2.upstream.cache.CacheDataSink;
+import com.google.android.exoplayer2.upstream.cache.CacheDataSource;
+import com.google.android.exoplayer2.util.Assertions;
+import com.google.android.exoplayer2.util.PriorityTaskManager;
+
+public final class DownloaderConstructorHelper
+{
+  private final Cache cache;
+  private final DataSource.Factory cacheReadDataSourceFactory;
+  private final DataSink.Factory cacheWriteDataSinkFactory;
+  private final PriorityTaskManager priorityTaskManager;
+  private final DataSource.Factory upstreamDataSourceFactory;
+  
+  public DownloaderConstructorHelper(Cache paramCache, DataSource.Factory paramFactory)
+  {
+    this(paramCache, paramFactory, null, null, null);
+  }
+  
+  public DownloaderConstructorHelper(Cache paramCache, DataSource.Factory paramFactory1, @Nullable DataSource.Factory paramFactory2, @Nullable DataSink.Factory paramFactory, @Nullable PriorityTaskManager paramPriorityTaskManager)
+  {
+    Assertions.checkNotNull(paramFactory1);
+    cache = paramCache;
+    upstreamDataSourceFactory = paramFactory1;
+    cacheReadDataSourceFactory = paramFactory2;
+    cacheWriteDataSinkFactory = paramFactory;
+    priorityTaskManager = paramPriorityTaskManager;
+  }
+  
+  public CacheDataSource buildCacheDataSource(boolean paramBoolean)
+  {
+    if (cacheReadDataSourceFactory != null) {}
+    for (Object localObject1 = cacheReadDataSourceFactory.createDataSource();; localObject1 = new FileDataSource()) {
+      break;
+    }
+    if (paramBoolean) {
+      return new CacheDataSource(cache, DummyDataSource.INSTANCE, (DataSource)localObject1, null, 1, null);
+    }
+    if (cacheWriteDataSinkFactory != null) {}
+    for (Object localObject2 = cacheWriteDataSinkFactory.createDataSink();; localObject2 = new CacheDataSink(cache, 2097152L)) {
+      break;
+    }
+    Object localObject3 = upstreamDataSourceFactory.createDataSource();
+    if (priorityTaskManager != null) {
+      localObject3 = new PriorityDataSource((DataSource)localObject3, priorityTaskManager, 64536);
+    }
+    return new CacheDataSource(cache, (DataSource)localObject3, (DataSource)localObject1, (DataSink)localObject2, 1, null);
+  }
+  
+  public Cache getCache()
+  {
+    return cache;
+  }
+  
+  public PriorityTaskManager getPriorityTaskManager()
+  {
+    if (priorityTaskManager != null) {
+      return priorityTaskManager;
+    }
+    return new PriorityTaskManager();
+  }
+}

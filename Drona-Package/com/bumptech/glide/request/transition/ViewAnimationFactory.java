@@ -1,0 +1,72 @@
+package com.bumptech.glide.request.transition;
+
+import android.content.Context;
+import android.view.animation.Animation;
+import android.view.animation.AnimationUtils;
+import com.bumptech.glide.load.DataSource;
+
+public class ViewAnimationFactory<R>
+  implements TransitionFactory<R>
+{
+  private Transition<R> transition;
+  private final ViewTransition.ViewTransitionAnimationFactory viewTransitionAnimationFactory;
+  
+  public ViewAnimationFactory(int paramInt)
+  {
+    this(new ResourceViewTransitionAnimationFactory(paramInt));
+  }
+  
+  public ViewAnimationFactory(Animation paramAnimation)
+  {
+    this(new ConcreteViewTransitionAnimationFactory(paramAnimation));
+  }
+  
+  ViewAnimationFactory(ViewTransition.ViewTransitionAnimationFactory paramViewTransitionAnimationFactory)
+  {
+    viewTransitionAnimationFactory = paramViewTransitionAnimationFactory;
+  }
+  
+  public Transition build(DataSource paramDataSource, boolean paramBoolean)
+  {
+    if ((paramDataSource != DataSource.MEMORY_CACHE) && (paramBoolean))
+    {
+      if (transition == null) {
+        transition = new ViewTransition(viewTransitionAnimationFactory);
+      }
+      return transition;
+    }
+    return NoTransition.access$getNO_ANIMATION();
+  }
+  
+  private static class ConcreteViewTransitionAnimationFactory
+    implements ViewTransition.ViewTransitionAnimationFactory
+  {
+    private final Animation animation;
+    
+    ConcreteViewTransitionAnimationFactory(Animation paramAnimation)
+    {
+      animation = paramAnimation;
+    }
+    
+    public Animation build(Context paramContext)
+    {
+      return animation;
+    }
+  }
+  
+  private static class ResourceViewTransitionAnimationFactory
+    implements ViewTransition.ViewTransitionAnimationFactory
+  {
+    private final int animationId;
+    
+    ResourceViewTransitionAnimationFactory(int paramInt)
+    {
+      animationId = paramInt;
+    }
+    
+    public Animation build(Context paramContext)
+    {
+      return AnimationUtils.loadAnimation(paramContext, animationId);
+    }
+  }
+}

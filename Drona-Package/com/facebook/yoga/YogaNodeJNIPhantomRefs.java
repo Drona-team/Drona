@@ -1,0 +1,42 @@
+package com.facebook.yoga;
+
+import com.facebook.upgrade.DestructorThread.Destructor;
+
+public class YogaNodeJNIPhantomRefs
+  extends YogaNodeJNIBase
+{
+  public YogaNodeJNIPhantomRefs()
+  {
+    registerPhantomRef(this, mNativePointer);
+  }
+  
+  public YogaNodeJNIPhantomRefs(YogaConfig paramYogaConfig)
+  {
+    super(paramYogaConfig);
+    registerPhantomRef(this, mNativePointer);
+  }
+  
+  private static final void registerPhantomRef(YogaNode paramYogaNode, final long paramLong)
+  {
+    new DestructorThread.Destructor(paramYogaNode)
+    {
+      private long mNativePointer = paramLong;
+      
+      protected void destruct()
+      {
+        if (mNativePointer != 0L)
+        {
+          YogaNative.jni_YGNodeFree(mNativePointer);
+          mNativePointer = 0L;
+        }
+      }
+    };
+  }
+  
+  public YogaNodeJNIPhantomRefs cloneWithoutChildren()
+  {
+    YogaNodeJNIPhantomRefs localYogaNodeJNIPhantomRefs = (YogaNodeJNIPhantomRefs)super.cloneWithoutChildren();
+    registerPhantomRef(localYogaNodeJNIPhantomRefs, mNativePointer);
+    return localYogaNodeJNIPhantomRefs;
+  }
+}

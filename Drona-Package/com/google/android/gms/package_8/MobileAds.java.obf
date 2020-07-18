@@ -1,0 +1,106 @@
+package com.google.android.gms.ads;
+
+import android.content.Context;
+import androidx.annotation.RequiresPermission;
+import com.google.android.gms.ads.mediation.rtb.RtbAdapter;
+import com.google.android.gms.ads.reward.RewardedVideoAd;
+import com.google.android.gms.common.annotation.KeepForSdk;
+import com.google.android.gms.internal.ads.zzabe;
+import com.google.android.gms.internal.ads.zzabi;
+
+public class MobileAds
+{
+  private MobileAds() {}
+  
+  public static RewardedVideoAd getRewardedVideoAdInstance(Context paramContext)
+  {
+    return zzabe.zzqf().getRewardedVideoAdInstance(paramContext);
+  }
+  
+  @KeepForSdk
+  public static String getVersionString()
+  {
+    return zzabe.zzqf().getVersionString();
+  }
+  
+  public static void initialize(Context paramContext)
+  {
+    initialize(paramContext, null, null);
+  }
+  
+  @RequiresPermission("android.permission.INTERNET")
+  public static void initialize(Context paramContext, String paramString)
+  {
+    initialize(paramContext, paramString, null);
+  }
+  
+  @Deprecated
+  @RequiresPermission("android.permission.INTERNET")
+  public static void initialize(Context paramContext, String paramString, Settings paramSettings)
+  {
+    zzabe localZzabe = zzabe.zzqf();
+    if (paramSettings == null) {
+      paramSettings = null;
+    } else {
+      paramSettings = paramSettings.zzdg();
+    }
+    localZzabe.zza(paramContext, paramString, paramSettings, null);
+  }
+  
+  public static void openDebugMenu(Context paramContext, String paramString)
+  {
+    zzabe.zzqf().openDebugMenu(paramContext, paramString);
+  }
+  
+  @KeepForSdk
+  public static void registerRtbAdapter(Class<? extends RtbAdapter> paramClass)
+  {
+    zzabe.zzqf().registerRtbAdapter(paramClass);
+  }
+  
+  public static void setAppMuted(boolean paramBoolean)
+  {
+    zzabe.zzqf().setAppMuted(paramBoolean);
+  }
+  
+  public static void setAppVolume(float paramFloat)
+  {
+    zzabe.zzqf().setAppVolume(paramFloat);
+  }
+  
+  public static final class Settings
+  {
+    private final zzabi zzaat = new zzabi();
+    
+    public Settings() {}
+    
+    @Deprecated
+    public final String getTrackingId()
+    {
+      return null;
+    }
+    
+    @Deprecated
+    public final boolean isGoogleAnalyticsEnabled()
+    {
+      return false;
+    }
+    
+    @Deprecated
+    public final Settings setGoogleAnalyticsEnabled(boolean paramBoolean)
+    {
+      return this;
+    }
+    
+    @Deprecated
+    public final Settings setTrackingId(String paramString)
+    {
+      return this;
+    }
+    
+    final zzabi zzdg()
+    {
+      return zzaat;
+    }
+  }
+}

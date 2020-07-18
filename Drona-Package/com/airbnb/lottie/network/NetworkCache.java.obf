@@ -1,0 +1,231 @@
+package com.airbnb.lottie.network;
+
+import android.content.Context;
+import androidx.annotation.Nullable;
+import com.airbnb.lottie.utils.Logger;
+import java.io.File;
+import java.io.FileNotFoundException;
+
+class NetworkCache
+{
+  private final Context appContext;
+  private final String url;
+  
+  NetworkCache(Context paramContext, String paramString)
+  {
+    appContext = paramContext.getApplicationContext();
+    url = paramString;
+  }
+  
+  private static String filenameForUrl(String paramString, FileExtension paramFileExtension, boolean paramBoolean)
+  {
+    StringBuilder localStringBuilder = new StringBuilder();
+    localStringBuilder.append("lottie_cache_");
+    localStringBuilder.append(paramString.replaceAll("\\W+", ""));
+    if (paramBoolean) {
+      paramString = paramFileExtension.tempExtension();
+    } else {
+      paramString = extension;
+    }
+    localStringBuilder.append(paramString);
+    return localStringBuilder.toString();
+  }
+  
+  @Nullable
+  private File getCachedFile(String paramString)
+    throws FileNotFoundException
+  {
+    File localFile = new File(appContext.getCacheDir(), filenameForUrl(paramString, FileExtension.JSON, false));
+    if (localFile.exists()) {
+      return localFile;
+    }
+    paramString = new File(appContext.getCacheDir(), filenameForUrl(paramString, FileExtension.ZIP, false));
+    if (paramString.exists()) {
+      return paramString;
+    }
+    return null;
+  }
+  
+  /* Error */
+  @Nullable
+  @androidx.annotation.WorkerThread
+  androidx.core.util.Pair<FileExtension, java.io.InputStream> fetch()
+  {
+    // Byte code:
+    //   0: aload_0
+    //   1: aload_0
+    //   2: getfield 23	com/airbnb/lottie/network/NetworkCache:url	Ljava/lang/String;
+    //   5: invokespecial 91	com/airbnb/lottie/network/NetworkCache:getCachedFile	(Ljava/lang/String;)Ljava/io/File;
+    //   8: astore_2
+    //   9: aload_2
+    //   10: ifnonnull +5 -> 15
+    //   13: aconst_null
+    //   14: areturn
+    //   15: new 93	java/io/FileInputStream
+    //   18: dup
+    //   19: aload_2
+    //   20: invokespecial 96	java/io/FileInputStream:<init>	(Ljava/io/File;)V
+    //   23: astore_3
+    //   24: aload_2
+    //   25: invokevirtual 99	java/io/File:getAbsolutePath	()Ljava/lang/String;
+    //   28: ldc 101
+    //   30: invokevirtual 105	java/lang/String:endsWith	(Ljava/lang/String;)Z
+    //   33: ifeq +10 -> 43
+    //   36: getstatic 84	com/airbnb/lottie/network/FileExtension:ZIP	Lcom/airbnb/lottie/network/FileExtension;
+    //   39: astore_1
+    //   40: goto +7 -> 47
+    //   43: getstatic 72	com/airbnb/lottie/network/FileExtension:JSON	Lcom/airbnb/lottie/network/FileExtension;
+    //   46: astore_1
+    //   47: new 28	java/lang/StringBuilder
+    //   50: dup
+    //   51: invokespecial 29	java/lang/StringBuilder:<init>	()V
+    //   54: astore 4
+    //   56: aload 4
+    //   58: ldc 107
+    //   60: invokevirtual 35	java/lang/StringBuilder:append	(Ljava/lang/String;)Ljava/lang/StringBuilder;
+    //   63: pop
+    //   64: aload 4
+    //   66: aload_0
+    //   67: getfield 23	com/airbnb/lottie/network/NetworkCache:url	Ljava/lang/String;
+    //   70: invokevirtual 35	java/lang/StringBuilder:append	(Ljava/lang/String;)Ljava/lang/StringBuilder;
+    //   73: pop
+    //   74: aload 4
+    //   76: ldc 109
+    //   78: invokevirtual 35	java/lang/StringBuilder:append	(Ljava/lang/String;)Ljava/lang/StringBuilder;
+    //   81: pop
+    //   82: aload 4
+    //   84: aload_2
+    //   85: invokevirtual 99	java/io/File:getAbsolutePath	()Ljava/lang/String;
+    //   88: invokevirtual 35	java/lang/StringBuilder:append	(Ljava/lang/String;)Ljava/lang/StringBuilder;
+    //   91: pop
+    //   92: aload 4
+    //   94: invokevirtual 57	java/lang/StringBuilder:toString	()Ljava/lang/String;
+    //   97: invokestatic 115	com/airbnb/lottie/utils/Logger:debug	(Ljava/lang/String;)V
+    //   100: new 117	androidx/core/util/Pair
+    //   103: dup
+    //   104: aload_1
+    //   105: aload_3
+    //   106: invokespecial 120	androidx/core/util/Pair:<init>	(Ljava/lang/Object;Ljava/lang/Object;)V
+    //   109: areturn
+    //   110: astore_1
+    //   111: aconst_null
+    //   112: areturn
+    //   113: astore_1
+    //   114: aconst_null
+    //   115: areturn
+    // Local variable table:
+    //   start	length	slot	name	signature
+    //   0	116	0	this	NetworkCache
+    //   39	66	1	localFileExtension	FileExtension
+    //   110	1	1	localFileNotFoundException1	FileNotFoundException
+    //   113	1	1	localFileNotFoundException2	FileNotFoundException
+    //   8	77	2	localFile	File
+    //   23	83	3	localFileInputStream	java.io.FileInputStream
+    //   54	39	4	localStringBuilder	StringBuilder
+    // Exception table:
+    //   from	to	target	type
+    //   0	9	110	java/io/FileNotFoundException
+    //   15	24	113	java/io/FileNotFoundException
+  }
+  
+  void renameTempFile(FileExtension paramFileExtension)
+  {
+    paramFileExtension = filenameForUrl(url, paramFileExtension, true);
+    paramFileExtension = new File(appContext.getCacheDir(), paramFileExtension);
+    File localFile = new File(paramFileExtension.getAbsolutePath().replace(".temp", ""));
+    boolean bool = paramFileExtension.renameTo(localFile);
+    StringBuilder localStringBuilder = new StringBuilder();
+    localStringBuilder.append("Copying temp file to real file (");
+    localStringBuilder.append(localFile);
+    localStringBuilder.append(")");
+    Logger.debug(localStringBuilder.toString());
+    if (!bool)
+    {
+      localStringBuilder = new StringBuilder();
+      localStringBuilder.append("Unable to rename cache file ");
+      localStringBuilder.append(paramFileExtension.getAbsolutePath());
+      localStringBuilder.append(" to ");
+      localStringBuilder.append(localFile.getAbsolutePath());
+      localStringBuilder.append(".");
+      Logger.warning(localStringBuilder.toString());
+    }
+  }
+  
+  /* Error */
+  File writeTempCacheFile(java.io.InputStream paramInputStream, FileExtension paramFileExtension)
+    throws java.io.IOException
+  {
+    // Byte code:
+    //   0: aload_0
+    //   1: getfield 23	com/airbnb/lottie/network/NetworkCache:url	Ljava/lang/String;
+    //   4: aload_2
+    //   5: iconst_1
+    //   6: invokestatic 74	com/airbnb/lottie/network/NetworkCache:filenameForUrl	(Ljava/lang/String;Lcom/airbnb/lottie/network/FileExtension;Z)Ljava/lang/String;
+    //   9: astore_2
+    //   10: new 64	java/io/File
+    //   13: dup
+    //   14: aload_0
+    //   15: getfield 21	com/airbnb/lottie/network/NetworkCache:appContext	Landroid/content/Context;
+    //   18: invokevirtual 68	android/content/Context:getCacheDir	()Ljava/io/File;
+    //   21: aload_2
+    //   22: invokespecial 77	java/io/File:<init>	(Ljava/io/File;Ljava/lang/String;)V
+    //   25: astore 4
+    //   27: new 158	java/io/FileOutputStream
+    //   30: dup
+    //   31: aload 4
+    //   33: invokespecial 159	java/io/FileOutputStream:<init>	(Ljava/io/File;)V
+    //   36: astore_2
+    //   37: sipush 1024
+    //   40: newarray byte
+    //   42: astore 5
+    //   44: aload_1
+    //   45: aload 5
+    //   47: invokevirtual 165	java/io/InputStream:read	([B)I
+    //   50: istore_3
+    //   51: iload_3
+    //   52: iconst_m1
+    //   53: if_icmpeq +14 -> 67
+    //   56: aload_2
+    //   57: aload 5
+    //   59: iconst_0
+    //   60: iload_3
+    //   61: invokevirtual 171	java/io/OutputStream:write	([BII)V
+    //   64: goto -20 -> 44
+    //   67: aload_2
+    //   68: invokevirtual 174	java/io/OutputStream:flush	()V
+    //   71: aload_2
+    //   72: invokevirtual 177	java/io/OutputStream:close	()V
+    //   75: aload_1
+    //   76: invokevirtual 178	java/io/InputStream:close	()V
+    //   79: aload 4
+    //   81: areturn
+    //   82: astore 4
+    //   84: aload_2
+    //   85: invokevirtual 177	java/io/OutputStream:close	()V
+    //   88: aload 4
+    //   90: athrow
+    //   91: astore_2
+    //   92: aload_1
+    //   93: invokevirtual 178	java/io/InputStream:close	()V
+    //   96: aload_2
+    //   97: athrow
+    // Local variable table:
+    //   start	length	slot	name	signature
+    //   0	98	0	this	NetworkCache
+    //   0	98	1	paramInputStream	java.io.InputStream
+    //   0	98	2	paramFileExtension	FileExtension
+    //   50	11	3	i	int
+    //   25	55	4	localFile	File
+    //   82	7	4	localObject	Object
+    //   42	16	5	arrayOfByte	byte[]
+    // Exception table:
+    //   from	to	target	type
+    //   37	44	82	finally
+    //   44	51	82	finally
+    //   56	64	82	finally
+    //   67	71	82	finally
+    //   27	37	91	finally
+    //   71	75	91	finally
+    //   84	91	91	finally
+  }
+}

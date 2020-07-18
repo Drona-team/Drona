@@ -1,0 +1,76 @@
+package com.bumptech.glide.load.resource.bitmap;
+
+import android.content.Context;
+import android.content.res.Resources;
+import android.graphics.Bitmap;
+import android.graphics.drawable.BitmapDrawable;
+import androidx.annotation.NonNull;
+import androidx.annotation.Nullable;
+import com.bumptech.glide.Glide;
+import com.bumptech.glide.load.engine.Initializable;
+import com.bumptech.glide.load.engine.Resource;
+import com.bumptech.glide.load.engine.bitmap_recycle.BitmapPool;
+import com.bumptech.glide.util.Preconditions;
+
+public final class LazyBitmapDrawableResource
+  implements Resource<BitmapDrawable>, Initializable
+{
+  private final Resource<Bitmap> bitmapResource;
+  private final Resources resources;
+  
+  private LazyBitmapDrawableResource(@NonNull Resources paramResources, @NonNull Resource<Bitmap> paramResource)
+  {
+    resources = ((Resources)Preconditions.checkNotNull(paramResources));
+    bitmapResource = ((Resource)Preconditions.checkNotNull(paramResource));
+  }
+  
+  @Nullable
+  public static Resource<BitmapDrawable> obtain(@NonNull Resources paramResources, @Nullable Resource<Bitmap> paramResource)
+  {
+    if (paramResource == null) {
+      return null;
+    }
+    return new LazyBitmapDrawableResource(paramResources, paramResource);
+  }
+  
+  @Deprecated
+  public static LazyBitmapDrawableResource obtain(Context paramContext, Bitmap paramBitmap)
+  {
+    return (LazyBitmapDrawableResource)obtain(paramContext.getResources(), BitmapResource.obtain(paramBitmap, Glide.get(paramContext).getBitmapPool()));
+  }
+  
+  @Deprecated
+  public static LazyBitmapDrawableResource obtain(Resources paramResources, BitmapPool paramBitmapPool, Bitmap paramBitmap)
+  {
+    return (LazyBitmapDrawableResource)obtain(paramResources, BitmapResource.obtain(paramBitmap, paramBitmapPool));
+  }
+  
+  @NonNull
+  public BitmapDrawable get()
+  {
+    return new BitmapDrawable(resources, (Bitmap)bitmapResource.get());
+  }
+  
+  @NonNull
+  public Class<BitmapDrawable> getResourceClass()
+  {
+    return BitmapDrawable.class;
+  }
+  
+  public int getSize()
+  {
+    return bitmapResource.getSize();
+  }
+  
+  public void initialize()
+  {
+    if ((bitmapResource instanceof Initializable)) {
+      ((Initializable)bitmapResource).initialize();
+    }
+  }
+  
+  public void recycle()
+  {
+    bitmapResource.recycle();
+  }
+}

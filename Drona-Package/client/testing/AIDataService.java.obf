@@ -1,0 +1,1764 @@
+package ai.api;
+
+import ai.api.model.AIContext;
+import ai.api.model.AIRequest;
+import ai.api.model.AIResponse;
+import ai.api.model.Entity;
+import ai.api.model.Status;
+import ai.api.util.StringUtils;
+import com.google.gson.Gson;
+import com.google.gson.JsonSyntaxException;
+import java.io.InputStream;
+import java.lang.reflect.Type;
+import java.net.MalformedURLException;
+import java.util.Calendar;
+import java.util.Collection;
+import java.util.Collections;
+import java.util.List;
+import java.util.Map;
+import java.util.TimeZone;
+import org.apache.logging.log4j.LogManager;
+import org.apache.logging.log4j.Logger;
+
+public class AIDataService
+{
+  private static final String DEFAULT_REQUEST_METHOD = "POST";
+  private static final Gson GSON = GsonFactory.getDefaultFactory().getGson();
+  private static final Logger Log = LogManager.getLogger(AIDataService.class);
+  private static final String REQUEST_METHOD_DELETE = "DELETE";
+  private static final String REQUEST_METHOD_GET = "GET";
+  private static final String REQUEST_METHOD_POST = "POST";
+  private static final AIServiceContext UNDEFINED_SERVICE_CONTEXT = null;
+  private final AIConfiguration config;
+  private final AIServiceContext defaultServiceContext;
+  
+  public AIDataService(AIConfiguration paramAIConfiguration)
+  {
+    this(paramAIConfiguration, null);
+  }
+  
+  public AIDataService(AIConfiguration paramAIConfiguration, AIServiceContext paramAIServiceContext)
+  {
+    if (paramAIConfiguration != null)
+    {
+      config = paramAIConfiguration.clone();
+      if (paramAIServiceContext == null)
+      {
+        defaultServiceContext = new AIServiceContextBuilder().generateSessionId().build();
+        return;
+      }
+      defaultServiceContext = paramAIServiceContext;
+      return;
+    }
+    throw new IllegalArgumentException("config should not be null");
+  }
+  
+  private void fillRequest(AIRequest paramAIRequest, RequestExtras paramRequestExtras)
+  {
+    if (paramRequestExtras.hasContexts()) {
+      paramAIRequest.setContexts(paramRequestExtras.getContexts());
+    }
+    if (paramRequestExtras.hasEntities()) {
+      paramAIRequest.setEntities(paramRequestExtras.getEntities());
+    }
+    if (paramRequestExtras.getLocation() != null) {
+      paramAIRequest.setLocation(paramRequestExtras.getLocation());
+    }
+  }
+  
+  private String getSessionId(AIServiceContext paramAIServiceContext)
+  {
+    if (paramAIServiceContext != null) {
+      return paramAIServiceContext.getSessionId();
+    }
+    return defaultServiceContext.getSessionId();
+  }
+  
+  private String getTimeZone(AIServiceContext paramAIServiceContext)
+  {
+    if (paramAIServiceContext != null) {
+      paramAIServiceContext = paramAIServiceContext.getTimeZone();
+    } else {
+      paramAIServiceContext = defaultServiceContext.getTimeZone();
+    }
+    if (paramAIServiceContext == null) {
+      paramAIServiceContext = Calendar.getInstance().getTimeZone();
+    }
+    return paramAIServiceContext.getID();
+  }
+  
+  public String addActiveContext(AIContext paramAIContext)
+    throws AIServiceException
+  {
+    return addActiveContext(paramAIContext, UNDEFINED_SERVICE_CONTEXT);
+  }
+  
+  public String addActiveContext(AIContext paramAIContext, AIServiceContext paramAIServiceContext)
+    throws AIServiceException
+  {
+    try
+    {
+      paramAIContext = (ApiActiveContextNamesResponse)doRequest(paramAIContext, ApiActiveContextNamesResponse.class, config.getContextsUrl(getSessionId(paramAIServiceContext)), "POST");
+      if ((names != null) && (names.size() > 0))
+      {
+        paramAIContext = (String)names.get(0);
+        return paramAIContext;
+      }
+      return null;
+    }
+    catch (BadResponseStatusException paramAIContext)
+    {
+      throw new AIServiceException(response);
+    }
+  }
+  
+  public List<String> addActiveContext(Iterable<AIContext> paramIterable)
+    throws AIServiceException
+  {
+    return addActiveContext(paramIterable, UNDEFINED_SERVICE_CONTEXT);
+  }
+  
+  public List<String> addActiveContext(Iterable<AIContext> paramIterable, AIServiceContext paramAIServiceContext)
+    throws AIServiceException
+  {
+    try
+    {
+      paramIterable = doRequestconfig.getContextsUrl(getSessionId(paramAIServiceContext)), "POST")).names;
+      return paramIterable;
+    }
+    catch (BadResponseStatusException paramIterable)
+    {
+      throw new AIServiceException(response);
+    }
+  }
+  
+  protected <TRequest, TResponse> TResponse doRequest(TRequest paramTRequest, Type paramType, String paramString1, String paramString2)
+    throws AIServiceException, AIDataService.BadResponseStatusException
+  {
+    return doRequest(paramTRequest, paramType, paramString1, paramString2, (Map)null);
+  }
+  
+  /* Error */
+  protected <TRequest, TResponse> TResponse doRequest(TRequest paramTRequest, Type paramType, String paramString1, String paramString2, Map<String, String> paramMap)
+    throws AIServiceException, AIDataService.BadResponseStatusException
+  {
+    // Byte code:
+    //   0: aconst_null
+    //   1: astore 9
+    //   3: aconst_null
+    //   4: astore 8
+    //   6: aload 8
+    //   8: astore 6
+    //   10: aload 9
+    //   12: astore 7
+    //   14: new 214	java/net/URL
+    //   17: dup
+    //   18: aload_3
+    //   19: invokespecial 215	java/net/URL:<init>	(Ljava/lang/String;)V
+    //   22: astore 10
+    //   24: aload_1
+    //   25: ifnull +775 -> 800
+    //   28: aload 8
+    //   30: astore 6
+    //   32: aload 9
+    //   34: astore 7
+    //   36: getstatic 60	ai/api/AIDataService:GSON	Lcom/google/gson/Gson;
+    //   39: aload_1
+    //   40: invokevirtual 221	com/google/gson/Gson:toJson	(Ljava/lang/Object;)Ljava/lang/String;
+    //   43: astore_3
+    //   44: goto +758 -> 802
+    //   47: aload 8
+    //   49: astore 6
+    //   51: aload 9
+    //   53: astore 7
+    //   55: getstatic 46	ai/api/AIDataService:Log	Lorg/apache/logging/log4j/Logger;
+    //   58: astore_1
+    //   59: aload 8
+    //   61: astore 6
+    //   63: aload 9
+    //   65: astore 7
+    //   67: new 223	java/lang/StringBuilder
+    //   70: dup
+    //   71: invokespecial 224	java/lang/StringBuilder:<init>	()V
+    //   74: astore 11
+    //   76: aload 8
+    //   78: astore 6
+    //   80: aload 9
+    //   82: astore 7
+    //   84: aload 11
+    //   86: ldc -30
+    //   88: invokevirtual 230	java/lang/StringBuilder:append	(Ljava/lang/String;)Ljava/lang/StringBuilder;
+    //   91: pop
+    //   92: aload 8
+    //   94: astore 6
+    //   96: aload 9
+    //   98: astore 7
+    //   100: aload 11
+    //   102: aload_3
+    //   103: invokevirtual 230	java/lang/StringBuilder:append	(Ljava/lang/String;)Ljava/lang/StringBuilder;
+    //   106: pop
+    //   107: aload 8
+    //   109: astore 6
+    //   111: aload 9
+    //   113: astore 7
+    //   115: aload_1
+    //   116: aload 11
+    //   118: invokevirtual 233	java/lang/StringBuilder:toString	()Ljava/lang/String;
+    //   121: invokeinterface 238 2 0
+    //   126: aload 8
+    //   128: astore 6
+    //   130: aload 9
+    //   132: astore 7
+    //   134: aload_0
+    //   135: getfield 76	ai/api/AIDataService:config	Lai/api/AIConfiguration;
+    //   138: invokevirtual 242	ai/api/AIConfiguration:getProxy	()Ljava/net/Proxy;
+    //   141: ifnull +30 -> 171
+    //   144: aload 8
+    //   146: astore 6
+    //   148: aload 9
+    //   150: astore 7
+    //   152: aload 10
+    //   154: aload_0
+    //   155: getfield 76	ai/api/AIDataService:config	Lai/api/AIConfiguration;
+    //   158: invokevirtual 242	ai/api/AIConfiguration:getProxy	()Ljava/net/Proxy;
+    //   161: invokevirtual 246	java/net/URL:openConnection	(Ljava/net/Proxy;)Ljava/net/URLConnection;
+    //   164: checkcast 248	java/net/HttpURLConnection
+    //   167: astore_1
+    //   168: goto +20 -> 188
+    //   171: aload 8
+    //   173: astore 6
+    //   175: aload 9
+    //   177: astore 7
+    //   179: aload 10
+    //   181: invokevirtual 251	java/net/URL:openConnection	()Ljava/net/URLConnection;
+    //   184: checkcast 248	java/net/HttpURLConnection
+    //   187: astore_1
+    //   188: aload_3
+    //   189: ifnull +39 -> 228
+    //   192: aload_1
+    //   193: astore 6
+    //   195: aload_1
+    //   196: astore 7
+    //   198: ldc 20
+    //   200: aload 4
+    //   202: invokevirtual 255	java/lang/String:equals	(Ljava/lang/Object;)Z
+    //   205: ifeq +6 -> 211
+    //   208: goto +20 -> 228
+    //   211: aload_1
+    //   212: astore 6
+    //   214: aload_1
+    //   215: astore 7
+    //   217: new 158	ai/api/AIServiceException
+    //   220: dup
+    //   221: ldc_w 257
+    //   224: invokespecial 258	ai/api/AIServiceException:<init>	(Ljava/lang/String;)V
+    //   227: athrow
+    //   228: aload_1
+    //   229: astore 6
+    //   231: aload_1
+    //   232: astore 7
+    //   234: aload_1
+    //   235: aload 4
+    //   237: invokevirtual 261	java/net/HttpURLConnection:setRequestMethod	(Ljava/lang/String;)V
+    //   240: aload_1
+    //   241: astore 6
+    //   243: aload_1
+    //   244: astore 7
+    //   246: ldc 20
+    //   248: aload 4
+    //   250: invokevirtual 255	java/lang/String:equals	(Ljava/lang/Object;)Z
+    //   253: ifeq +14 -> 267
+    //   256: aload_1
+    //   257: astore 6
+    //   259: aload_1
+    //   260: astore 7
+    //   262: aload_1
+    //   263: iconst_1
+    //   264: invokevirtual 265	java/net/HttpURLConnection:setDoOutput	(Z)V
+    //   267: aload_1
+    //   268: astore 6
+    //   270: aload_1
+    //   271: astore 7
+    //   273: new 223	java/lang/StringBuilder
+    //   276: dup
+    //   277: invokespecial 224	java/lang/StringBuilder:<init>	()V
+    //   280: astore 4
+    //   282: aload_1
+    //   283: astore 6
+    //   285: aload_1
+    //   286: astore 7
+    //   288: aload 4
+    //   290: ldc_w 267
+    //   293: invokevirtual 230	java/lang/StringBuilder:append	(Ljava/lang/String;)Ljava/lang/StringBuilder;
+    //   296: pop
+    //   297: aload_1
+    //   298: astore 6
+    //   300: aload_1
+    //   301: astore 7
+    //   303: aload 4
+    //   305: aload_0
+    //   306: getfield 76	ai/api/AIDataService:config	Lai/api/AIConfiguration;
+    //   309: invokevirtual 270	ai/api/AIConfiguration:getApiKey	()Ljava/lang/String;
+    //   312: invokevirtual 230	java/lang/StringBuilder:append	(Ljava/lang/String;)Ljava/lang/StringBuilder;
+    //   315: pop
+    //   316: aload_1
+    //   317: astore 6
+    //   319: aload_1
+    //   320: astore 7
+    //   322: aload_1
+    //   323: ldc_w 272
+    //   326: aload 4
+    //   328: invokevirtual 233	java/lang/StringBuilder:toString	()Ljava/lang/String;
+    //   331: invokevirtual 276	java/net/HttpURLConnection:addRequestProperty	(Ljava/lang/String;Ljava/lang/String;)V
+    //   334: aload_1
+    //   335: astore 6
+    //   337: aload_1
+    //   338: astore 7
+    //   340: aload_1
+    //   341: ldc_w 278
+    //   344: ldc_w 280
+    //   347: invokevirtual 276	java/net/HttpURLConnection:addRequestProperty	(Ljava/lang/String;Ljava/lang/String;)V
+    //   350: aload_1
+    //   351: astore 6
+    //   353: aload_1
+    //   354: astore 7
+    //   356: aload_1
+    //   357: ldc_w 282
+    //   360: ldc_w 284
+    //   363: invokevirtual 276	java/net/HttpURLConnection:addRequestProperty	(Ljava/lang/String;Ljava/lang/String;)V
+    //   366: aload 5
+    //   368: ifnull +90 -> 458
+    //   371: aload_1
+    //   372: astore 6
+    //   374: aload_1
+    //   375: astore 7
+    //   377: aload 5
+    //   379: invokeinterface 288 1 0
+    //   384: invokeinterface 294 1 0
+    //   389: astore 4
+    //   391: aload_1
+    //   392: astore 6
+    //   394: aload_1
+    //   395: astore 7
+    //   397: aload 4
+    //   399: invokeinterface 299 1 0
+    //   404: ifeq +54 -> 458
+    //   407: aload_1
+    //   408: astore 6
+    //   410: aload_1
+    //   411: astore 7
+    //   413: aload 4
+    //   415: invokeinterface 303 1 0
+    //   420: checkcast 305	java/util/Map$Entry
+    //   423: astore 5
+    //   425: aload_1
+    //   426: astore 6
+    //   428: aload_1
+    //   429: astore 7
+    //   431: aload_1
+    //   432: aload 5
+    //   434: invokeinterface 308 1 0
+    //   439: checkcast 188	java/lang/String
+    //   442: aload 5
+    //   444: invokeinterface 311 1 0
+    //   449: checkcast 188	java/lang/String
+    //   452: invokevirtual 276	java/net/HttpURLConnection:addRequestProperty	(Ljava/lang/String;Ljava/lang/String;)V
+    //   455: goto -64 -> 391
+    //   458: aload_1
+    //   459: astore 6
+    //   461: aload_1
+    //   462: astore 7
+    //   464: aload_1
+    //   465: invokevirtual 314	java/net/HttpURLConnection:connect	()V
+    //   468: aload_3
+    //   469: ifnull +45 -> 514
+    //   472: aload_1
+    //   473: astore 6
+    //   475: aload_1
+    //   476: astore 7
+    //   478: new 316	java/io/BufferedOutputStream
+    //   481: dup
+    //   482: aload_1
+    //   483: invokevirtual 320	java/net/HttpURLConnection:getOutputStream	()Ljava/io/OutputStream;
+    //   486: invokespecial 323	java/io/BufferedOutputStream:<init>	(Ljava/io/OutputStream;)V
+    //   489: astore 4
+    //   491: aload_1
+    //   492: astore 6
+    //   494: aload_1
+    //   495: astore 7
+    //   497: aload_3
+    //   498: aload 4
+    //   500: invokestatic 329	ai/api/util/IOUtils:writeAll	(Ljava/lang/String;Ljava/io/OutputStream;)V
+    //   503: aload_1
+    //   504: astore 6
+    //   506: aload_1
+    //   507: astore 7
+    //   509: aload 4
+    //   511: invokevirtual 332	java/io/BufferedOutputStream:close	()V
+    //   514: aload_1
+    //   515: astore 6
+    //   517: aload_1
+    //   518: astore 7
+    //   520: new 334	java/io/BufferedInputStream
+    //   523: dup
+    //   524: aload_1
+    //   525: invokevirtual 338	java/net/HttpURLConnection:getInputStream	()Ljava/io/InputStream;
+    //   528: invokespecial 341	java/io/BufferedInputStream:<init>	(Ljava/io/InputStream;)V
+    //   531: astore 4
+    //   533: aload_1
+    //   534: astore 6
+    //   536: aload_1
+    //   537: astore 7
+    //   539: aload 4
+    //   541: invokestatic 345	ai/api/util/IOUtils:readAll	(Ljava/io/InputStream;)Ljava/lang/String;
+    //   544: astore_3
+    //   545: aload_1
+    //   546: astore 6
+    //   548: aload_1
+    //   549: astore 7
+    //   551: aload 4
+    //   553: invokevirtual 348	java/io/InputStream:close	()V
+    //   556: aload_1
+    //   557: astore 6
+    //   559: aload_1
+    //   560: astore 7
+    //   562: getstatic 60	ai/api/AIDataService:GSON	Lcom/google/gson/Gson;
+    //   565: aload_3
+    //   566: ldc_w 350
+    //   569: invokevirtual 354	com/google/gson/Gson:fromJson	(Ljava/lang/String;Ljava/lang/Class;)Ljava/lang/Object;
+    //   572: checkcast 350	ai/api/model/AIResponse
+    //   575: astore 4
+    //   577: aload_1
+    //   578: astore 6
+    //   580: aload_1
+    //   581: astore 7
+    //   583: aload 4
+    //   585: invokevirtual 358	ai/api/model/AIResponse:getStatus	()Lai/api/model/Status;
+    //   588: ifnull +45 -> 633
+    //   591: aload_1
+    //   592: astore 6
+    //   594: aload_1
+    //   595: astore 7
+    //   597: aload 4
+    //   599: invokevirtual 358	ai/api/model/AIResponse:getStatus	()Lai/api/model/Status;
+    //   602: invokevirtual 364	ai/api/model/Status:getCode	()Ljava/lang/Integer;
+    //   605: invokevirtual 369	java/lang/Integer:intValue	()I
+    //   608: sipush 200
+    //   611: if_icmpne +6 -> 617
+    //   614: goto +19 -> 633
+    //   617: aload_1
+    //   618: astore 6
+    //   620: aload_1
+    //   621: astore 7
+    //   623: new 12	ai/api/AIDataService$BadResponseStatusException
+    //   626: dup
+    //   627: aload 4
+    //   629: invokespecial 370	ai/api/AIDataService$BadResponseStatusException:<init>	(Lai/api/model/AIResponse;)V
+    //   632: athrow
+    //   633: aload_1
+    //   634: astore 6
+    //   636: aload_1
+    //   637: astore 7
+    //   639: getstatic 60	ai/api/AIDataService:GSON	Lcom/google/gson/Gson;
+    //   642: aload_3
+    //   643: aload_2
+    //   644: invokevirtual 373	com/google/gson/Gson:fromJson	(Ljava/lang/String;Ljava/lang/reflect/Type;)Ljava/lang/Object;
+    //   647: astore_2
+    //   648: aload_1
+    //   649: ifnull +7 -> 656
+    //   652: aload_1
+    //   653: invokevirtual 376	java/net/HttpURLConnection:disconnect	()V
+    //   656: aload_2
+    //   657: areturn
+    //   658: astore_1
+    //   659: goto +124 -> 783
+    //   662: astore_1
+    //   663: aload 7
+    //   665: ifnull +86 -> 751
+    //   668: aload 7
+    //   670: astore 6
+    //   672: aload 7
+    //   674: invokevirtual 379	java/net/HttpURLConnection:getErrorStream	()Ljava/io/InputStream;
+    //   677: astore_2
+    //   678: aload_2
+    //   679: ifnull +39 -> 718
+    //   682: aload 7
+    //   684: astore 6
+    //   686: aload_2
+    //   687: invokestatic 345	ai/api/util/IOUtils:readAll	(Ljava/io/InputStream;)Ljava/lang/String;
+    //   690: astore_2
+    //   691: aload 7
+    //   693: astore 6
+    //   695: getstatic 46	ai/api/AIDataService:Log	Lorg/apache/logging/log4j/Logger;
+    //   698: aload_2
+    //   699: invokeinterface 238 2 0
+    //   704: aload 7
+    //   706: astore 6
+    //   708: new 158	ai/api/AIServiceException
+    //   711: dup
+    //   712: aload_2
+    //   713: aload_1
+    //   714: invokespecial 382	ai/api/AIServiceException:<init>	(Ljava/lang/String;Ljava/lang/Throwable;)V
+    //   717: athrow
+    //   718: aload 7
+    //   720: astore 6
+    //   722: new 158	ai/api/AIServiceException
+    //   725: dup
+    //   726: ldc_w 384
+    //   729: aload_1
+    //   730: invokespecial 382	ai/api/AIServiceException:<init>	(Ljava/lang/String;Ljava/lang/Throwable;)V
+    //   733: athrow
+    //   734: astore_2
+    //   735: aload 7
+    //   737: astore 6
+    //   739: getstatic 46	ai/api/AIDataService:Log	Lorg/apache/logging/log4j/Logger;
+    //   742: ldc_w 386
+    //   745: aload_2
+    //   746: invokeinterface 389 3 0
+    //   751: aload 7
+    //   753: astore 6
+    //   755: getstatic 46	ai/api/AIDataService:Log	Lorg/apache/logging/log4j/Logger;
+    //   758: ldc_w 391
+    //   761: aload_1
+    //   762: invokeinterface 394 3 0
+    //   767: aload 7
+    //   769: astore 6
+    //   771: new 158	ai/api/AIServiceException
+    //   774: dup
+    //   775: ldc_w 391
+    //   778: aload_1
+    //   779: invokespecial 382	ai/api/AIServiceException:<init>	(Ljava/lang/String;Ljava/lang/Throwable;)V
+    //   782: athrow
+    //   783: aload 6
+    //   785: ifnull +8 -> 793
+    //   788: aload 6
+    //   790: invokevirtual 376	java/net/HttpURLConnection:disconnect	()V
+    //   793: aload_1
+    //   794: athrow
+    //   795: astore 4
+    //   797: goto -164 -> 633
+    //   800: aconst_null
+    //   801: astore_3
+    //   802: aload 4
+    //   804: ifnull +6 -> 810
+    //   807: goto -760 -> 47
+    //   810: ldc 20
+    //   812: astore 4
+    //   814: goto -767 -> 47
+    // Local variable table:
+    //   start	length	slot	name	signature
+    //   0	817	0	this	AIDataService
+    //   0	817	1	paramTRequest	TRequest
+    //   0	817	2	paramType	Type
+    //   0	817	3	paramString1	String
+    //   0	817	4	paramString2	String
+    //   0	817	5	paramMap	Map<String, String>
+    //   8	781	6	localObject1	Object
+    //   12	756	7	localObject2	Object
+    //   4	168	8	localObject3	Object
+    //   1	175	9	localObject4	Object
+    //   22	158	10	localURL	java.net.URL
+    //   74	43	11	localStringBuilder	StringBuilder
+    // Exception table:
+    //   from	to	target	type
+    //   14	24	658	finally
+    //   36	44	658	finally
+    //   55	59	658	finally
+    //   67	76	658	finally
+    //   84	92	658	finally
+    //   100	107	658	finally
+    //   115	126	658	finally
+    //   134	144	658	finally
+    //   152	168	658	finally
+    //   179	188	658	finally
+    //   198	208	658	finally
+    //   217	228	658	finally
+    //   234	240	658	finally
+    //   246	256	658	finally
+    //   262	267	658	finally
+    //   273	282	658	finally
+    //   288	297	658	finally
+    //   303	316	658	finally
+    //   322	334	658	finally
+    //   340	350	658	finally
+    //   356	366	658	finally
+    //   377	391	658	finally
+    //   397	407	658	finally
+    //   413	425	658	finally
+    //   431	455	658	finally
+    //   464	468	658	finally
+    //   478	491	658	finally
+    //   497	503	658	finally
+    //   509	514	658	finally
+    //   520	533	658	finally
+    //   539	545	658	finally
+    //   551	556	658	finally
+    //   562	577	658	finally
+    //   583	591	658	finally
+    //   597	614	658	finally
+    //   623	633	658	finally
+    //   639	648	658	finally
+    //   672	678	658	finally
+    //   686	691	658	finally
+    //   695	704	658	finally
+    //   708	718	658	finally
+    //   722	734	658	finally
+    //   739	751	658	finally
+    //   755	767	658	finally
+    //   771	783	658	finally
+    //   14	24	662	java/io/IOException
+    //   36	44	662	java/io/IOException
+    //   55	59	662	java/io/IOException
+    //   67	76	662	java/io/IOException
+    //   84	92	662	java/io/IOException
+    //   100	107	662	java/io/IOException
+    //   115	126	662	java/io/IOException
+    //   134	144	662	java/io/IOException
+    //   152	168	662	java/io/IOException
+    //   179	188	662	java/io/IOException
+    //   198	208	662	java/io/IOException
+    //   217	228	662	java/io/IOException
+    //   234	240	662	java/io/IOException
+    //   246	256	662	java/io/IOException
+    //   262	267	662	java/io/IOException
+    //   273	282	662	java/io/IOException
+    //   288	297	662	java/io/IOException
+    //   303	316	662	java/io/IOException
+    //   322	334	662	java/io/IOException
+    //   340	350	662	java/io/IOException
+    //   356	366	662	java/io/IOException
+    //   377	391	662	java/io/IOException
+    //   397	407	662	java/io/IOException
+    //   413	425	662	java/io/IOException
+    //   431	455	662	java/io/IOException
+    //   464	468	662	java/io/IOException
+    //   478	491	662	java/io/IOException
+    //   497	503	662	java/io/IOException
+    //   509	514	662	java/io/IOException
+    //   520	533	662	java/io/IOException
+    //   539	545	662	java/io/IOException
+    //   551	556	662	java/io/IOException
+    //   562	577	662	java/io/IOException
+    //   583	591	662	java/io/IOException
+    //   597	614	662	java/io/IOException
+    //   623	633	662	java/io/IOException
+    //   639	648	662	java/io/IOException
+    //   672	678	734	java/io/IOException
+    //   686	691	734	java/io/IOException
+    //   695	704	734	java/io/IOException
+    //   708	718	734	java/io/IOException
+    //   722	734	734	java/io/IOException
+    //   562	577	795	com/google/gson/JsonParseException
+    //   583	591	795	com/google/gson/JsonParseException
+    //   597	614	795	com/google/gson/JsonParseException
+    //   623	633	795	com/google/gson/JsonParseException
+  }
+  
+  protected <TResponse> TResponse doRequest(Type paramType, String paramString1, String paramString2)
+    throws AIServiceException, AIDataService.BadResponseStatusException
+  {
+    return doRequest(paramType, paramString1, paramString2, (Map)null);
+  }
+  
+  protected <TResponse> TResponse doRequest(Type paramType, String paramString1, String paramString2, Map<String, String> paramMap)
+    throws AIServiceException, AIDataService.BadResponseStatusException
+  {
+    return doRequest(null, paramType, paramString1, paramString2, paramMap);
+  }
+  
+  protected String doSoundRequest(InputStream paramInputStream, String paramString)
+    throws MalformedURLException, AIServiceException
+  {
+    return doSoundRequest(paramInputStream, paramString, null, UNDEFINED_SERVICE_CONTEXT);
+  }
+  
+  protected String doSoundRequest(InputStream paramInputStream, String paramString, Map<String, String> paramMap)
+    throws MalformedURLException, AIServiceException
+  {
+    return doSoundRequest(paramInputStream, paramString, paramMap, UNDEFINED_SERVICE_CONTEXT);
+  }
+  
+  /* Error */
+  protected String doSoundRequest(InputStream paramInputStream, String paramString, Map<String, String> paramMap, AIServiceContext paramAIServiceContext)
+    throws MalformedURLException, AIServiceException
+  {
+    // Byte code:
+    //   0: aconst_null
+    //   1: astore 7
+    //   3: new 214	java/net/URL
+    //   6: dup
+    //   7: aload_0
+    //   8: getfield 76	ai/api/AIDataService:config	Lai/api/AIConfiguration;
+    //   11: aload_0
+    //   12: aload 4
+    //   14: invokespecial 164	ai/api/AIDataService:getSessionId	(Lai/api/AIServiceContext;)Ljava/lang/String;
+    //   17: invokevirtual 413	ai/api/AIConfiguration:getQuestionUrl	(Ljava/lang/String;)Ljava/lang/String;
+    //   20: invokespecial 215	java/net/URL:<init>	(Ljava/lang/String;)V
+    //   23: astore 4
+    //   25: getstatic 46	ai/api/AIDataService:Log	Lorg/apache/logging/log4j/Logger;
+    //   28: ldc_w 415
+    //   31: iconst_1
+    //   32: anewarray 4	java/lang/Object
+    //   35: dup
+    //   36: iconst_0
+    //   37: aload 4
+    //   39: aastore
+    //   40: invokeinterface 418 3 0
+    //   45: aload_0
+    //   46: getfield 76	ai/api/AIDataService:config	Lai/api/AIConfiguration;
+    //   49: invokevirtual 242	ai/api/AIConfiguration:getProxy	()Ljava/net/Proxy;
+    //   52: ifnull +23 -> 75
+    //   55: aload 4
+    //   57: aload_0
+    //   58: getfield 76	ai/api/AIDataService:config	Lai/api/AIConfiguration;
+    //   61: invokevirtual 242	ai/api/AIConfiguration:getProxy	()Ljava/net/Proxy;
+    //   64: invokevirtual 246	java/net/URL:openConnection	(Ljava/net/Proxy;)Ljava/net/URLConnection;
+    //   67: checkcast 248	java/net/HttpURLConnection
+    //   70: astore 4
+    //   72: goto +13 -> 85
+    //   75: aload 4
+    //   77: invokevirtual 251	java/net/URL:openConnection	()Ljava/net/URLConnection;
+    //   80: checkcast 248	java/net/HttpURLConnection
+    //   83: astore 4
+    //   85: aload 4
+    //   87: astore 6
+    //   89: new 223	java/lang/StringBuilder
+    //   92: dup
+    //   93: invokespecial 224	java/lang/StringBuilder:<init>	()V
+    //   96: astore 8
+    //   98: aload 4
+    //   100: astore 6
+    //   102: aload 8
+    //   104: ldc_w 267
+    //   107: invokevirtual 230	java/lang/StringBuilder:append	(Ljava/lang/String;)Ljava/lang/StringBuilder;
+    //   110: pop
+    //   111: aload 4
+    //   113: astore 6
+    //   115: aload 8
+    //   117: aload_0
+    //   118: getfield 76	ai/api/AIDataService:config	Lai/api/AIConfiguration;
+    //   121: invokevirtual 270	ai/api/AIConfiguration:getApiKey	()Ljava/lang/String;
+    //   124: invokevirtual 230	java/lang/StringBuilder:append	(Ljava/lang/String;)Ljava/lang/StringBuilder;
+    //   127: pop
+    //   128: aload 4
+    //   130: astore 6
+    //   132: aload 4
+    //   134: ldc_w 272
+    //   137: aload 8
+    //   139: invokevirtual 233	java/lang/StringBuilder:toString	()Ljava/lang/String;
+    //   142: invokevirtual 276	java/net/HttpURLConnection:addRequestProperty	(Ljava/lang/String;Ljava/lang/String;)V
+    //   145: aload 4
+    //   147: astore 6
+    //   149: aload 4
+    //   151: ldc_w 282
+    //   154: ldc_w 284
+    //   157: invokevirtual 276	java/net/HttpURLConnection:addRequestProperty	(Ljava/lang/String;Ljava/lang/String;)V
+    //   160: aload_3
+    //   161: ifnull +79 -> 240
+    //   164: aload 4
+    //   166: astore 6
+    //   168: aload_3
+    //   169: invokeinterface 288 1 0
+    //   174: invokeinterface 294 1 0
+    //   179: astore_3
+    //   180: aload 4
+    //   182: astore 6
+    //   184: aload_3
+    //   185: invokeinterface 299 1 0
+    //   190: ifeq +50 -> 240
+    //   193: aload 4
+    //   195: astore 6
+    //   197: aload_3
+    //   198: invokeinterface 303 1 0
+    //   203: checkcast 305	java/util/Map$Entry
+    //   206: astore 8
+    //   208: aload 4
+    //   210: astore 6
+    //   212: aload 4
+    //   214: aload 8
+    //   216: invokeinterface 308 1 0
+    //   221: checkcast 188	java/lang/String
+    //   224: aload 8
+    //   226: invokeinterface 311 1 0
+    //   231: checkcast 188	java/lang/String
+    //   234: invokevirtual 276	java/net/HttpURLConnection:addRequestProperty	(Ljava/lang/String;Ljava/lang/String;)V
+    //   237: goto -57 -> 180
+    //   240: aload 4
+    //   242: astore 6
+    //   244: aload 4
+    //   246: ldc 20
+    //   248: invokevirtual 261	java/net/HttpURLConnection:setRequestMethod	(Ljava/lang/String;)V
+    //   251: aload 4
+    //   253: astore 6
+    //   255: aload 4
+    //   257: iconst_1
+    //   258: invokevirtual 421	java/net/HttpURLConnection:setDoInput	(Z)V
+    //   261: aload 4
+    //   263: astore 6
+    //   265: aload 4
+    //   267: iconst_1
+    //   268: invokevirtual 265	java/net/HttpURLConnection:setDoOutput	(Z)V
+    //   271: aload 4
+    //   273: astore 6
+    //   275: new 423	ai/api/http/HttpClient
+    //   278: dup
+    //   279: aload 4
+    //   281: invokespecial 426	ai/api/http/HttpClient:<init>	(Ljava/net/HttpURLConnection;)V
+    //   284: astore_3
+    //   285: aload 4
+    //   287: astore 6
+    //   289: aload_3
+    //   290: aload_0
+    //   291: getfield 76	ai/api/AIDataService:config	Lai/api/AIConfiguration;
+    //   294: invokevirtual 429	ai/api/AIConfiguration:isWriteSoundLog	()Z
+    //   297: invokevirtual 432	ai/api/http/HttpClient:setWriteSoundLog	(Z)V
+    //   300: aload 4
+    //   302: astore 6
+    //   304: aload_3
+    //   305: invokevirtual 435	ai/api/http/HttpClient:connectForMultipart	()V
+    //   308: aload 4
+    //   310: astore 6
+    //   312: aload_3
+    //   313: ldc_w 437
+    //   316: aload_2
+    //   317: invokevirtual 440	ai/api/http/HttpClient:addFormPart	(Ljava/lang/String;Ljava/lang/String;)V
+    //   320: aload 4
+    //   322: astore 6
+    //   324: aload_3
+    //   325: ldc_w 442
+    //   328: ldc_w 444
+    //   331: aload_1
+    //   332: invokevirtual 448	ai/api/http/HttpClient:addFilePart	(Ljava/lang/String;Ljava/lang/String;Ljava/io/InputStream;)V
+    //   335: aload 4
+    //   337: astore 6
+    //   339: aload_3
+    //   340: invokevirtual 451	ai/api/http/HttpClient:finishMultipart	()V
+    //   343: aload 4
+    //   345: astore 6
+    //   347: aload_3
+    //   348: invokevirtual 454	ai/api/http/HttpClient:getResponse	()Ljava/lang/String;
+    //   351: astore_1
+    //   352: aload 4
+    //   354: ifnull +8 -> 362
+    //   357: aload 4
+    //   359: invokevirtual 376	java/net/HttpURLConnection:disconnect	()V
+    //   362: aload_1
+    //   363: areturn
+    //   364: astore_1
+    //   365: aload_3
+    //   366: astore_2
+    //   367: goto +24 -> 391
+    //   370: astore_1
+    //   371: aload 7
+    //   373: astore_2
+    //   374: goto +17 -> 391
+    //   377: astore_1
+    //   378: aconst_null
+    //   379: astore 6
+    //   381: goto +170 -> 551
+    //   384: astore_1
+    //   385: aconst_null
+    //   386: astore 4
+    //   388: aload 7
+    //   390: astore_2
+    //   391: aload_2
+    //   392: ifnull +127 -> 519
+    //   395: aload 4
+    //   397: astore 6
+    //   399: aload_2
+    //   400: invokevirtual 457	ai/api/http/HttpClient:getErrorString	()Ljava/lang/String;
+    //   403: astore_2
+    //   404: aload 4
+    //   406: astore 6
+    //   408: getstatic 46	ai/api/AIDataService:Log	Lorg/apache/logging/log4j/Logger;
+    //   411: aload_2
+    //   412: invokeinterface 238 2 0
+    //   417: aload 4
+    //   419: astore 6
+    //   421: aload_2
+    //   422: invokestatic 463	ai/api/util/StringUtils:isEmpty	(Ljava/lang/CharSequence;)Z
+    //   425: istore 5
+    //   427: iload 5
+    //   429: ifne +15 -> 444
+    //   432: aload 4
+    //   434: ifnull +8 -> 442
+    //   437: aload 4
+    //   439: invokevirtual 376	java/net/HttpURLConnection:disconnect	()V
+    //   442: aload_2
+    //   443: areturn
+    //   444: aload 4
+    //   446: astore 6
+    //   448: aload_1
+    //   449: instanceof 465
+    //   452: ifeq +67 -> 519
+    //   455: aload 4
+    //   457: astore 6
+    //   459: new 350	ai/api/model/AIResponse
+    //   462: dup
+    //   463: invokespecial 466	ai/api/model/AIResponse:<init>	()V
+    //   466: astore_2
+    //   467: aload 4
+    //   469: astore 6
+    //   471: aload_1
+    //   472: checkcast 465	java/net/HttpRetryException
+    //   475: invokevirtual 469	java/net/HttpRetryException:responseCode	()I
+    //   478: invokestatic 473	ai/api/model/Status:fromResponseCode	(I)Lai/api/model/Status;
+    //   481: astore_3
+    //   482: aload 4
+    //   484: astore 6
+    //   486: aload_3
+    //   487: aload_1
+    //   488: checkcast 465	java/net/HttpRetryException
+    //   491: invokevirtual 476	java/net/HttpRetryException:getReason	()Ljava/lang/String;
+    //   494: invokevirtual 479	ai/api/model/Status:setErrorDetails	(Ljava/lang/String;)V
+    //   497: aload 4
+    //   499: astore 6
+    //   501: aload_2
+    //   502: aload_3
+    //   503: invokevirtual 483	ai/api/model/AIResponse:setStatus	(Lai/api/model/Status;)V
+    //   506: aload 4
+    //   508: astore 6
+    //   510: new 158	ai/api/AIServiceException
+    //   513: dup
+    //   514: aload_2
+    //   515: invokespecial 195	ai/api/AIServiceException:<init>	(Lai/api/model/AIResponse;)V
+    //   518: athrow
+    //   519: aload 4
+    //   521: astore 6
+    //   523: getstatic 46	ai/api/AIDataService:Log	Lorg/apache/logging/log4j/Logger;
+    //   526: ldc_w 485
+    //   529: aload_1
+    //   530: invokeinterface 394 3 0
+    //   535: aload 4
+    //   537: astore 6
+    //   539: new 158	ai/api/AIServiceException
+    //   542: dup
+    //   543: ldc_w 485
+    //   546: aload_1
+    //   547: invokespecial 382	ai/api/AIServiceException:<init>	(Ljava/lang/String;Ljava/lang/Throwable;)V
+    //   550: athrow
+    //   551: aload 6
+    //   553: ifnull +8 -> 561
+    //   556: aload 6
+    //   558: invokevirtual 376	java/net/HttpURLConnection:disconnect	()V
+    //   561: aload_1
+    //   562: athrow
+    //   563: astore_1
+    //   564: goto -13 -> 551
+    // Local variable table:
+    //   start	length	slot	name	signature
+    //   0	567	0	this	AIDataService
+    //   0	567	1	paramInputStream	InputStream
+    //   0	567	2	paramString	String
+    //   0	567	3	paramMap	Map<String, String>
+    //   0	567	4	paramAIServiceContext	AIServiceContext
+    //   425	3	5	bool	boolean
+    //   87	470	6	localAIServiceContext	AIServiceContext
+    //   1	388	7	localObject1	Object
+    //   96	129	8	localObject2	Object
+    // Exception table:
+    //   from	to	target	type
+    //   289	300	364	java/io/IOException
+    //   304	308	364	java/io/IOException
+    //   312	320	364	java/io/IOException
+    //   324	335	364	java/io/IOException
+    //   339	343	364	java/io/IOException
+    //   347	352	364	java/io/IOException
+    //   89	98	370	java/io/IOException
+    //   102	111	370	java/io/IOException
+    //   115	128	370	java/io/IOException
+    //   132	145	370	java/io/IOException
+    //   149	160	370	java/io/IOException
+    //   168	180	370	java/io/IOException
+    //   184	193	370	java/io/IOException
+    //   197	208	370	java/io/IOException
+    //   212	237	370	java/io/IOException
+    //   244	251	370	java/io/IOException
+    //   255	261	370	java/io/IOException
+    //   265	271	370	java/io/IOException
+    //   275	285	370	java/io/IOException
+    //   3	72	377	finally
+    //   75	85	377	finally
+    //   3	72	384	java/io/IOException
+    //   75	85	384	java/io/IOException
+    //   89	98	563	finally
+    //   102	111	563	finally
+    //   115	128	563	finally
+    //   132	145	563	finally
+    //   149	160	563	finally
+    //   168	180	563	finally
+    //   184	193	563	finally
+    //   197	208	563	finally
+    //   212	237	563	finally
+    //   244	251	563	finally
+    //   255	261	563	finally
+    //   265	271	563	finally
+    //   275	285	563	finally
+    //   289	300	563	finally
+    //   304	308	563	finally
+    //   312	320	563	finally
+    //   324	335	563	finally
+    //   339	343	563	finally
+    //   347	352	563	finally
+    //   399	404	563	finally
+    //   408	417	563	finally
+    //   421	427	563	finally
+    //   448	455	563	finally
+    //   459	467	563	finally
+    //   471	482	563	finally
+    //   486	497	563	finally
+    //   501	506	563	finally
+    //   510	519	563	finally
+    //   523	535	563	finally
+    //   539	551	563	finally
+  }
+  
+  protected String doTextRequest(String paramString)
+    throws MalformedURLException, AIServiceException
+  {
+    return doTextRequest(paramString, UNDEFINED_SERVICE_CONTEXT);
+  }
+  
+  protected String doTextRequest(String paramString, AIServiceContext paramAIServiceContext)
+    throws MalformedURLException, AIServiceException
+  {
+    return doTextRequest(config.getQuestionUrl(getSessionId(paramAIServiceContext)), paramString);
+  }
+  
+  protected String doTextRequest(String paramString1, String paramString2)
+    throws MalformedURLException, AIServiceException
+  {
+    return doTextRequest(paramString1, paramString2, null);
+  }
+  
+  /* Error */
+  protected String doTextRequest(String paramString1, String paramString2, Map<String, String> paramMap)
+    throws MalformedURLException, AIServiceException
+  {
+    // Byte code:
+    //   0: aconst_null
+    //   1: astore 7
+    //   3: aconst_null
+    //   4: astore 6
+    //   6: aload 6
+    //   8: astore 4
+    //   10: aload 7
+    //   12: astore 5
+    //   14: new 214	java/net/URL
+    //   17: dup
+    //   18: aload_1
+    //   19: invokespecial 215	java/net/URL:<init>	(Ljava/lang/String;)V
+    //   22: astore_1
+    //   23: aload 6
+    //   25: astore 4
+    //   27: aload 7
+    //   29: astore 5
+    //   31: getstatic 46	ai/api/AIDataService:Log	Lorg/apache/logging/log4j/Logger;
+    //   34: astore 8
+    //   36: aload 6
+    //   38: astore 4
+    //   40: aload 7
+    //   42: astore 5
+    //   44: new 223	java/lang/StringBuilder
+    //   47: dup
+    //   48: invokespecial 224	java/lang/StringBuilder:<init>	()V
+    //   51: astore 9
+    //   53: aload 6
+    //   55: astore 4
+    //   57: aload 7
+    //   59: astore 5
+    //   61: aload 9
+    //   63: ldc -30
+    //   65: invokevirtual 230	java/lang/StringBuilder:append	(Ljava/lang/String;)Ljava/lang/StringBuilder;
+    //   68: pop
+    //   69: aload 6
+    //   71: astore 4
+    //   73: aload 7
+    //   75: astore 5
+    //   77: aload 9
+    //   79: aload_2
+    //   80: invokevirtual 230	java/lang/StringBuilder:append	(Ljava/lang/String;)Ljava/lang/StringBuilder;
+    //   83: pop
+    //   84: aload 6
+    //   86: astore 4
+    //   88: aload 7
+    //   90: astore 5
+    //   92: aload 8
+    //   94: aload 9
+    //   96: invokevirtual 233	java/lang/StringBuilder:toString	()Ljava/lang/String;
+    //   99: invokeinterface 238 2 0
+    //   104: aload 6
+    //   106: astore 4
+    //   108: aload 7
+    //   110: astore 5
+    //   112: aload_0
+    //   113: getfield 76	ai/api/AIDataService:config	Lai/api/AIConfiguration;
+    //   116: invokevirtual 242	ai/api/AIConfiguration:getProxy	()Ljava/net/Proxy;
+    //   119: ifnull +29 -> 148
+    //   122: aload 6
+    //   124: astore 4
+    //   126: aload 7
+    //   128: astore 5
+    //   130: aload_1
+    //   131: aload_0
+    //   132: getfield 76	ai/api/AIDataService:config	Lai/api/AIConfiguration;
+    //   135: invokevirtual 242	ai/api/AIConfiguration:getProxy	()Ljava/net/Proxy;
+    //   138: invokevirtual 246	java/net/URL:openConnection	(Ljava/net/Proxy;)Ljava/net/URLConnection;
+    //   141: checkcast 248	java/net/HttpURLConnection
+    //   144: astore_1
+    //   145: goto +19 -> 164
+    //   148: aload 6
+    //   150: astore 4
+    //   152: aload 7
+    //   154: astore 5
+    //   156: aload_1
+    //   157: invokevirtual 251	java/net/URL:openConnection	()Ljava/net/URLConnection;
+    //   160: checkcast 248	java/net/HttpURLConnection
+    //   163: astore_1
+    //   164: aload_1
+    //   165: astore 4
+    //   167: aload_1
+    //   168: astore 5
+    //   170: aload_1
+    //   171: ldc 20
+    //   173: invokevirtual 261	java/net/HttpURLConnection:setRequestMethod	(Ljava/lang/String;)V
+    //   176: aload_1
+    //   177: astore 4
+    //   179: aload_1
+    //   180: astore 5
+    //   182: aload_1
+    //   183: iconst_1
+    //   184: invokevirtual 265	java/net/HttpURLConnection:setDoOutput	(Z)V
+    //   187: aload_1
+    //   188: astore 4
+    //   190: aload_1
+    //   191: astore 5
+    //   193: new 223	java/lang/StringBuilder
+    //   196: dup
+    //   197: invokespecial 224	java/lang/StringBuilder:<init>	()V
+    //   200: astore 6
+    //   202: aload_1
+    //   203: astore 4
+    //   205: aload_1
+    //   206: astore 5
+    //   208: aload 6
+    //   210: ldc_w 267
+    //   213: invokevirtual 230	java/lang/StringBuilder:append	(Ljava/lang/String;)Ljava/lang/StringBuilder;
+    //   216: pop
+    //   217: aload_1
+    //   218: astore 4
+    //   220: aload_1
+    //   221: astore 5
+    //   223: aload 6
+    //   225: aload_0
+    //   226: getfield 76	ai/api/AIDataService:config	Lai/api/AIConfiguration;
+    //   229: invokevirtual 270	ai/api/AIConfiguration:getApiKey	()Ljava/lang/String;
+    //   232: invokevirtual 230	java/lang/StringBuilder:append	(Ljava/lang/String;)Ljava/lang/StringBuilder;
+    //   235: pop
+    //   236: aload_1
+    //   237: astore 4
+    //   239: aload_1
+    //   240: astore 5
+    //   242: aload_1
+    //   243: ldc_w 272
+    //   246: aload 6
+    //   248: invokevirtual 233	java/lang/StringBuilder:toString	()Ljava/lang/String;
+    //   251: invokevirtual 276	java/net/HttpURLConnection:addRequestProperty	(Ljava/lang/String;Ljava/lang/String;)V
+    //   254: aload_1
+    //   255: astore 4
+    //   257: aload_1
+    //   258: astore 5
+    //   260: aload_1
+    //   261: ldc_w 278
+    //   264: ldc_w 280
+    //   267: invokevirtual 276	java/net/HttpURLConnection:addRequestProperty	(Ljava/lang/String;Ljava/lang/String;)V
+    //   270: aload_1
+    //   271: astore 4
+    //   273: aload_1
+    //   274: astore 5
+    //   276: aload_1
+    //   277: ldc_w 282
+    //   280: ldc_w 284
+    //   283: invokevirtual 276	java/net/HttpURLConnection:addRequestProperty	(Ljava/lang/String;Ljava/lang/String;)V
+    //   286: aload_3
+    //   287: ifnull +86 -> 373
+    //   290: aload_1
+    //   291: astore 4
+    //   293: aload_1
+    //   294: astore 5
+    //   296: aload_3
+    //   297: invokeinterface 288 1 0
+    //   302: invokeinterface 294 1 0
+    //   307: astore_3
+    //   308: aload_1
+    //   309: astore 4
+    //   311: aload_1
+    //   312: astore 5
+    //   314: aload_3
+    //   315: invokeinterface 299 1 0
+    //   320: ifeq +53 -> 373
+    //   323: aload_1
+    //   324: astore 4
+    //   326: aload_1
+    //   327: astore 5
+    //   329: aload_3
+    //   330: invokeinterface 303 1 0
+    //   335: checkcast 305	java/util/Map$Entry
+    //   338: astore 6
+    //   340: aload_1
+    //   341: astore 4
+    //   343: aload_1
+    //   344: astore 5
+    //   346: aload_1
+    //   347: aload 6
+    //   349: invokeinterface 308 1 0
+    //   354: checkcast 188	java/lang/String
+    //   357: aload 6
+    //   359: invokeinterface 311 1 0
+    //   364: checkcast 188	java/lang/String
+    //   367: invokevirtual 276	java/net/HttpURLConnection:addRequestProperty	(Ljava/lang/String;Ljava/lang/String;)V
+    //   370: goto -62 -> 308
+    //   373: aload_1
+    //   374: astore 4
+    //   376: aload_1
+    //   377: astore 5
+    //   379: aload_1
+    //   380: invokevirtual 314	java/net/HttpURLConnection:connect	()V
+    //   383: aload_1
+    //   384: astore 4
+    //   386: aload_1
+    //   387: astore 5
+    //   389: new 316	java/io/BufferedOutputStream
+    //   392: dup
+    //   393: aload_1
+    //   394: invokevirtual 320	java/net/HttpURLConnection:getOutputStream	()Ljava/io/OutputStream;
+    //   397: invokespecial 323	java/io/BufferedOutputStream:<init>	(Ljava/io/OutputStream;)V
+    //   400: astore_3
+    //   401: aload_1
+    //   402: astore 4
+    //   404: aload_1
+    //   405: astore 5
+    //   407: aload_2
+    //   408: aload_3
+    //   409: invokestatic 329	ai/api/util/IOUtils:writeAll	(Ljava/lang/String;Ljava/io/OutputStream;)V
+    //   412: aload_1
+    //   413: astore 4
+    //   415: aload_1
+    //   416: astore 5
+    //   418: aload_3
+    //   419: invokevirtual 332	java/io/BufferedOutputStream:close	()V
+    //   422: aload_1
+    //   423: astore 4
+    //   425: aload_1
+    //   426: astore 5
+    //   428: new 334	java/io/BufferedInputStream
+    //   431: dup
+    //   432: aload_1
+    //   433: invokevirtual 338	java/net/HttpURLConnection:getInputStream	()Ljava/io/InputStream;
+    //   436: invokespecial 341	java/io/BufferedInputStream:<init>	(Ljava/io/InputStream;)V
+    //   439: astore_2
+    //   440: aload_1
+    //   441: astore 4
+    //   443: aload_1
+    //   444: astore 5
+    //   446: aload_2
+    //   447: invokestatic 345	ai/api/util/IOUtils:readAll	(Ljava/io/InputStream;)Ljava/lang/String;
+    //   450: astore_3
+    //   451: aload_1
+    //   452: astore 4
+    //   454: aload_1
+    //   455: astore 5
+    //   457: aload_2
+    //   458: invokevirtual 348	java/io/InputStream:close	()V
+    //   461: aload_1
+    //   462: ifnull +7 -> 469
+    //   465: aload_1
+    //   466: invokevirtual 376	java/net/HttpURLConnection:disconnect	()V
+    //   469: aload_3
+    //   470: areturn
+    //   471: astore_1
+    //   472: goto +122 -> 594
+    //   475: astore_1
+    //   476: aload 5
+    //   478: ifnull +84 -> 562
+    //   481: aload 5
+    //   483: astore 4
+    //   485: aload 5
+    //   487: invokevirtual 379	java/net/HttpURLConnection:getErrorStream	()Ljava/io/InputStream;
+    //   490: astore_2
+    //   491: aload_2
+    //   492: ifnull +37 -> 529
+    //   495: aload 5
+    //   497: astore 4
+    //   499: aload_2
+    //   500: invokestatic 345	ai/api/util/IOUtils:readAll	(Ljava/io/InputStream;)Ljava/lang/String;
+    //   503: astore_2
+    //   504: aload 5
+    //   506: astore 4
+    //   508: getstatic 46	ai/api/AIDataService:Log	Lorg/apache/logging/log4j/Logger;
+    //   511: aload_2
+    //   512: invokeinterface 238 2 0
+    //   517: aload 5
+    //   519: ifnull +8 -> 527
+    //   522: aload 5
+    //   524: invokevirtual 376	java/net/HttpURLConnection:disconnect	()V
+    //   527: aload_2
+    //   528: areturn
+    //   529: aload 5
+    //   531: astore 4
+    //   533: new 158	ai/api/AIServiceException
+    //   536: dup
+    //   537: ldc_w 384
+    //   540: aload_1
+    //   541: invokespecial 382	ai/api/AIServiceException:<init>	(Ljava/lang/String;Ljava/lang/Throwable;)V
+    //   544: athrow
+    //   545: astore_2
+    //   546: aload 5
+    //   548: astore 4
+    //   550: getstatic 46	ai/api/AIDataService:Log	Lorg/apache/logging/log4j/Logger;
+    //   553: ldc_w 386
+    //   556: aload_2
+    //   557: invokeinterface 389 3 0
+    //   562: aload 5
+    //   564: astore 4
+    //   566: getstatic 46	ai/api/AIDataService:Log	Lorg/apache/logging/log4j/Logger;
+    //   569: ldc_w 391
+    //   572: aload_1
+    //   573: invokeinterface 394 3 0
+    //   578: aload 5
+    //   580: astore 4
+    //   582: new 158	ai/api/AIServiceException
+    //   585: dup
+    //   586: ldc_w 391
+    //   589: aload_1
+    //   590: invokespecial 382	ai/api/AIServiceException:<init>	(Ljava/lang/String;Ljava/lang/Throwable;)V
+    //   593: athrow
+    //   594: aload 4
+    //   596: ifnull +8 -> 604
+    //   599: aload 4
+    //   601: invokevirtual 376	java/net/HttpURLConnection:disconnect	()V
+    //   604: aload_1
+    //   605: athrow
+    // Local variable table:
+    //   start	length	slot	name	signature
+    //   0	606	0	this	AIDataService
+    //   0	606	1	paramString1	String
+    //   0	606	2	paramString2	String
+    //   0	606	3	paramMap	Map<String, String>
+    //   8	592	4	localObject1	Object
+    //   12	567	5	localObject2	Object
+    //   4	354	6	localObject3	Object
+    //   1	152	7	localObject4	Object
+    //   34	59	8	localLogger	Logger
+    //   51	44	9	localStringBuilder	StringBuilder
+    // Exception table:
+    //   from	to	target	type
+    //   14	23	471	finally
+    //   31	36	471	finally
+    //   44	53	471	finally
+    //   61	69	471	finally
+    //   77	84	471	finally
+    //   92	104	471	finally
+    //   112	122	471	finally
+    //   130	145	471	finally
+    //   156	164	471	finally
+    //   170	176	471	finally
+    //   182	187	471	finally
+    //   193	202	471	finally
+    //   208	217	471	finally
+    //   223	236	471	finally
+    //   242	254	471	finally
+    //   260	270	471	finally
+    //   276	286	471	finally
+    //   296	308	471	finally
+    //   314	323	471	finally
+    //   329	340	471	finally
+    //   346	370	471	finally
+    //   379	383	471	finally
+    //   389	401	471	finally
+    //   407	412	471	finally
+    //   418	422	471	finally
+    //   428	440	471	finally
+    //   446	451	471	finally
+    //   457	461	471	finally
+    //   485	491	471	finally
+    //   499	504	471	finally
+    //   508	517	471	finally
+    //   533	545	471	finally
+    //   550	562	471	finally
+    //   566	578	471	finally
+    //   582	594	471	finally
+    //   14	23	475	java/io/IOException
+    //   31	36	475	java/io/IOException
+    //   44	53	475	java/io/IOException
+    //   61	69	475	java/io/IOException
+    //   77	84	475	java/io/IOException
+    //   92	104	475	java/io/IOException
+    //   112	122	475	java/io/IOException
+    //   130	145	475	java/io/IOException
+    //   156	164	475	java/io/IOException
+    //   170	176	475	java/io/IOException
+    //   182	187	475	java/io/IOException
+    //   193	202	475	java/io/IOException
+    //   208	217	475	java/io/IOException
+    //   223	236	475	java/io/IOException
+    //   242	254	475	java/io/IOException
+    //   260	270	475	java/io/IOException
+    //   276	286	475	java/io/IOException
+    //   296	308	475	java/io/IOException
+    //   314	323	475	java/io/IOException
+    //   329	340	475	java/io/IOException
+    //   346	370	475	java/io/IOException
+    //   379	383	475	java/io/IOException
+    //   389	401	475	java/io/IOException
+    //   407	412	475	java/io/IOException
+    //   418	422	475	java/io/IOException
+    //   428	440	475	java/io/IOException
+    //   446	451	475	java/io/IOException
+    //   457	461	475	java/io/IOException
+    //   485	491	545	java/io/IOException
+    //   499	504	545	java/io/IOException
+    //   508	517	545	java/io/IOException
+    //   533	545	545	java/io/IOException
+  }
+  
+  public AIContext getActiveContext(String paramString)
+    throws AIServiceException
+  {
+    return getActiveContext(paramString, UNDEFINED_SERVICE_CONTEXT);
+  }
+  
+  public AIContext getActiveContext(String paramString, AIServiceContext paramAIServiceContext)
+    throws AIServiceException
+  {
+    try
+    {
+      paramString = (AIContext)doRequest(AIContext.class, config.getContextsUrl(getSessionId(paramAIServiceContext), paramString), "GET");
+      return paramString;
+    }
+    catch (BadResponseStatusException paramString)
+    {
+      if (response.getStatus().getCode().intValue() == 404) {
+        return null;
+      }
+      throw new AIServiceException(response);
+    }
+  }
+  
+  public List<AIContext> getActiveContexts()
+    throws AIServiceException
+  {
+    return getActiveContexts(UNDEFINED_SERVICE_CONTEXT);
+  }
+  
+  public List<AIContext> getActiveContexts(AIServiceContext paramAIServiceContext)
+    throws AIServiceException
+  {
+    try
+    {
+      paramAIServiceContext = (List)doRequest(ApiActiveContextListResponse.class, config.getContextsUrl(getSessionId(paramAIServiceContext)), "GET");
+      return paramAIServiceContext;
+    }
+    catch (BadResponseStatusException paramAIServiceContext)
+    {
+      throw new AIServiceException(response);
+    }
+  }
+  
+  public AIServiceContext getContext()
+  {
+    return defaultServiceContext;
+  }
+  
+  public boolean removeActiveContext(String paramString)
+    throws AIServiceException
+  {
+    return removeActiveContext(paramString, UNDEFINED_SERVICE_CONTEXT);
+  }
+  
+  public boolean removeActiveContext(String paramString, AIServiceContext paramAIServiceContext)
+    throws AIServiceException
+  {
+    try
+    {
+      doRequest(AIResponse.class, config.getContextsUrl(getSessionId(paramAIServiceContext), paramString), "DELETE");
+      return true;
+    }
+    catch (BadResponseStatusException paramString)
+    {
+      if (response.getStatus().getCode().intValue() == 404) {
+        return false;
+      }
+      throw new AIServiceException(response);
+    }
+  }
+  
+  public AIResponse request(AIRequest paramAIRequest)
+    throws AIServiceException
+  {
+    return request(paramAIRequest, (RequestExtras)null);
+  }
+  
+  public AIResponse request(AIRequest paramAIRequest, AIServiceContext paramAIServiceContext)
+    throws AIServiceException
+  {
+    return request(paramAIRequest, (RequestExtras)null, paramAIServiceContext);
+  }
+  
+  public AIResponse request(AIRequest paramAIRequest, RequestExtras paramRequestExtras)
+    throws AIServiceException
+  {
+    return request(paramAIRequest, paramRequestExtras, UNDEFINED_SERVICE_CONTEXT);
+  }
+  
+  public AIResponse request(AIRequest paramAIRequest, RequestExtras paramRequestExtras, AIServiceContext paramAIServiceContext)
+    throws AIServiceException
+  {
+    if (paramAIRequest != null)
+    {
+      Log.debug("Start request");
+      try
+      {
+        paramAIRequest.setLanguage(config.getApiAiLanguage());
+        paramAIRequest.setSessionId(getSessionId(paramAIServiceContext));
+        if (StringUtils.isEmpty(paramAIRequest.getTimezone())) {
+          paramAIRequest.setTimezone(getTimeZone(paramAIServiceContext));
+        }
+        Map localMap = null;
+        if (paramRequestExtras != null)
+        {
+          fillRequest(paramAIRequest, paramRequestExtras);
+          localMap = paramRequestExtras.getAdditionalHeaders();
+        }
+        paramAIRequest = GSON.toJson(paramAIRequest);
+        paramAIRequest = doTextRequest(config.getQuestionUrl(getSessionId(paramAIServiceContext)), paramAIRequest, localMap);
+        if (!StringUtils.isEmpty(paramAIRequest))
+        {
+          paramRequestExtras = Log;
+          paramAIServiceContext = new StringBuilder();
+          paramAIServiceContext.append("Response json: ");
+          paramAIServiceContext.append(paramAIRequest.replaceAll("[\r\n]+", " "));
+          paramRequestExtras.debug(paramAIServiceContext.toString());
+          paramAIRequest = (AIResponse)GSON.fromJson(paramAIRequest, AIResponse.class);
+          if (paramAIRequest != null)
+          {
+            if (!paramAIRequest.isError())
+            {
+              paramAIRequest.cleanup();
+              return paramAIRequest;
+            }
+            throw new AIServiceException(paramAIRequest);
+          }
+          throw new AIServiceException("API.AI response parsed as null. Check debug log for details.");
+        }
+        throw new AIServiceException("Empty response from ai service. Please check configuration and Internet connection.");
+      }
+      catch (JsonSyntaxException paramAIRequest)
+      {
+        throw new AIServiceException("Wrong service answer format. Please, connect to API.AI Service support", paramAIRequest);
+      }
+      catch (MalformedURLException paramAIRequest)
+      {
+        Log.error("Malformed url should not be raised", paramAIRequest);
+        throw new AIServiceException("Wrong configuration. Please, connect to API.AI Service support", paramAIRequest);
+      }
+    }
+    throw new IllegalArgumentException("Request argument must not be null");
+  }
+  
+  public void resetActiveContexts()
+    throws AIServiceException
+  {
+    resetActiveContexts(UNDEFINED_SERVICE_CONTEXT);
+  }
+  
+  public void resetActiveContexts(AIServiceContext paramAIServiceContext)
+    throws AIServiceException
+  {
+    try
+    {
+      doRequest(AIResponse.class, config.getContextsUrl(getSessionId(paramAIServiceContext)), "DELETE");
+      return;
+    }
+    catch (BadResponseStatusException paramAIServiceContext)
+    {
+      throw new AIServiceException(response);
+    }
+  }
+  
+  public boolean resetContexts()
+  {
+    AIRequest localAIRequest = new AIRequest();
+    localAIRequest.setQuery("empty_query_for_resetting_contexts");
+    localAIRequest.setResetContexts(Boolean.valueOf(true));
+    try
+    {
+      boolean bool = request(localAIRequest).isError();
+      return bool ^ true;
+    }
+    catch (AIServiceException localAIServiceException)
+    {
+      Log.error("Exception while contexts clean.", localAIServiceException);
+    }
+    return false;
+  }
+  
+  public AIResponse uploadUserEntities(Collection<Entity> paramCollection)
+    throws AIServiceException
+  {
+    return uploadUserEntities(paramCollection, UNDEFINED_SERVICE_CONTEXT);
+  }
+  
+  public AIResponse uploadUserEntities(Collection<Entity> paramCollection, AIServiceContext paramAIServiceContext)
+    throws AIServiceException
+  {
+    if ((paramCollection != null) && (paramCollection.size() != 0))
+    {
+      paramCollection = GSON.toJson(paramCollection);
+      try
+      {
+        paramCollection = doTextRequest(config.getUserEntitiesEndpoint(getSessionId(paramAIServiceContext)), paramCollection);
+        if (!StringUtils.isEmpty(paramCollection))
+        {
+          paramAIServiceContext = Log;
+          StringBuilder localStringBuilder = new StringBuilder();
+          localStringBuilder.append("Response json: ");
+          localStringBuilder.append(paramCollection);
+          paramAIServiceContext.debug(localStringBuilder.toString());
+          paramCollection = (AIResponse)GSON.fromJson(paramCollection, AIResponse.class);
+          if (paramCollection != null)
+          {
+            if (!paramCollection.isError())
+            {
+              paramCollection.cleanup();
+              return paramCollection;
+            }
+            throw new AIServiceException(paramCollection);
+          }
+          throw new AIServiceException("API.AI response parsed as null. Check debug log for details.");
+        }
+        throw new AIServiceException("Empty response from ai service. Please check configuration and Internet connection.");
+      }
+      catch (JsonSyntaxException paramCollection)
+      {
+        throw new AIServiceException("Wrong service answer format. Please, connect to API.AI Service support", paramCollection);
+      }
+      catch (MalformedURLException paramCollection)
+      {
+        Log.error("Malformed url should not be raised", paramCollection);
+        throw new AIServiceException("Wrong configuration. Please, connect to AI Service support", paramCollection);
+      }
+    }
+    throw new AIServiceException("Empty entities list");
+  }
+  
+  public AIResponse uploadUserEntity(Entity paramEntity)
+    throws AIServiceException
+  {
+    return uploadUserEntity(paramEntity, UNDEFINED_SERVICE_CONTEXT);
+  }
+  
+  public AIResponse uploadUserEntity(Entity paramEntity, AIServiceContext paramAIServiceContext)
+    throws AIServiceException
+  {
+    return uploadUserEntities(Collections.singleton(paramEntity), paramAIServiceContext);
+  }
+  
+  public AIResponse voiceRequest(InputStream paramInputStream)
+    throws AIServiceException
+  {
+    return voiceRequest(paramInputStream, new RequestExtras());
+  }
+  
+  public AIResponse voiceRequest(InputStream paramInputStream, RequestExtras paramRequestExtras)
+    throws AIServiceException
+  {
+    return voiceRequest(paramInputStream, paramRequestExtras, UNDEFINED_SERVICE_CONTEXT);
+  }
+  
+  public AIResponse voiceRequest(InputStream paramInputStream, RequestExtras paramRequestExtras, AIServiceContext paramAIServiceContext)
+    throws AIServiceException
+  {
+    Log.debug("Start voice request");
+    try
+    {
+      Object localObject = new AIRequest();
+      ((AIRequest)localObject).setLanguage(config.getApiAiLanguage());
+      ((AIRequest)localObject).setSessionId(getSessionId(paramAIServiceContext));
+      ((AIRequest)localObject).setTimezone(getTimeZone(paramAIServiceContext));
+      paramAIServiceContext = null;
+      if (paramRequestExtras != null)
+      {
+        fillRequest((AIRequest)localObject, paramRequestExtras);
+        paramAIServiceContext = paramRequestExtras.getAdditionalHeaders();
+      }
+      paramRequestExtras = GSON.toJson(localObject);
+      localObject = Log;
+      StringBuilder localStringBuilder = new StringBuilder();
+      localStringBuilder.append("Request json: ");
+      localStringBuilder.append(paramRequestExtras);
+      ((Logger)localObject).debug(localStringBuilder.toString());
+      paramInputStream = doSoundRequest(paramInputStream, paramRequestExtras, paramAIServiceContext);
+      if (!StringUtils.isEmpty(paramInputStream))
+      {
+        paramRequestExtras = Log;
+        paramAIServiceContext = new StringBuilder();
+        paramAIServiceContext.append("Response json: ");
+        paramAIServiceContext.append(paramInputStream);
+        paramRequestExtras.debug(paramAIServiceContext.toString());
+        paramInputStream = (AIResponse)GSON.fromJson(paramInputStream, AIResponse.class);
+        if (paramInputStream != null)
+        {
+          if (!paramInputStream.isError())
+          {
+            paramInputStream.cleanup();
+            return paramInputStream;
+          }
+          throw new AIServiceException(paramInputStream);
+        }
+        throw new AIServiceException("API.AI response parsed as null. Check debug log for details.");
+      }
+      throw new AIServiceException("Empty response from ai service. Please check configuration.");
+    }
+    catch (JsonSyntaxException paramInputStream)
+    {
+      throw new AIServiceException("Wrong service answer format. Please, connect to API.AI Service support", paramInputStream);
+    }
+    catch (MalformedURLException paramInputStream)
+    {
+      Log.error("Malformed url should not be raised", paramInputStream);
+      throw new AIServiceException("Wrong configuration. Please, connect to AI Service support", paramInputStream);
+    }
+  }
+  
+  public AIResponse voiceRequest(InputStream paramInputStream, List<AIContext> paramList)
+    throws AIServiceException
+  {
+    return voiceRequest(paramInputStream, new RequestExtras(paramList, null));
+  }
+  
+  private static abstract interface ApiActiveContextListResponse
+    extends List<AIContext>
+  {}
+  
+  private static class ApiActiveContextNamesResponse
+    extends AIResponse
+  {
+    private static final long serialVersionUID = 1L;
+    public List<String> names;
+    
+    private ApiActiveContextNamesResponse() {}
+  }
+  
+  private static class BadResponseStatusException
+    extends Exception
+  {
+    private static final long serialVersionUID = 1L;
+    private final AIResponse response;
+    
+    public BadResponseStatusException(AIResponse paramAIResponse)
+    {
+      response = paramAIResponse;
+    }
+  }
+}

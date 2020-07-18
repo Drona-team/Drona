@@ -1,0 +1,64 @@
+package bleshadow.dagger.internal;
+
+import bleshadow.javax.inject.Provider;
+import java.util.Collections;
+import java.util.Iterator;
+import java.util.LinkedHashMap;
+import java.util.Map;
+import java.util.Map.Entry;
+import java.util.Set;
+
+public final class MapFactory<K, V>
+  implements Factory<Map<K, V>>
+{
+  private static final Provider<Map<Object, Object>> EMPTY = InstanceFactory.create(Collections.emptyMap());
+  private final Map<K, Provider<V>> contributingMap;
+  
+  private MapFactory(Map<K, Provider<V>> paramMap)
+  {
+    contributingMap = Collections.unmodifiableMap(paramMap);
+  }
+  
+  public static <K, V> Builder<K, V> builder(int paramInt)
+  {
+    return new Builder(paramInt, null);
+  }
+  
+  public static <K, V> Provider<Map<K, V>> emptyMapProvider()
+  {
+    return EMPTY;
+  }
+  
+  public Map<K, V> get()
+  {
+    LinkedHashMap localLinkedHashMap = DaggerCollections.newLinkedHashMapWithExpectedSize(contributingMap.size());
+    Iterator localIterator = contributingMap.entrySet().iterator();
+    while (localIterator.hasNext())
+    {
+      Map.Entry localEntry = (Map.Entry)localIterator.next();
+      localLinkedHashMap.put(localEntry.getKey(), ((Provider)localEntry.getValue()).get());
+    }
+    return Collections.unmodifiableMap(localLinkedHashMap);
+  }
+  
+  public static final class Builder<K, V>
+  {
+    private final LinkedHashMap<K, Provider<V>> map;
+    
+    private Builder(int paramInt)
+    {
+      map = DaggerCollections.newLinkedHashMapWithExpectedSize(paramInt);
+    }
+    
+    public MapFactory<K, V> build()
+    {
+      return new MapFactory(map, null);
+    }
+    
+    public Builder<K, V> put(K paramK, Provider<V> paramProvider)
+    {
+      map.put(Preconditions.checkNotNull(paramK, "key"), Preconditions.checkNotNull(paramProvider, "provider"));
+      return this;
+    }
+  }
+}

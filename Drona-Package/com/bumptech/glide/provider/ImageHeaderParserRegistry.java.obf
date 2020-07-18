@@ -1,0 +1,42 @@
+package com.bumptech.glide.provider;
+
+import androidx.annotation.NonNull;
+import com.bumptech.glide.load.ImageHeaderParser;
+import java.util.ArrayList;
+import java.util.List;
+
+public final class ImageHeaderParserRegistry
+{
+  private final List<ImageHeaderParser> parsers = new ArrayList();
+  
+  public ImageHeaderParserRegistry() {}
+  
+  public void add(@NonNull ImageHeaderParser paramImageHeaderParser)
+  {
+    try
+    {
+      parsers.add(paramImageHeaderParser);
+      return;
+    }
+    finally
+    {
+      paramImageHeaderParser = finally;
+      throw paramImageHeaderParser;
+    }
+  }
+  
+  @NonNull
+  public List<ImageHeaderParser> getParsers()
+  {
+    try
+    {
+      List localList = parsers;
+      return localList;
+    }
+    finally
+    {
+      localObject = finally;
+      throw localObject;
+    }
+  }
+}

@@ -1,0 +1,604 @@
+package com.google.android.gms.iid;
+
+import android.app.PendingIntent;
+import android.content.BroadcastReceiver;
+import android.content.Context;
+import android.content.Intent;
+import android.content.IntentFilter;
+import android.content.pm.ActivityInfo;
+import android.content.pm.ApplicationInfo;
+import android.content.pm.PackageInfo;
+import android.content.pm.PackageManager;
+import android.content.pm.PackageManager.NameNotFoundException;
+import android.content.pm.ResolveInfo;
+import android.content.pm.ServiceInfo;
+import android.os.Build.VERSION;
+import android.os.Bundle;
+import android.os.ConditionVariable;
+import android.os.Looper;
+import android.os.Message;
+import android.os.Messenger;
+import android.os.Process;
+import android.os.RemoteException;
+import android.util.Log;
+import androidx.annotation.GuardedBy;
+import androidx.collection.ArrayMap;
+import com.google.android.gms.common.internal.ShowFirstParty;
+import com.google.android.gms.common.util.PlatformVersion;
+import com.google.android.gms.tasks.Tasks;
+import java.io.IOException;
+import java.security.KeyPair;
+import java.util.Iterator;
+import java.util.List;
+import java.util.Map;
+import java.util.Set;
+import java.util.concurrent.ExecutionException;
+import java.util.regex.Matcher;
+import java.util.regex.Pattern;
+
+@ShowFirstParty
+public class zzaf
+{
+  private static int zzcp = 0;
+  private static final zzaj<Boolean> zzct = zzai.zzy().zzd("gcm_iid_use_messenger_ipc", true);
+  private static String zzcu = null;
+  private static boolean zzcv = false;
+  private static int zzcw = 0;
+  private static int zzcx = 0;
+  @GuardedBy("Rpc.class")
+  private static BroadcastReceiver zzcy = null;
+  private PendingIntent zzaf;
+  private Messenger zzaj;
+  private Map<String, Object> zzcz = new ArrayMap();
+  private Messenger zzda;
+  private MessengerCompat zzdb;
+  private Context zzl;
+  
+  public zzaf(Context paramContext)
+  {
+    zzl = paramContext;
+  }
+  
+  private static void zzd(Object paramObject1, Object paramObject2)
+  {
+    if ((paramObject1 instanceof ConditionVariable)) {
+      ((ConditionVariable)paramObject1).open();
+    }
+    if ((paramObject1 instanceof Messenger))
+    {
+      paramObject1 = (Messenger)paramObject1;
+      Message localMessage = Message.obtain();
+      obj = paramObject2;
+      try
+      {
+        paramObject1.send(localMessage);
+        return;
+      }
+      catch (RemoteException paramObject1)
+      {
+        paramObject1 = String.valueOf(paramObject1);
+        paramObject2 = new StringBuilder(String.valueOf(paramObject1).length() + 24);
+        paramObject2.append("Failed to send response ");
+        paramObject2.append(paramObject1);
+        Log.w("InstanceID", paramObject2.toString());
+      }
+    }
+  }
+  
+  private final void zzd(String paramString, Object paramObject)
+  {
+    synchronized (getClass())
+    {
+      Object localObject = zzcz.get(paramString);
+      zzcz.put(paramString, paramObject);
+      zzd(localObject, paramObject);
+      return;
+    }
+  }
+  
+  private static boolean zzd(PackageManager paramPackageManager, String paramString)
+  {
+    try
+    {
+      paramPackageManager = paramPackageManager.getApplicationInfo(paramString, 0);
+      zzcu = packageName;
+      zzcx = uid;
+      return true;
+    }
+    catch (PackageManager.NameNotFoundException paramPackageManager) {}
+    return false;
+  }
+  
+  private static boolean zzd(PackageManager paramPackageManager, String paramString1, String paramString2)
+  {
+    if (paramPackageManager.checkPermission("com.google.android.c2dm.permission.SEND", paramString1) == 0) {
+      return zzd(paramPackageManager, paramString1);
+    }
+    paramPackageManager = new StringBuilder(String.valueOf(paramString1).length() + 56 + String.valueOf(paramString2).length());
+    paramPackageManager.append("Possible malicious package ");
+    paramPackageManager.append(paramString1);
+    paramPackageManager.append(" declares ");
+    paramPackageManager.append(paramString2);
+    paramPackageManager.append(" without permission");
+    Log.w("InstanceID", paramPackageManager.toString());
+    return false;
+  }
+  
+  private final void zzg(Intent paramIntent)
+  {
+    try
+    {
+      if (zzaf == null)
+      {
+        Intent localIntent = new Intent();
+        localIntent.setPackage("com.google.example.invalidpackage");
+        zzaf = PendingIntent.getBroadcast(zzl, 0, localIntent, 0);
+      }
+      paramIntent.putExtra("app", zzaf);
+      return;
+    }
+    finally {}
+  }
+  
+  static String zzi(Bundle paramBundle)
+    throws IOException
+  {
+    if (paramBundle != null)
+    {
+      String str = paramBundle.getString("registration_id");
+      Object localObject = str;
+      if (str == null) {
+        localObject = paramBundle.getString("unregistered");
+      }
+      if (localObject == null)
+      {
+        localObject = paramBundle.getString("error");
+        if (localObject != null) {
+          throw new IOException((String)localObject);
+        }
+        paramBundle = String.valueOf(paramBundle);
+        localObject = new StringBuilder(String.valueOf(paramBundle).length() + 29);
+        ((StringBuilder)localObject).append("Unexpected response from GCM ");
+        ((StringBuilder)localObject).append(paramBundle);
+        Log.w("InstanceID", ((StringBuilder)localObject).toString(), new Throwable());
+        throw new IOException("SERVICE_NOT_AVAILABLE");
+      }
+      return localObject;
+    }
+    throw new IOException("SERVICE_NOT_AVAILABLE");
+  }
+  
+  private final Bundle zzj(Bundle paramBundle)
+    throws IOException
+  {
+    Bundle localBundle2 = zzk(paramBundle);
+    Bundle localBundle1 = localBundle2;
+    if (localBundle2 != null)
+    {
+      localBundle1 = localBundle2;
+      if (localBundle2.containsKey("google.messenger"))
+      {
+        paramBundle = zzk(paramBundle);
+        localBundle1 = paramBundle;
+        if (paramBundle != null)
+        {
+          localBundle1 = paramBundle;
+          if (paramBundle.containsKey("google.messenger")) {
+            localBundle1 = null;
+          }
+        }
+      }
+    }
+    return localBundle1;
+  }
+  
+  private final Bundle zzk(Bundle arg1)
+    throws IOException
+  {
+    ConditionVariable localConditionVariable = new ConditionVariable();
+    Object localObject3 = zzx();
+    synchronized (getClass())
+    {
+      zzcz.put(localObject3, localConditionVariable);
+      if (zzaj == null)
+      {
+        zzl(zzl);
+        zzaj = new Messenger(new zzag(this, Looper.getMainLooper()));
+      }
+      boolean bool;
+      if (zzcu != null)
+      {
+        if (zzcv) {
+          ??? = "com.google.iid.TOKEN_REQUEST";
+        } else {
+          ??? = "com.google.android.c2dm.intent.REGISTER";
+        }
+        ??? = new Intent((String)???);
+        ((Intent)???).setPackage(zzcu);
+        ((Intent)???).putExtras(???);
+        zzg((Intent)???);
+        ??? = new StringBuilder(String.valueOf(localObject3).length() + 5);
+        ???.append("|ID|");
+        ???.append((String)localObject3);
+        ???.append("|");
+        ((Intent)???).putExtra("kid", ???.toString());
+        ??? = new StringBuilder(String.valueOf(localObject3).length() + 5);
+        ???.append("|ID|");
+        ???.append((String)localObject3);
+        ???.append("|");
+        ((Intent)???).putExtra("X-kid", ???.toString());
+        bool = "com.google.android.gsf".equals(zzcu);
+        ??? = ((Intent)???).getStringExtra("useGsf");
+        if (??? != null) {
+          bool = "1".equals(???);
+        }
+        if (Log.isLoggable("InstanceID", 3))
+        {
+          ??? = String.valueOf(((Intent)???).getExtras());
+          StringBuilder localStringBuilder = new StringBuilder(String.valueOf(???).length() + 8);
+          localStringBuilder.append("Sending ");
+          localStringBuilder.append(???);
+          Log.d("InstanceID", localStringBuilder.toString());
+        }
+        if (zzda != null)
+        {
+          ((Intent)???).putExtra("google.messenger", zzaj);
+          ??? = Message.obtain();
+          obj = ???;
+        }
+      }
+      try
+      {
+        zzda.send(???);
+      }
+      catch (RemoteException ???)
+      {
+        for (;;) {}
+      }
+      if (Log.isLoggable("InstanceID", 3)) {
+        Log.d("InstanceID", "Messenger failed, fallback to startService");
+      }
+      if (bool) {
+        try
+        {
+          if (zzcy == null)
+          {
+            zzcy = new zzah(this);
+            if (Log.isLoggable("InstanceID", 3)) {
+              Log.d("InstanceID", "Registered GSF callback receiver");
+            }
+            ??? = new IntentFilter("com.google.android.c2dm.intent.REGISTRATION");
+            ???.addCategory(zzl.getPackageName());
+            zzl.registerReceiver(zzcy, ???, "com.google.android.c2dm.permission.SEND", null);
+          }
+          zzl.sendBroadcast((Intent)???);
+        }
+        finally {}
+      }
+      ((Intent)???).putExtra("google.messenger", zzaj);
+      ((Intent)???).putExtra("messenger2", "1");
+      if (zzdb != null)
+      {
+        ??? = Message.obtain();
+        obj = ???;
+      }
+      try
+      {
+        zzdb.send(???);
+      }
+      catch (RemoteException ???)
+      {
+        for (;;) {}
+      }
+      if (Log.isLoggable("InstanceID", 3)) {
+        Log.d("InstanceID", "Messenger failed, fallback to startService");
+      }
+      if (zzcv) {
+        zzl.sendBroadcast((Intent)???);
+      } else {
+        zzl.startService((Intent)???);
+      }
+      localConditionVariable.block(30000L);
+      synchronized (getClass())
+      {
+        ??? = zzcz.remove(localObject3);
+        if ((??? instanceof Bundle))
+        {
+          ??? = (Bundle)???;
+          return ???;
+        }
+        if ((??? instanceof String)) {
+          throw new IOException((String)???);
+        }
+        ??? = String.valueOf(???);
+        localObject3 = new StringBuilder(String.valueOf(???).length() + 12);
+        ((StringBuilder)localObject3).append("No response ");
+        ((StringBuilder)localObject3).append((String)???);
+        Log.w("InstanceID", ((StringBuilder)localObject3).toString());
+        throw new IOException("TIMEOUT");
+      }
+      throw new IOException("MISSING_INSTANCEID_SERVICE");
+    }
+  }
+  
+  @ShowFirstParty
+  public static boolean zzk(Context paramContext)
+  {
+    if (zzcu != null) {
+      zzl(paramContext);
+    }
+    return zzcv;
+  }
+  
+  @ShowFirstParty
+  public static String zzl(Context paramContext)
+  {
+    if (zzcu != null) {
+      return zzcu;
+    }
+    zzcw = Process.myUid();
+    paramContext = paramContext.getPackageManager();
+    boolean bool = PlatformVersion.isAtLeastO();
+    int j = 1;
+    if (!bool)
+    {
+      localIterator = paramContext.queryIntentServices(new Intent("com.google.android.c2dm.intent.REGISTER"), 0).iterator();
+      while (localIterator.hasNext()) {
+        if (zzd(paramContext, nextserviceInfo.packageName, "com.google.android.c2dm.intent.REGISTER"))
+        {
+          zzcv = false;
+          i = 1;
+          break label100;
+        }
+      }
+      i = 0;
+      label100:
+      if (i != 0) {
+        return zzcu;
+      }
+    }
+    Iterator localIterator = paramContext.queryBroadcastReceivers(new Intent("com.google.iid.TOKEN_REQUEST"), 0).iterator();
+    while (localIterator.hasNext()) {
+      if (zzd(paramContext, nextactivityInfo.packageName, "com.google.iid.TOKEN_REQUEST"))
+      {
+        zzcv = true;
+        i = j;
+        break label177;
+      }
+    }
+    int i = 0;
+    label177:
+    if (i != 0) {
+      return zzcu;
+    }
+    Log.w("InstanceID", "Failed to resolve IID implementation package, falling back");
+    if (zzd(paramContext, "com.google.android.gms"))
+    {
+      zzcv = PlatformVersion.isAtLeastO();
+      return zzcu;
+    }
+    if ((!PlatformVersion.isAtLeastLollipop()) && (zzd(paramContext, "com.google.android.gsf")))
+    {
+      zzcv = false;
+      return zzcu;
+    }
+    Log.w("InstanceID", "Google Play services is missing, unable to get tokens");
+    return null;
+  }
+  
+  private static int zzm(Context paramContext)
+  {
+    PackageManager localPackageManager = paramContext.getPackageManager();
+    try
+    {
+      int i = getPackageInfozzl0versionCode;
+      return i;
+    }
+    catch (PackageManager.NameNotFoundException paramContext)
+    {
+      for (;;) {}
+    }
+    return -1;
+  }
+  
+  private static String zzx()
+  {
+    try
+    {
+      int i = zzcp;
+      zzcp = i + 1;
+      String str = Integer.toString(i);
+      return str;
+    }
+    finally
+    {
+      localObject = finally;
+      throw localObject;
+    }
+  }
+  
+  final Bundle zzd(Bundle paramBundle, KeyPair paramKeyPair)
+    throws IOException
+  {
+    int i = zzm(zzl);
+    paramBundle.putString("gmsv", Integer.toString(i));
+    paramBundle.putString("osv", Integer.toString(Build.VERSION.SDK_INT));
+    paramBundle.putString("app_ver", Integer.toString(InstanceID.zzg(zzl)));
+    paramBundle.putString("app_ver_name", InstanceID.zzh(zzl));
+    paramBundle.putString("cliv", "iid-12451000");
+    paramBundle.putString("appid", InstanceID.zzd(paramKeyPair));
+    if ((i >= 12000000) && (((Boolean)zzct.get()).booleanValue()))
+    {
+      paramKeyPair = new zzr(zzl).zzd(1, paramBundle);
+      try
+      {
+        paramKeyPair = (Bundle)Tasks.await(paramKeyPair);
+        return paramKeyPair;
+      }
+      catch (InterruptedException|ExecutionException paramKeyPair)
+      {
+        if (Log.isLoggable("InstanceID", 3))
+        {
+          String str = String.valueOf(paramKeyPair);
+          StringBuilder localStringBuilder = new StringBuilder(String.valueOf(str).length() + 22);
+          localStringBuilder.append("Error making request: ");
+          localStringBuilder.append(str);
+          Log.d("InstanceID", localStringBuilder.toString());
+        }
+        if (((paramKeyPair.getCause() instanceof zzaa)) && (((zzaa)paramKeyPair.getCause()).getErrorCode() == 4)) {
+          return zzj(paramBundle);
+        }
+        return null;
+      }
+    }
+    return zzj(paramBundle);
+  }
+  
+  public final void zze(Message paramMessage)
+  {
+    if (paramMessage == null) {
+      return;
+    }
+    if ((obj instanceof Intent))
+    {
+      Object localObject = (Intent)obj;
+      ((Intent)localObject).setExtrasClassLoader(MessengerCompat.class.getClassLoader());
+      if (((Intent)localObject).hasExtra("google.messenger"))
+      {
+        localObject = ((Intent)localObject).getParcelableExtra("google.messenger");
+        if ((localObject instanceof MessengerCompat)) {
+          zzdb = ((MessengerCompat)localObject);
+        }
+        if ((localObject instanceof Messenger)) {
+          zzda = ((Messenger)localObject);
+        }
+      }
+      zzh((Intent)obj);
+      return;
+    }
+    Log.w("InstanceID", "Dropping invalid message");
+  }
+  
+  public final void zzh(Intent arg1)
+  {
+    if (??? == null)
+    {
+      if (Log.isLoggable("InstanceID", 3)) {
+        Log.d("InstanceID", "Unexpected response: null");
+      }
+      return;
+    }
+    Object localObject1 = ???.getAction();
+    if ((!"com.google.android.c2dm.intent.REGISTRATION".equals(localObject1)) && (!"com.google.android.gms.iid.InstanceID".equals(localObject1)))
+    {
+      if (Log.isLoggable("InstanceID", 3))
+      {
+        ??? = String.valueOf(???.getAction());
+        if (???.length() != 0) {
+          ??? = "Unexpected response ".concat(???);
+        } else {
+          ??? = new String("Unexpected response ");
+        }
+        Log.d("InstanceID", ???);
+      }
+      return;
+    }
+    Object localObject3 = ???.getStringExtra("registration_id");
+    localObject1 = localObject3;
+    if (localObject3 == null) {
+      localObject1 = ???.getStringExtra("unregistered");
+    }
+    if (localObject1 == null)
+    {
+      Object localObject4 = ???.getStringExtra("error");
+      if (localObject4 == null)
+      {
+        ??? = String.valueOf(???.getExtras());
+        localObject1 = new StringBuilder(String.valueOf(???).length() + 49);
+        ((StringBuilder)localObject1).append("Unexpected response, no error or registration id ");
+        ((StringBuilder)localObject1).append(???);
+        Log.w("InstanceID", ((StringBuilder)localObject1).toString());
+        return;
+      }
+      if (Log.isLoggable("InstanceID", 3))
+      {
+        localObject1 = String.valueOf(localObject4);
+        if (((String)localObject1).length() != 0) {
+          localObject1 = "Received InstanceID error ".concat((String)localObject1);
+        } else {
+          localObject1 = new String("Received InstanceID error ");
+        }
+        Log.d("InstanceID", (String)localObject1);
+      }
+      localObject3 = null;
+      String str2 = null;
+      localObject1 = localObject4;
+      if (((String)localObject4).startsWith("|"))
+      {
+        String[] arrayOfString = ((String)localObject4).split("\\|");
+        if (!"ID".equals(arrayOfString[1]))
+        {
+          localObject1 = String.valueOf(localObject4);
+          if (((String)localObject1).length() != 0) {
+            localObject1 = "Unexpected structured response ".concat((String)localObject1);
+          } else {
+            localObject1 = new String("Unexpected structured response ");
+          }
+          Log.w("InstanceID", (String)localObject1);
+        }
+        if (arrayOfString.length > 2)
+        {
+          localObject3 = arrayOfString[2];
+          str2 = arrayOfString[3];
+          localObject1 = str2;
+          if (str2.startsWith(":")) {
+            localObject1 = str2.substring(1);
+          }
+        }
+        for (;;)
+        {
+          break;
+          localObject1 = "UNKNOWN";
+          localObject3 = str2;
+        }
+        ???.putExtra("error", (String)localObject1);
+      }
+      if (localObject3 == null) {
+        synchronized (getClass())
+        {
+          localObject3 = zzcz.keySet().iterator();
+          while (((Iterator)localObject3).hasNext())
+          {
+            str2 = (String)((Iterator)localObject3).next();
+            localObject4 = zzcz.get(str2);
+            zzcz.put(str2, localObject1);
+            zzd(localObject4, localObject1);
+          }
+          return;
+        }
+      }
+      zzd((String)localObject3, localObject2);
+      return;
+    }
+    localObject3 = Pattern.compile("\\|ID\\|([^|]+)\\|:?+(.*)").matcher(localObject2);
+    if (!((Matcher)localObject3).matches())
+    {
+      if (Log.isLoggable("InstanceID", 3))
+      {
+        ??? = String.valueOf(localObject2);
+        if (???.length() != 0) {
+          ??? = "Unexpected response string: ".concat(???);
+        } else {
+          ??? = new String("Unexpected response string: ");
+        }
+        Log.d("InstanceID", ???);
+      }
+      return;
+    }
+    String str1 = ((Matcher)localObject3).group(1);
+    localObject3 = ((Matcher)localObject3).group(2);
+    ??? = ???.getExtras();
+    ???.putString("registration_id", (String)localObject3);
+    zzd(str1, ???);
+  }
+}

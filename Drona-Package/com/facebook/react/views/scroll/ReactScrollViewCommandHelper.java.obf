@@ -1,0 +1,127 @@
+package com.facebook.react.views.scroll;
+
+import androidx.annotation.Nullable;
+import com.facebook.infer.annotation.Assertions;
+import com.facebook.react.bridge.ReadableArray;
+import com.facebook.react.common.MapBuilder;
+import com.facebook.react.uimanager.PixelUtil;
+import java.util.Map;
+
+public class ReactScrollViewCommandHelper
+{
+  public static final int COMMAND_FLASH_SCROLL_INDICATORS = 3;
+  public static final int COMMAND_SCROLL_TO = 1;
+  public static final int COMMAND_SCROLL_TO_END = 2;
+  
+  public ReactScrollViewCommandHelper() {}
+  
+  public static Map<String, Integer> getCommandsMap()
+  {
+    return MapBuilder.of("scrollTo", Integer.valueOf(1), "scrollToEnd", Integer.valueOf(2), "flashScrollIndicators", Integer.valueOf(3));
+  }
+  
+  public static <T> void receiveCommand(ScrollCommandHandler<T> paramScrollCommandHandler, T paramT, int paramInt, @Nullable ReadableArray paramReadableArray)
+  {
+    Assertions.assertNotNull(paramScrollCommandHandler);
+    Assertions.assertNotNull(paramT);
+    Assertions.assertNotNull(paramReadableArray);
+    switch (paramInt)
+    {
+    default: 
+      throw new IllegalArgumentException(String.format("Unsupported command %d received by %s.", new Object[] { Integer.valueOf(paramInt), paramScrollCommandHandler.getClass().getSimpleName() }));
+    case 3: 
+      paramScrollCommandHandler.flashScrollIndicators(paramT);
+      return;
+    case 2: 
+      scrollToEnd(paramScrollCommandHandler, paramT, paramReadableArray);
+      return;
+    }
+    scrollTo(paramScrollCommandHandler, paramT, paramReadableArray);
+  }
+  
+  public static <T> void receiveCommand(ScrollCommandHandler<T> paramScrollCommandHandler, T paramT, String paramString, @Nullable ReadableArray paramReadableArray)
+  {
+    Assertions.assertNotNull(paramScrollCommandHandler);
+    Assertions.assertNotNull(paramT);
+    Assertions.assertNotNull(paramReadableArray);
+    int i = paramString.hashCode();
+    if (i != -402165208)
+    {
+      if (i != 28425985)
+      {
+        if ((i == 2055114131) && (paramString.equals("scrollToEnd")))
+        {
+          i = 1;
+          break label93;
+        }
+      }
+      else if (paramString.equals("flashScrollIndicators"))
+      {
+        i = 2;
+        break label93;
+      }
+    }
+    else if (paramString.equals("scrollTo"))
+    {
+      i = 0;
+      break label93;
+    }
+    i = -1;
+    switch (i)
+    {
+    default: 
+      throw new IllegalArgumentException(String.format("Unsupported command %s received by %s.", new Object[] { paramString, paramScrollCommandHandler.getClass().getSimpleName() }));
+    case 2: 
+      paramScrollCommandHandler.flashScrollIndicators(paramT);
+      return;
+    case 1: 
+      label93:
+      scrollToEnd(paramScrollCommandHandler, paramT, paramReadableArray);
+      return;
+    }
+    scrollTo(paramScrollCommandHandler, paramT, paramReadableArray);
+  }
+  
+  private static <T> void scrollTo(ScrollCommandHandler<T> paramScrollCommandHandler, T paramT, @Nullable ReadableArray paramReadableArray)
+  {
+    paramScrollCommandHandler.scrollTo(paramT, new ScrollToCommandData(Math.round(PixelUtil.toPixelFromDIP(paramReadableArray.getDouble(0))), Math.round(PixelUtil.toPixelFromDIP(paramReadableArray.getDouble(1))), paramReadableArray.getBoolean(2)));
+  }
+  
+  private static <T> void scrollToEnd(ScrollCommandHandler<T> paramScrollCommandHandler, T paramT, @Nullable ReadableArray paramReadableArray)
+  {
+    paramScrollCommandHandler.scrollToEnd(paramT, new ScrollToEndCommandData(paramReadableArray.getBoolean(0)));
+  }
+  
+  public static abstract interface ScrollCommandHandler<T>
+  {
+    public abstract void flashScrollIndicators(T paramT);
+    
+    public abstract void scrollTo(T paramT, ReactScrollViewCommandHelper.ScrollToCommandData paramScrollToCommandData);
+    
+    public abstract void scrollToEnd(T paramT, ReactScrollViewCommandHelper.ScrollToEndCommandData paramScrollToEndCommandData);
+  }
+  
+  public static class ScrollToCommandData
+  {
+    public final boolean mAnimated;
+    public final int mDestX;
+    public final int mDestY;
+    
+    ScrollToCommandData(int paramInt1, int paramInt2, boolean paramBoolean)
+    {
+      mDestX = paramInt1;
+      mDestY = paramInt2;
+      mAnimated = paramBoolean;
+    }
+  }
+  
+  public static class ScrollToEndCommandData
+  {
+    public final boolean mAnimated;
+    
+    ScrollToEndCommandData(boolean paramBoolean)
+    {
+      mAnimated = paramBoolean;
+    }
+  }
+}

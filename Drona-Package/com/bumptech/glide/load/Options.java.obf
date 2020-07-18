@@ -1,0 +1,75 @@
+package com.bumptech.glide.load;
+
+import androidx.annotation.NonNull;
+import androidx.annotation.Nullable;
+import androidx.collection.ArrayMap;
+import com.bumptech.glide.util.CachedHashCodeArrayMap;
+import java.security.MessageDigest;
+
+public final class Options
+  implements Key
+{
+  private final ArrayMap<Option<?>, Object> values = new CachedHashCodeArrayMap();
+  
+  public Options() {}
+  
+  private static <T> void updateDiskCacheKey(@NonNull Option<T> paramOption, @NonNull Object paramObject, @NonNull MessageDigest paramMessageDigest)
+  {
+    paramOption.update(paramObject, paramMessageDigest);
+  }
+  
+  public boolean equals(Object paramObject)
+  {
+    if ((paramObject instanceof Options))
+    {
+      paramObject = (Options)paramObject;
+      return values.equals(values);
+    }
+    return false;
+  }
+  
+  @Nullable
+  public <T> T get(@NonNull Option<T> paramOption)
+  {
+    if (values.containsKey(paramOption)) {
+      return values.get(paramOption);
+    }
+    return paramOption.getDefaultValue();
+  }
+  
+  public int hashCode()
+  {
+    return values.hashCode();
+  }
+  
+  public void putAll(@NonNull Options paramOptions)
+  {
+    values.putAll(values);
+  }
+  
+  @NonNull
+  public <T> Options set(@NonNull Option<T> paramOption, @NonNull T paramT)
+  {
+    values.put(paramOption, paramT);
+    return this;
+  }
+  
+  public String toString()
+  {
+    StringBuilder localStringBuilder = new StringBuilder();
+    localStringBuilder.append("Options{values=");
+    localStringBuilder.append(values);
+    localStringBuilder.append('}');
+    return localStringBuilder.toString();
+  }
+  
+  public void updateDiskCacheKey(@NonNull MessageDigest paramMessageDigest)
+  {
+    int i = 0;
+    while (i < values.size())
+    {
+      updateDiskCacheKey((Option)values.keyAt(i), values.valueAt(i), paramMessageDigest);
+      i += 1;
+    }
+  }
+}

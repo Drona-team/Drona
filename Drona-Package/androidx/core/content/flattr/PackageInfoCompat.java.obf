@@ -1,0 +1,18 @@
+package androidx.core.content.pm;
+
+import android.content.pm.PackageInfo;
+import android.os.Build.VERSION;
+import androidx.annotation.NonNull;
+
+public final class PackageInfoCompat
+{
+  private PackageInfoCompat() {}
+  
+  public static long getLongVersionCode(@NonNull PackageInfo paramPackageInfo)
+  {
+    if (Build.VERSION.SDK_INT >= 28) {
+      return paramPackageInfo.getLongVersionCode();
+    }
+    return versionCode;
+  }
+}

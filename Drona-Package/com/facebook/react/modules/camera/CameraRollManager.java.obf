@@ -1,0 +1,978 @@
+package com.facebook.react.modules.camera;
+
+import android.content.ContentResolver;
+import android.content.Context;
+import android.database.Cursor;
+import android.media.MediaScannerConnection.OnScanCompletedListener;
+import android.net.Uri;
+import android.os.AsyncTask;
+import android.provider.MediaStore.Files;
+import android.text.TextUtils;
+import androidx.annotation.Nullable;
+import com.facebook.react.bridge.GuardedAsyncTask;
+import com.facebook.react.bridge.JSApplicationIllegalArgumentException;
+import com.facebook.react.bridge.Promise;
+import com.facebook.react.bridge.ReactApplicationContext;
+import com.facebook.react.bridge.ReactContext;
+import com.facebook.react.bridge.ReactContextBaseJavaModule;
+import com.facebook.react.bridge.ReactMethod;
+import com.facebook.react.bridge.ReadableArray;
+import com.facebook.react.bridge.ReadableMap;
+import com.facebook.react.bridge.WritableArray;
+import com.facebook.react.bridge.WritableMap;
+import com.facebook.react.bridge.WritableNativeArray;
+import com.facebook.react.bridge.WritableNativeMap;
+import com.facebook.react.module.annotations.ReactModule;
+import java.util.ArrayList;
+import java.util.List;
+
+@ReactModule(name="CameraRollManager")
+public class CameraRollManager
+  extends ReactContextBaseJavaModule
+{
+  private static final String ASSET_TYPE_ALL = "All";
+  private static final String ASSET_TYPE_PHOTOS = "Photos";
+  private static final String ASSET_TYPE_VIDEOS = "Videos";
+  private static final String ERROR_UNABLE_TO_FILTER = "E_UNABLE_TO_FILTER";
+  private static final String ERROR_UNABLE_TO_LOAD = "E_UNABLE_TO_LOAD";
+  private static final String ERROR_UNABLE_TO_LOAD_PERMISSION = "E_UNABLE_TO_LOAD_PERMISSION";
+  private static final String ERROR_UNABLE_TO_SAVE = "E_UNABLE_TO_SAVE";
+  public static final String NAME = "CameraRollManager";
+  private static final String[] PROJECTION = { "_id", "mime_type", "bucket_display_name", "datetaken", "width", "height", "longitude", "latitude", "_data" };
+  private static final String SELECTION_BUCKET = "bucket_display_name = ?";
+  private static final String SELECTION_DATE_TAKEN = "datetaken < ?";
+  
+  public CameraRollManager(ReactApplicationContext paramReactApplicationContext)
+  {
+    super(paramReactApplicationContext);
+  }
+  
+  private static void putBasicNodeInfo(Cursor paramCursor, WritableMap paramWritableMap, int paramInt1, int paramInt2, int paramInt3)
+  {
+    paramWritableMap.putString("type", paramCursor.getString(paramInt1));
+    paramWritableMap.putString("group_name", paramCursor.getString(paramInt2));
+    paramWritableMap.putDouble("timestamp", paramCursor.getLong(paramInt3) / 1000.0D);
+  }
+  
+  private static void putEdges(ContentResolver paramContentResolver, Cursor paramCursor, WritableMap paramWritableMap, int paramInt)
+  {
+    WritableNativeArray localWritableNativeArray = new WritableNativeArray();
+    paramCursor.moveToFirst();
+    int k = paramCursor.getColumnIndex("_id");
+    int i1 = paramCursor.getColumnIndex("mime_type");
+    int i2 = paramCursor.getColumnIndex("bucket_display_name");
+    int i3 = paramCursor.getColumnIndex("datetaken");
+    int j = paramCursor.getColumnIndex("width");
+    int i4 = paramCursor.getColumnIndex("height");
+    int m = paramCursor.getColumnIndex("longitude");
+    int n = paramCursor.getColumnIndex("latitude");
+    int i5 = paramCursor.getColumnIndex("_data");
+    int i = 0;
+    while ((i < paramInt) && (!paramCursor.isAfterLast()))
+    {
+      WritableNativeMap localWritableNativeMap1 = new WritableNativeMap();
+      WritableNativeMap localWritableNativeMap2 = new WritableNativeMap();
+      if (putImageInfo(paramContentResolver, paramCursor, localWritableNativeMap2, k, j, i4, i5, i1))
+      {
+        putBasicNodeInfo(paramCursor, localWritableNativeMap2, i1, i2, i3);
+        putLocationInfo(paramCursor, localWritableNativeMap2, m, n);
+        localWritableNativeMap1.putMap("node", localWritableNativeMap2);
+        localWritableNativeArray.pushMap(localWritableNativeMap1);
+      }
+      else
+      {
+        i -= 1;
+      }
+      paramCursor.moveToNext();
+      i += 1;
+    }
+    paramWritableMap.putArray("edges", localWritableNativeArray);
+  }
+  
+  /* Error */
+  private static boolean putImageInfo(ContentResolver paramContentResolver, Cursor paramCursor, WritableMap paramWritableMap, int paramInt1, int paramInt2, int paramInt3, int paramInt4, int paramInt5)
+  {
+    // Byte code:
+    //   0: new 137	com/facebook/react/bridge/WritableNativeMap
+    //   3: dup
+    //   4: invokespecial 138	com/facebook/react/bridge/WritableNativeMap:<init>	()V
+    //   7: astore 13
+    //   9: new 177	java/lang/StringBuilder
+    //   12: dup
+    //   13: invokespecial 178	java/lang/StringBuilder:<init>	()V
+    //   16: astore 12
+    //   18: aload 12
+    //   20: ldc -76
+    //   22: invokevirtual 184	java/lang/StringBuilder:append	(Ljava/lang/String;)Ljava/lang/StringBuilder;
+    //   25: pop
+    //   26: aload 12
+    //   28: aload_1
+    //   29: iload 6
+    //   31: invokeinterface 100 2 0
+    //   36: invokevirtual 184	java/lang/StringBuilder:append	(Ljava/lang/String;)Ljava/lang/StringBuilder;
+    //   39: pop
+    //   40: aload 12
+    //   42: invokevirtual 188	java/lang/StringBuilder:toString	()Ljava/lang/String;
+    //   45: invokestatic 194	android/net/Uri:parse	(Ljava/lang/String;)Landroid/net/Uri;
+    //   48: astore 12
+    //   50: aload 13
+    //   52: ldc -60
+    //   54: aload 12
+    //   56: invokevirtual 197	android/net/Uri:toString	()Ljava/lang/String;
+    //   59: invokeinterface 106 3 0
+    //   64: aload_1
+    //   65: iload 4
+    //   67: invokeinterface 201 2 0
+    //   72: i2f
+    //   73: fstore 11
+    //   75: aload_1
+    //   76: iload 5
+    //   78: invokeinterface 201 2 0
+    //   83: i2f
+    //   84: fstore 10
+    //   86: aload_1
+    //   87: iload 7
+    //   89: invokeinterface 100 2 0
+    //   94: astore_1
+    //   95: fload 11
+    //   97: fstore 9
+    //   99: fload 10
+    //   101: fstore 8
+    //   103: aload_1
+    //   104: ifnull +231 -> 335
+    //   107: fload 11
+    //   109: fstore 9
+    //   111: fload 10
+    //   113: fstore 8
+    //   115: aload_1
+    //   116: ldc -53
+    //   118: invokevirtual 207	java/lang/String:startsWith	(Ljava/lang/String;)Z
+    //   121: ifeq +214 -> 335
+    //   124: aload_0
+    //   125: aload 12
+    //   127: ldc -47
+    //   129: invokevirtual 215	android/content/ContentResolver:openAssetFileDescriptor	(Landroid/net/Uri;Ljava/lang/String;)Landroid/content/res/AssetFileDescriptor;
+    //   132: astore_1
+    //   133: new 217	android/media/MediaMetadataRetriever
+    //   136: dup
+    //   137: invokespecial 218	android/media/MediaMetadataRetriever:<init>	()V
+    //   140: astore 14
+    //   142: aload 14
+    //   144: aload_1
+    //   145: invokevirtual 224	android/content/res/AssetFileDescriptor:getFileDescriptor	()Ljava/io/FileDescriptor;
+    //   148: invokevirtual 228	android/media/MediaMetadataRetriever:setDataSource	(Ljava/io/FileDescriptor;)V
+    //   151: fload 11
+    //   153: fconst_0
+    //   154: fcmpg
+    //   155: ifle +18 -> 173
+    //   158: fload 11
+    //   160: fstore 9
+    //   162: fload 10
+    //   164: fstore 8
+    //   166: fload 10
+    //   168: fconst_0
+    //   169: fcmpg
+    //   170: ifgt +29 -> 199
+    //   173: aload 14
+    //   175: bipush 18
+    //   177: invokevirtual 231	android/media/MediaMetadataRetriever:extractMetadata	(I)Ljava/lang/String;
+    //   180: invokestatic 236	java/lang/Integer:parseInt	(Ljava/lang/String;)I
+    //   183: i2f
+    //   184: fstore 9
+    //   186: aload 14
+    //   188: bipush 19
+    //   190: invokevirtual 231	android/media/MediaMetadataRetriever:extractMetadata	(I)Ljava/lang/String;
+    //   193: invokestatic 236	java/lang/Integer:parseInt	(Ljava/lang/String;)I
+    //   196: i2f
+    //   197: fstore 8
+    //   199: aload 13
+    //   201: ldc -18
+    //   203: aload 14
+    //   205: bipush 9
+    //   207: invokevirtual 231	android/media/MediaMetadataRetriever:extractMetadata	(I)Ljava/lang/String;
+    //   210: invokestatic 236	java/lang/Integer:parseInt	(Ljava/lang/String;)I
+    //   213: sipush 1000
+    //   216: idiv
+    //   217: invokeinterface 242 3 0
+    //   222: aload 14
+    //   224: invokevirtual 245	android/media/MediaMetadataRetriever:release	()V
+    //   227: aload_1
+    //   228: invokevirtual 248	android/content/res/AssetFileDescriptor:close	()V
+    //   231: goto +104 -> 335
+    //   234: astore_0
+    //   235: goto +50 -> 285
+    //   238: astore_0
+    //   239: new 177	java/lang/StringBuilder
+    //   242: dup
+    //   243: invokespecial 178	java/lang/StringBuilder:<init>	()V
+    //   246: astore_2
+    //   247: aload_2
+    //   248: ldc -6
+    //   250: invokevirtual 184	java/lang/StringBuilder:append	(Ljava/lang/String;)Ljava/lang/StringBuilder;
+    //   253: pop
+    //   254: aload_2
+    //   255: aload 12
+    //   257: invokevirtual 197	android/net/Uri:toString	()Ljava/lang/String;
+    //   260: invokevirtual 184	java/lang/StringBuilder:append	(Ljava/lang/String;)Ljava/lang/StringBuilder;
+    //   263: pop
+    //   264: ldc -4
+    //   266: aload_2
+    //   267: invokevirtual 188	java/lang/StringBuilder:toString	()Ljava/lang/String;
+    //   270: aload_0
+    //   271: invokestatic 258	com/facebook/common/logging/FLog:e	(Ljava/lang/String;Ljava/lang/String;Ljava/lang/Throwable;)V
+    //   274: aload 14
+    //   276: invokevirtual 245	android/media/MediaMetadataRetriever:release	()V
+    //   279: aload_1
+    //   280: invokevirtual 248	android/content/res/AssetFileDescriptor:close	()V
+    //   283: iconst_0
+    //   284: ireturn
+    //   285: aload 14
+    //   287: invokevirtual 245	android/media/MediaMetadataRetriever:release	()V
+    //   290: aload_1
+    //   291: invokevirtual 248	android/content/res/AssetFileDescriptor:close	()V
+    //   294: aload_0
+    //   295: athrow
+    //   296: astore_0
+    //   297: new 177	java/lang/StringBuilder
+    //   300: dup
+    //   301: invokespecial 178	java/lang/StringBuilder:<init>	()V
+    //   304: astore_1
+    //   305: aload_1
+    //   306: ldc_w 260
+    //   309: invokevirtual 184	java/lang/StringBuilder:append	(Ljava/lang/String;)Ljava/lang/StringBuilder;
+    //   312: pop
+    //   313: aload_1
+    //   314: aload 12
+    //   316: invokevirtual 197	android/net/Uri:toString	()Ljava/lang/String;
+    //   319: invokevirtual 184	java/lang/StringBuilder:append	(Ljava/lang/String;)Ljava/lang/StringBuilder;
+    //   322: pop
+    //   323: ldc -4
+    //   325: aload_1
+    //   326: invokevirtual 188	java/lang/StringBuilder:toString	()Ljava/lang/String;
+    //   329: aload_0
+    //   330: invokestatic 258	com/facebook/common/logging/FLog:e	(Ljava/lang/String;Ljava/lang/String;Ljava/lang/Throwable;)V
+    //   333: iconst_0
+    //   334: ireturn
+    //   335: fload 9
+    //   337: fconst_0
+    //   338: fcmpg
+    //   339: ifle +18 -> 357
+    //   342: fload 9
+    //   344: fstore 10
+    //   346: fload 8
+    //   348: fstore 9
+    //   350: fload 8
+    //   352: fconst_0
+    //   353: fcmpg
+    //   354: ifgt +57 -> 411
+    //   357: aload_0
+    //   358: aload 12
+    //   360: ldc -47
+    //   362: invokevirtual 215	android/content/ContentResolver:openAssetFileDescriptor	(Landroid/net/Uri;Ljava/lang/String;)Landroid/content/res/AssetFileDescriptor;
+    //   365: astore_0
+    //   366: new 262	android/graphics/BitmapFactory$Options
+    //   369: dup
+    //   370: invokespecial 263	android/graphics/BitmapFactory$Options:<init>	()V
+    //   373: astore_1
+    //   374: aload_1
+    //   375: iconst_1
+    //   376: putfield 267	android/graphics/BitmapFactory$Options:inJustDecodeBounds	Z
+    //   379: aload_0
+    //   380: invokevirtual 224	android/content/res/AssetFileDescriptor:getFileDescriptor	()Ljava/io/FileDescriptor;
+    //   383: aconst_null
+    //   384: aload_1
+    //   385: invokestatic 273	android/graphics/BitmapFactory:decodeFileDescriptor	(Ljava/io/FileDescriptor;Landroid/graphics/Rect;Landroid/graphics/BitmapFactory$Options;)Landroid/graphics/Bitmap;
+    //   388: pop
+    //   389: aload_1
+    //   390: getfield 277	android/graphics/BitmapFactory$Options:outWidth	I
+    //   393: i2f
+    //   394: fstore 8
+    //   396: aload_1
+    //   397: getfield 280	android/graphics/BitmapFactory$Options:outHeight	I
+    //   400: i2f
+    //   401: fstore 9
+    //   403: aload_0
+    //   404: invokevirtual 248	android/content/res/AssetFileDescriptor:close	()V
+    //   407: fload 8
+    //   409: fstore 10
+    //   411: aload 13
+    //   413: ldc 63
+    //   415: fload 10
+    //   417: f2d
+    //   418: invokeinterface 120 4 0
+    //   423: aload 13
+    //   425: ldc 65
+    //   427: fload 9
+    //   429: f2d
+    //   430: invokeinterface 120 4 0
+    //   435: aload_2
+    //   436: ldc_w 282
+    //   439: aload 13
+    //   441: invokeinterface 154 3 0
+    //   446: iconst_1
+    //   447: ireturn
+    //   448: astore_0
+    //   449: new 177	java/lang/StringBuilder
+    //   452: dup
+    //   453: invokespecial 178	java/lang/StringBuilder:<init>	()V
+    //   456: astore_1
+    //   457: aload_1
+    //   458: ldc_w 284
+    //   461: invokevirtual 184	java/lang/StringBuilder:append	(Ljava/lang/String;)Ljava/lang/StringBuilder;
+    //   464: pop
+    //   465: aload_1
+    //   466: aload 12
+    //   468: invokevirtual 197	android/net/Uri:toString	()Ljava/lang/String;
+    //   471: invokevirtual 184	java/lang/StringBuilder:append	(Ljava/lang/String;)Ljava/lang/StringBuilder;
+    //   474: pop
+    //   475: ldc -4
+    //   477: aload_1
+    //   478: invokevirtual 188	java/lang/StringBuilder:toString	()Ljava/lang/String;
+    //   481: aload_0
+    //   482: invokestatic 258	com/facebook/common/logging/FLog:e	(Ljava/lang/String;Ljava/lang/String;Ljava/lang/Throwable;)V
+    //   485: iconst_0
+    //   486: ireturn
+    // Local variable table:
+    //   start	length	slot	name	signature
+    //   0	487	0	paramContentResolver	ContentResolver
+    //   0	487	1	paramCursor	Cursor
+    //   0	487	2	paramWritableMap	WritableMap
+    //   0	487	3	paramInt1	int
+    //   0	487	4	paramInt2	int
+    //   0	487	5	paramInt3	int
+    //   0	487	6	paramInt4	int
+    //   0	487	7	paramInt5	int
+    //   101	307	8	f1	float
+    //   97	331	9	f2	float
+    //   84	332	10	f3	float
+    //   73	86	11	f4	float
+    //   16	451	12	localObject	Object
+    //   7	433	13	localWritableNativeMap	WritableNativeMap
+    //   140	146	14	localMediaMetadataRetriever	android.media.MediaMetadataRetriever
+    // Exception table:
+    //   from	to	target	type
+    //   173	199	234	finally
+    //   199	222	234	finally
+    //   239	274	234	finally
+    //   173	199	238	java/lang/NumberFormatException
+    //   199	222	238	java/lang/NumberFormatException
+    //   124	151	296	java/lang/Exception
+    //   222	231	296	java/lang/Exception
+    //   274	283	296	java/lang/Exception
+    //   285	296	296	java/lang/Exception
+    //   357	407	448	java/io/IOException
+  }
+  
+  private static void putLocationInfo(Cursor paramCursor, WritableMap paramWritableMap, int paramInt1, int paramInt2)
+  {
+    double d1 = paramCursor.getDouble(paramInt1);
+    double d2 = paramCursor.getDouble(paramInt2);
+    if ((d1 > 0.0D) || (d2 > 0.0D))
+    {
+      paramCursor = new WritableNativeMap();
+      paramCursor.putDouble("longitude", d1);
+      paramCursor.putDouble("latitude", d2);
+      paramWritableMap.putMap("location", paramCursor);
+    }
+  }
+  
+  private static void putPageInfo(Cursor paramCursor, WritableMap paramWritableMap, int paramInt)
+  {
+    WritableNativeMap localWritableNativeMap = new WritableNativeMap();
+    boolean bool;
+    if (paramInt < paramCursor.getCount()) {
+      bool = true;
+    } else {
+      bool = false;
+    }
+    localWritableNativeMap.putBoolean("has_next_page", bool);
+    if (paramInt < paramCursor.getCount())
+    {
+      paramCursor.moveToPosition(paramInt - 1);
+      localWritableNativeMap.putString("end_cursor", paramCursor.getString(paramCursor.getColumnIndex("datetaken")));
+    }
+    paramWritableMap.putMap("page_info", localWritableNativeMap);
+  }
+  
+  public String getName()
+  {
+    return "CameraRollManager";
+  }
+  
+  @ReactMethod
+  public void getPhotos(ReadableMap paramReadableMap, Promise paramPromise)
+  {
+    int i = paramReadableMap.getInt("first");
+    String str1;
+    if (paramReadableMap.hasKey("after")) {
+      str1 = paramReadableMap.getString("after");
+    } else {
+      str1 = null;
+    }
+    String str2;
+    if (paramReadableMap.hasKey("groupName")) {
+      str2 = paramReadableMap.getString("groupName");
+    } else {
+      str2 = null;
+    }
+    if (paramReadableMap.hasKey("assetType")) {}
+    for (String str3 = paramReadableMap.getString("assetType");; str3 = "Photos") {
+      break;
+    }
+    ReadableArray localReadableArray;
+    if (paramReadableMap.hasKey("mimeTypes")) {
+      localReadableArray = paramReadableMap.getArray("mimeTypes");
+    } else {
+      localReadableArray = null;
+    }
+    if (!paramReadableMap.hasKey("groupTypes"))
+    {
+      new GetMediaTask(getReactApplicationContext(), i, str1, str2, localReadableArray, str3, paramPromise, null).executeOnExecutor(AsyncTask.THREAD_POOL_EXECUTOR, new Void[0]);
+      return;
+    }
+    throw new JSApplicationIllegalArgumentException("groupTypes is not supported on Android");
+  }
+  
+  @ReactMethod
+  public void saveToCameraRoll(String paramString1, String paramString2, Promise paramPromise)
+  {
+    new SaveToCameraRoll(getReactApplicationContext(), Uri.parse(paramString1), paramPromise).executeOnExecutor(AsyncTask.THREAD_POOL_EXECUTOR, new Void[0]);
+  }
+  
+  private static class GetMediaTask
+    extends GuardedAsyncTask<Void, Void>
+  {
+    @Nullable
+    private final String mAfter;
+    private final String mAssetType;
+    private final Context mContext;
+    private final int mFirst;
+    @Nullable
+    private final String mGroupName;
+    @Nullable
+    private final ReadableArray mMimeTypes;
+    private final Promise mPromise;
+    
+    private GetMediaTask(ReactContext paramReactContext, int paramInt, @Nullable String paramString1, @Nullable String paramString2, @Nullable ReadableArray paramReadableArray, String paramString3, Promise paramPromise)
+    {
+      super();
+      mContext = paramReactContext;
+      mFirst = paramInt;
+      mAfter = paramString1;
+      mGroupName = paramString2;
+      mMimeTypes = paramReadableArray;
+      mPromise = paramPromise;
+      mAssetType = paramString3;
+    }
+    
+    protected void doInBackgroundGuarded(Void... paramVarArgs)
+    {
+      Object localObject5 = new StringBuilder("1");
+      Object localObject4 = new ArrayList();
+      if (!TextUtils.isEmpty(mAfter))
+      {
+        ((StringBuilder)localObject5).append(" AND datetaken < ?");
+        ((List)localObject4).add(mAfter);
+      }
+      if (!TextUtils.isEmpty(mGroupName))
+      {
+        ((StringBuilder)localObject5).append(" AND bucket_display_name = ?");
+        ((List)localObject4).add(mGroupName);
+      }
+      paramVarArgs = mAssetType;
+      int i = -1;
+      int k = paramVarArgs.hashCode();
+      int j = 0;
+      if (k != -1905167199)
+      {
+        if (k != -1732810888)
+        {
+          if ((k == 65921) && (paramVarArgs.equals("All"))) {
+            i = 2;
+          }
+        }
+        else if (paramVarArgs.equals("Videos")) {
+          i = 1;
+        }
+      }
+      else if (paramVarArgs.equals("Photos")) {
+        i = 0;
+      }
+      switch (i)
+      {
+      default: 
+        paramVarArgs = mPromise;
+        localObject1 = new StringBuilder();
+        ((StringBuilder)localObject1).append("Invalid filter option: '");
+        ((StringBuilder)localObject1).append(mAssetType);
+        ((StringBuilder)localObject1).append("'. Expected one of '");
+        ((StringBuilder)localObject1).append("Photos");
+        ((StringBuilder)localObject1).append("', '");
+        ((StringBuilder)localObject1).append("Videos");
+        ((StringBuilder)localObject1).append("' or '");
+        ((StringBuilder)localObject1).append("All");
+        ((StringBuilder)localObject1).append("'.");
+        paramVarArgs.reject("E_UNABLE_TO_FILTER", ((StringBuilder)localObject1).toString());
+        return;
+      case 2: 
+        ((StringBuilder)localObject5).append(" AND media_type IN (3,1)");
+        break;
+      case 1: 
+        ((StringBuilder)localObject5).append(" AND media_type = 3");
+        break;
+      case 0: 
+        ((StringBuilder)localObject5).append(" AND media_type = 1");
+      }
+      if ((mMimeTypes != null) && (mMimeTypes.size() > 0))
+      {
+        ((StringBuilder)localObject5).append(" AND mime_type IN (");
+        i = j;
+        while (i < mMimeTypes.size())
+        {
+          ((StringBuilder)localObject5).append("?,");
+          ((List)localObject4).add(mMimeTypes.getString(i));
+          i += 1;
+        }
+        ((StringBuilder)localObject5).replace(((StringBuilder)localObject5).length() - 1, ((StringBuilder)localObject5).length(), ")");
+      }
+      paramVarArgs = new WritableNativeMap();
+      Object localObject1 = mContext.getContentResolver();
+      try
+      {
+        Object localObject3 = MediaStore.Files.getContentUri("external");
+        String[] arrayOfString = CameraRollManager.PROJECTION;
+        localObject5 = ((StringBuilder)localObject5).toString();
+        localObject4 = (String[])((List)localObject4).toArray(new String[((List)localObject4).size()]);
+        StringBuilder localStringBuilder = new StringBuilder();
+        localStringBuilder.append("datetaken DESC, date_modified DESC LIMIT ");
+        localStringBuilder.append(mFirst + 1);
+        localObject3 = ((ContentResolver)localObject1).query((Uri)localObject3, arrayOfString, (String)localObject5, (String[])localObject4, localStringBuilder.toString());
+        if (localObject3 == null)
+        {
+          mPromise.reject("E_UNABLE_TO_LOAD", "Could not get media");
+          return;
+        }
+        try
+        {
+          CameraRollManager.putEdges((ContentResolver)localObject1, (Cursor)localObject3, paramVarArgs, mFirst);
+          CameraRollManager.putPageInfo((Cursor)localObject3, paramVarArgs, mFirst);
+          return;
+        }
+        finally
+        {
+          ((Cursor)localObject3).close();
+          mPromise.resolve(paramVarArgs);
+        }
+        return;
+      }
+      catch (SecurityException paramVarArgs)
+      {
+        mPromise.reject("E_UNABLE_TO_LOAD_PERMISSION", "Could not get media: need READ_EXTERNAL_STORAGE permission", paramVarArgs);
+      }
+    }
+  }
+  
+  private static class SaveToCameraRoll
+    extends GuardedAsyncTask<Void, Void>
+  {
+    private static final int SAVE_BUFFER_SIZE = 1048576;
+    private final Context mContext;
+    private final Promise mPromise;
+    private final Uri mUri;
+    
+    public SaveToCameraRoll(ReactContext paramReactContext, Uri paramUri, Promise paramPromise)
+    {
+      super();
+      mContext = paramReactContext;
+      mUri = paramUri;
+      mPromise = paramPromise;
+    }
+    
+    /* Error */
+    protected void doInBackgroundGuarded(Void... paramVarArgs)
+    {
+      // Byte code:
+      //   0: new 44	java/io/File
+      //   3: dup
+      //   4: aload_0
+      //   5: getfield 28	com/facebook/react/modules/camera/CameraRollManager$SaveToCameraRoll:mUri	Landroid/net/Uri;
+      //   8: invokevirtual 50	android/net/Uri:getPath	()Ljava/lang/String;
+      //   11: invokespecial 53	java/io/File:<init>	(Ljava/lang/String;)V
+      //   14: astore 4
+      //   16: aconst_null
+      //   17: astore 6
+      //   19: aconst_null
+      //   20: astore 5
+      //   22: aload_0
+      //   23: getfield 28	com/facebook/react/modules/camera/CameraRollManager$SaveToCameraRoll:mUri	Landroid/net/Uri;
+      //   26: invokevirtual 56	android/net/Uri:getScheme	()Ljava/lang/String;
+      //   29: astore_1
+      //   30: aload_1
+      //   31: ldc 58
+      //   33: invokevirtual 64	java/lang/String:equals	(Ljava/lang/Object;)Z
+      //   36: ifne +31 -> 67
+      //   39: aload_1
+      //   40: ldc 66
+      //   42: invokevirtual 64	java/lang/String:equals	(Ljava/lang/Object;)Z
+      //   45: ifeq +6 -> 51
+      //   48: goto +19 -> 67
+      //   51: new 68	java/io/FileInputStream
+      //   54: dup
+      //   55: aload 4
+      //   57: invokespecial 71	java/io/FileInputStream:<init>	(Ljava/io/File;)V
+      //   60: invokevirtual 75	java/io/FileInputStream:getChannel	()Ljava/nio/channels/FileChannel;
+      //   63: astore_1
+      //   64: goto +24 -> 88
+      //   67: new 77	java/net/URL
+      //   70: dup
+      //   71: aload_0
+      //   72: getfield 28	com/facebook/react/modules/camera/CameraRollManager$SaveToCameraRoll:mUri	Landroid/net/Uri;
+      //   75: invokevirtual 80	android/net/Uri:toString	()Ljava/lang/String;
+      //   78: invokespecial 81	java/net/URL:<init>	(Ljava/lang/String;)V
+      //   81: invokevirtual 85	java/net/URL:openStream	()Ljava/io/InputStream;
+      //   84: invokestatic 91	java/nio/channels/Channels:newChannel	(Ljava/io/InputStream;)Ljava/nio/channels/ReadableByteChannel;
+      //   87: astore_1
+      //   88: getstatic 97	android/os/Environment:DIRECTORY_DCIM	Ljava/lang/String;
+      //   91: invokestatic 101	android/os/Environment:getExternalStoragePublicDirectory	(Ljava/lang/String;)Ljava/io/File;
+      //   94: astore 8
+      //   96: aload 8
+      //   98: invokevirtual 105	java/io/File:mkdirs	()Z
+      //   101: pop
+      //   102: aload 8
+      //   104: invokevirtual 108	java/io/File:isDirectory	()Z
+      //   107: ifne +46 -> 153
+      //   110: aload_0
+      //   111: getfield 30	com/facebook/react/modules/camera/CameraRollManager$SaveToCameraRoll:mPromise	Lcom/facebook/react/bridge/Promise;
+      //   114: ldc 110
+      //   116: ldc 112
+      //   118: invokeinterface 118 3 0
+      //   123: aload_1
+      //   124: ifnull +28 -> 152
+      //   127: aload_1
+      //   128: invokeinterface 123 1 0
+      //   133: ifeq +19 -> 152
+      //   136: aload_1
+      //   137: invokeinterface 127 1 0
+      //   142: return
+      //   143: astore_1
+      //   144: ldc -127
+      //   146: ldc -125
+      //   148: aload_1
+      //   149: invokestatic 137	com/facebook/common/logging/FLog:e	(Ljava/lang/String;Ljava/lang/String;Ljava/lang/Throwable;)V
+      //   152: return
+      //   153: new 44	java/io/File
+      //   156: dup
+      //   157: aload 8
+      //   159: aload 4
+      //   161: invokevirtual 140	java/io/File:getName	()Ljava/lang/String;
+      //   164: invokespecial 143	java/io/File:<init>	(Ljava/io/File;Ljava/lang/String;)V
+      //   167: astore_3
+      //   168: aload 4
+      //   170: invokevirtual 140	java/io/File:getName	()Ljava/lang/String;
+      //   173: astore 5
+      //   175: aload 5
+      //   177: bipush 46
+      //   179: invokevirtual 147	java/lang/String:indexOf	(I)I
+      //   182: iflt +485 -> 667
+      //   185: aload 5
+      //   187: iconst_0
+      //   188: aload 5
+      //   190: bipush 46
+      //   192: invokevirtual 150	java/lang/String:lastIndexOf	(I)I
+      //   195: invokevirtual 154	java/lang/String:substring	(II)Ljava/lang/String;
+      //   198: astore 7
+      //   200: aload 5
+      //   202: aload 5
+      //   204: bipush 46
+      //   206: invokevirtual 150	java/lang/String:lastIndexOf	(I)I
+      //   209: invokevirtual 157	java/lang/String:substring	(I)Ljava/lang/String;
+      //   212: astore 4
+      //   214: iconst_0
+      //   215: istore_2
+      //   216: aload 7
+      //   218: astore 5
+      //   220: goto +3 -> 223
+      //   223: aload_3
+      //   224: invokevirtual 160	java/io/File:createNewFile	()Z
+      //   227: ifne +59 -> 286
+      //   230: new 162	java/lang/StringBuilder
+      //   233: dup
+      //   234: invokespecial 164	java/lang/StringBuilder:<init>	()V
+      //   237: astore_3
+      //   238: aload_3
+      //   239: aload 5
+      //   241: invokevirtual 168	java/lang/StringBuilder:append	(Ljava/lang/String;)Ljava/lang/StringBuilder;
+      //   244: pop
+      //   245: aload_3
+      //   246: ldc -86
+      //   248: invokevirtual 168	java/lang/StringBuilder:append	(Ljava/lang/String;)Ljava/lang/StringBuilder;
+      //   251: pop
+      //   252: aload_3
+      //   253: iload_2
+      //   254: invokevirtual 173	java/lang/StringBuilder:append	(I)Ljava/lang/StringBuilder;
+      //   257: pop
+      //   258: aload_3
+      //   259: aload 4
+      //   261: invokevirtual 168	java/lang/StringBuilder:append	(Ljava/lang/String;)Ljava/lang/StringBuilder;
+      //   264: pop
+      //   265: new 44	java/io/File
+      //   268: dup
+      //   269: aload 8
+      //   271: aload_3
+      //   272: invokevirtual 174	java/lang/StringBuilder:toString	()Ljava/lang/String;
+      //   275: invokespecial 143	java/io/File:<init>	(Ljava/io/File;Ljava/lang/String;)V
+      //   278: astore_3
+      //   279: iload_2
+      //   280: iconst_1
+      //   281: iadd
+      //   282: istore_2
+      //   283: goto -60 -> 223
+      //   286: new 176	java/io/FileOutputStream
+      //   289: dup
+      //   290: aload_3
+      //   291: invokespecial 177	java/io/FileOutputStream:<init>	(Ljava/io/File;)V
+      //   294: invokevirtual 178	java/io/FileOutputStream:getChannel	()Ljava/nio/channels/FileChannel;
+      //   297: astore 4
+      //   299: ldc 13
+      //   301: invokestatic 184	java/nio/ByteBuffer:allocate	(I)Ljava/nio/ByteBuffer;
+      //   304: astore 5
+      //   306: aload_1
+      //   307: aload 5
+      //   309: invokeinterface 188 2 0
+      //   314: ifle +26 -> 340
+      //   317: aload 5
+      //   319: invokevirtual 192	java/nio/ByteBuffer:flip	()Ljava/nio/Buffer;
+      //   322: pop
+      //   323: aload 4
+      //   325: aload 5
+      //   327: invokevirtual 197	java/nio/channels/FileChannel:write	(Ljava/nio/ByteBuffer;)I
+      //   330: pop
+      //   331: aload 5
+      //   333: invokevirtual 201	java/nio/ByteBuffer:compact	()Ljava/nio/ByteBuffer;
+      //   336: pop
+      //   337: goto -31 -> 306
+      //   340: aload 5
+      //   342: invokevirtual 192	java/nio/ByteBuffer:flip	()Ljava/nio/Buffer;
+      //   345: pop
+      //   346: aload 5
+      //   348: invokevirtual 204	java/nio/ByteBuffer:hasRemaining	()Z
+      //   351: ifeq +14 -> 365
+      //   354: aload 4
+      //   356: aload 5
+      //   358: invokevirtual 197	java/nio/channels/FileChannel:write	(Ljava/nio/ByteBuffer;)I
+      //   361: pop
+      //   362: goto -16 -> 346
+      //   365: aload_1
+      //   366: invokeinterface 127 1 0
+      //   371: aload 4
+      //   373: invokevirtual 205	java/nio/channels/FileChannel:close	()V
+      //   376: aload_0
+      //   377: getfield 26	com/facebook/react/modules/camera/CameraRollManager$SaveToCameraRoll:mContext	Landroid/content/Context;
+      //   380: astore 5
+      //   382: aload_3
+      //   383: invokevirtual 208	java/io/File:getAbsolutePath	()Ljava/lang/String;
+      //   386: astore_3
+      //   387: new 10	com/facebook/react/modules/camera/CameraRollManager$SaveToCameraRoll$1
+      //   390: dup
+      //   391: aload_0
+      //   392: invokespecial 211	com/facebook/react/modules/camera/CameraRollManager$SaveToCameraRoll$1:<init>	(Lcom/facebook/react/modules/camera/CameraRollManager$SaveToCameraRoll;)V
+      //   395: astore 6
+      //   397: aload 5
+      //   399: iconst_1
+      //   400: anewarray 60	java/lang/String
+      //   403: dup
+      //   404: iconst_0
+      //   405: aload_3
+      //   406: aastore
+      //   407: aconst_null
+      //   408: aload 6
+      //   410: invokestatic 217	android/media/MediaScannerConnection:scanFile	(Landroid/content/Context;[Ljava/lang/String;[Ljava/lang/String;Landroid/media/MediaScannerConnection$OnScanCompletedListener;)V
+      //   413: aload_1
+      //   414: ifnull +30 -> 444
+      //   417: aload_1
+      //   418: invokeinterface 123 1 0
+      //   423: ifeq +21 -> 444
+      //   426: aload_1
+      //   427: invokeinterface 127 1 0
+      //   432: goto +12 -> 444
+      //   435: astore_1
+      //   436: ldc -127
+      //   438: ldc -125
+      //   440: aload_1
+      //   441: invokestatic 137	com/facebook/common/logging/FLog:e	(Ljava/lang/String;Ljava/lang/String;Ljava/lang/Throwable;)V
+      //   444: aload 4
+      //   446: ifnull +144 -> 590
+      //   449: aload 4
+      //   451: invokevirtual 218	java/nio/channels/FileChannel:isOpen	()Z
+      //   454: ifeq +136 -> 590
+      //   457: aload 4
+      //   459: invokevirtual 205	java/nio/channels/FileChannel:close	()V
+      //   462: return
+      //   463: astore 5
+      //   465: aload 4
+      //   467: astore_3
+      //   468: aload_1
+      //   469: astore 4
+      //   471: aload 5
+      //   473: astore_1
+      //   474: goto +128 -> 602
+      //   477: astore_3
+      //   478: goto +21 -> 499
+      //   481: astore 5
+      //   483: aload 6
+      //   485: astore_3
+      //   486: aload_1
+      //   487: astore 4
+      //   489: aload 5
+      //   491: astore_1
+      //   492: goto +110 -> 602
+      //   495: astore_3
+      //   496: aconst_null
+      //   497: astore 4
+      //   499: aload_1
+      //   500: astore 5
+      //   502: aload 4
+      //   504: astore_1
+      //   505: goto +16 -> 521
+      //   508: astore_1
+      //   509: aconst_null
+      //   510: astore 4
+      //   512: aload 6
+      //   514: astore_3
+      //   515: goto +87 -> 602
+      //   518: astore_3
+      //   519: aconst_null
+      //   520: astore_1
+      //   521: aload_0
+      //   522: getfield 30	com/facebook/react/modules/camera/CameraRollManager$SaveToCameraRoll:mPromise	Lcom/facebook/react/bridge/Promise;
+      //   525: aload_3
+      //   526: invokeinterface 221 2 0
+      //   531: aload 5
+      //   533: ifnull +32 -> 565
+      //   536: aload 5
+      //   538: invokeinterface 123 1 0
+      //   543: ifeq +22 -> 565
+      //   546: aload 5
+      //   548: invokeinterface 127 1 0
+      //   553: goto +12 -> 565
+      //   556: astore_3
+      //   557: ldc -127
+      //   559: ldc -125
+      //   561: aload_3
+      //   562: invokestatic 137	com/facebook/common/logging/FLog:e	(Ljava/lang/String;Ljava/lang/String;Ljava/lang/Throwable;)V
+      //   565: aload_1
+      //   566: ifnull +24 -> 590
+      //   569: aload_1
+      //   570: invokevirtual 218	java/nio/channels/FileChannel:isOpen	()Z
+      //   573: ifeq +17 -> 590
+      //   576: aload_1
+      //   577: invokevirtual 205	java/nio/channels/FileChannel:close	()V
+      //   580: return
+      //   581: astore_1
+      //   582: ldc -127
+      //   584: ldc -33
+      //   586: aload_1
+      //   587: invokestatic 137	com/facebook/common/logging/FLog:e	(Ljava/lang/String;Ljava/lang/String;Ljava/lang/Throwable;)V
+      //   590: return
+      //   591: astore 6
+      //   593: aload 5
+      //   595: astore 4
+      //   597: aload_1
+      //   598: astore_3
+      //   599: aload 6
+      //   601: astore_1
+      //   602: aload 4
+      //   604: ifnull +34 -> 638
+      //   607: aload 4
+      //   609: invokeinterface 123 1 0
+      //   614: ifeq +24 -> 638
+      //   617: aload 4
+      //   619: invokeinterface 127 1 0
+      //   624: goto +14 -> 638
+      //   627: astore 4
+      //   629: ldc -127
+      //   631: ldc -125
+      //   633: aload 4
+      //   635: invokestatic 137	com/facebook/common/logging/FLog:e	(Ljava/lang/String;Ljava/lang/String;Ljava/lang/Throwable;)V
+      //   638: aload_3
+      //   639: ifnull +26 -> 665
+      //   642: aload_3
+      //   643: invokevirtual 218	java/nio/channels/FileChannel:isOpen	()Z
+      //   646: ifeq +19 -> 665
+      //   649: aload_3
+      //   650: invokevirtual 205	java/nio/channels/FileChannel:close	()V
+      //   653: goto +12 -> 665
+      //   656: astore_3
+      //   657: ldc -127
+      //   659: ldc -33
+      //   661: aload_3
+      //   662: invokestatic 137	com/facebook/common/logging/FLog:e	(Ljava/lang/String;Ljava/lang/String;Ljava/lang/Throwable;)V
+      //   665: aload_1
+      //   666: athrow
+      //   667: ldc -31
+      //   669: astore 4
+      //   671: iconst_0
+      //   672: istore_2
+      //   673: goto -450 -> 223
+      // Local variable table:
+      //   start	length	slot	name	signature
+      //   0	676	0	this	SaveToCameraRoll
+      //   0	676	1	paramVarArgs	Void[]
+      //   215	458	2	i	int
+      //   167	301	3	localObject1	Object
+      //   477	1	3	localIOException1	java.io.IOException
+      //   485	1	3	local11	1
+      //   495	1	3	localIOException2	java.io.IOException
+      //   514	1	3	local12	1
+      //   518	8	3	localIOException3	java.io.IOException
+      //   556	6	3	localIOException4	java.io.IOException
+      //   598	52	3	arrayOfVoid1	Void[]
+      //   656	6	3	localIOException5	java.io.IOException
+      //   14	604	4	localObject2	Object
+      //   627	7	4	localIOException6	java.io.IOException
+      //   669	1	4	str1	String
+      //   20	378	5	localObject3	Object
+      //   463	9	5	localObject4	Object
+      //   481	9	5	localObject5	Object
+      //   500	94	5	arrayOfVoid2	Void[]
+      //   17	496	6	local13	1
+      //   591	9	6	localObject6	Object
+      //   198	19	7	str2	String
+      //   94	176	8	localFile	java.io.File
+      // Exception table:
+      //   from	to	target	type
+      //   136	142	143	java/io/IOException
+      //   426	432	435	java/io/IOException
+      //   299	306	463	finally
+      //   306	337	463	finally
+      //   340	346	463	finally
+      //   346	362	463	finally
+      //   365	413	463	finally
+      //   299	306	477	java/io/IOException
+      //   306	337	477	java/io/IOException
+      //   340	346	477	java/io/IOException
+      //   346	362	477	java/io/IOException
+      //   365	413	477	java/io/IOException
+      //   88	123	481	finally
+      //   153	214	481	finally
+      //   223	279	481	finally
+      //   286	299	481	finally
+      //   88	123	495	java/io/IOException
+      //   153	214	495	java/io/IOException
+      //   223	279	495	java/io/IOException
+      //   286	299	495	java/io/IOException
+      //   22	48	508	finally
+      //   51	64	508	finally
+      //   67	88	508	finally
+      //   22	48	518	java/io/IOException
+      //   51	64	518	java/io/IOException
+      //   67	88	518	java/io/IOException
+      //   546	553	556	java/io/IOException
+      //   457	462	581	java/io/IOException
+      //   576	580	581	java/io/IOException
+      //   521	531	591	finally
+      //   617	624	627	java/io/IOException
+      //   649	653	656	java/io/IOException
+    }
+  }
+}

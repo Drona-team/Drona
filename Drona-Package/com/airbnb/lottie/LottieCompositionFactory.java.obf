@@ -1,0 +1,406 @@
+package com.airbnb.lottie;
+
+import android.content.Context;
+import android.content.res.AssetManager;
+import android.content.res.Resources;
+import android.content.res.Resources.NotFoundException;
+import android.graphics.Bitmap;
+import android.graphics.BitmapFactory;
+import androidx.annotation.Nullable;
+import androidx.annotation.RawRes;
+import androidx.annotation.WorkerThread;
+import com.airbnb.lottie.model.LottieCompositionCache;
+import com.airbnb.lottie.network.NetworkFetcher;
+import com.airbnb.lottie.parser.moshi.JsonReader;
+import com.airbnb.lottie.utils.Utils;
+import java.io.ByteArrayInputStream;
+import java.io.IOException;
+import java.io.InputStream;
+import java.util.Collection;
+import java.util.HashMap;
+import java.util.Iterator;
+import java.util.Map;
+import java.util.Map.Entry;
+import java.util.Set;
+import java.util.concurrent.Callable;
+import java.util.zip.ZipEntry;
+import java.util.zip.ZipInputStream;
+import okio.Okio;
+import org.json.JSONObject;
+
+public class LottieCompositionFactory
+{
+  private static final Map<String, LottieTask<LottieComposition>> taskCache = new HashMap();
+  
+  private LottieCompositionFactory() {}
+  
+  private static LottieTask<LottieComposition> cache(@Nullable String paramString, Callable<LottieResult<LottieComposition>> paramCallable)
+  {
+    LottieComposition localLottieComposition;
+    if (paramString == null) {
+      localLottieComposition = null;
+    } else {
+      localLottieComposition = LottieCompositionCache.getInstance().get(paramString);
+    }
+    if (localLottieComposition != null) {
+      new LottieTask(new Callable()
+      {
+        public LottieResult<LottieComposition> call()
+        {
+          return new LottieResult(val$cachedComposition);
+        }
+      });
+    }
+    if ((paramString != null) && (taskCache.containsKey(paramString))) {
+      return (LottieTask)taskCache.get(paramString);
+    }
+    paramCallable = new LottieTask(paramCallable);
+    paramCallable.addListener(new LottieListener()
+    {
+      public void onResult(LottieComposition paramAnonymousLottieComposition)
+      {
+        if (val$cacheKey != null) {
+          LottieCompositionCache.getInstance().put(val$cacheKey, paramAnonymousLottieComposition);
+        }
+        LottieCompositionFactory.taskCache.remove(val$cacheKey);
+      }
+    });
+    paramCallable.addFailureListener(new LottieListener()
+    {
+      public void onResult(Throwable paramAnonymousThrowable)
+      {
+        LottieCompositionFactory.taskCache.remove(val$cacheKey);
+      }
+    });
+    taskCache.put(paramString, paramCallable);
+    return paramCallable;
+  }
+  
+  @Nullable
+  private static LottieImageAsset findImageAssetForFileName(LottieComposition paramLottieComposition, String paramString)
+  {
+    paramLottieComposition = paramLottieComposition.getImages().values().iterator();
+    while (paramLottieComposition.hasNext())
+    {
+      LottieImageAsset localLottieImageAsset = (LottieImageAsset)paramLottieComposition.next();
+      if (localLottieImageAsset.getFileName().equals(paramString)) {
+        return localLottieImageAsset;
+      }
+    }
+    return null;
+  }
+  
+  public static LottieTask<LottieComposition> fromAsset(Context paramContext, final String paramString)
+  {
+    cache(paramString, new Callable()
+    {
+      public LottieResult<LottieComposition> call()
+      {
+        return LottieCompositionFactory.fromAssetSync(val$appContext, paramString);
+      }
+    });
+  }
+  
+  @WorkerThread
+  public static LottieResult<LottieComposition> fromAssetSync(Context paramContext, String paramString)
+  {
+    try
+    {
+      Object localObject = new StringBuilder();
+      ((StringBuilder)localObject).append("asset_");
+      ((StringBuilder)localObject).append(paramString);
+      localObject = ((StringBuilder)localObject).toString();
+      if (paramString.endsWith(".zip")) {
+        return fromZipStreamSync(new ZipInputStream(paramContext.getAssets().open(paramString)), (String)localObject);
+      }
+      paramContext = fromJsonInputStreamSync(paramContext.getAssets().open(paramString), (String)localObject);
+      return paramContext;
+    }
+    catch (IOException paramContext) {}
+    return new LottieResult(paramContext);
+  }
+  
+  @Deprecated
+  public static LottieTask<LottieComposition> fromJson(JSONObject paramJSONObject, @Nullable final String paramString)
+  {
+    cache(paramString, new Callable()
+    {
+      public LottieResult<LottieComposition> call()
+      {
+        return LottieCompositionFactory.fromJsonSync(val$json, paramString);
+      }
+    });
+  }
+  
+  public static LottieTask<LottieComposition> fromJsonInputStream(InputStream paramInputStream, @Nullable final String paramString)
+  {
+    cache(paramString, new Callable()
+    {
+      public LottieResult<LottieComposition> call()
+      {
+        return LottieCompositionFactory.fromJsonInputStreamSync(val$stream, paramString);
+      }
+    });
+  }
+  
+  @WorkerThread
+  public static LottieResult<LottieComposition> fromJsonInputStreamSync(InputStream paramInputStream, @Nullable String paramString)
+  {
+    return fromJsonInputStreamSync(paramInputStream, paramString, true);
+  }
+  
+  @WorkerThread
+  private static LottieResult<LottieComposition> fromJsonInputStreamSync(InputStream paramInputStream, @Nullable String paramString, boolean paramBoolean)
+  {
+    try
+    {
+      paramString = fromJsonReaderSync(JsonReader.of(Okio.buffer(Okio.source(paramInputStream))), paramString);
+      return paramString;
+    }
+    finally
+    {
+      if (paramBoolean) {
+        Utils.closeQuietly(paramInputStream);
+      }
+    }
+  }
+  
+  public static LottieTask<LottieComposition> fromJsonReader(JsonReader paramJsonReader, @Nullable final String paramString)
+  {
+    cache(paramString, new Callable()
+    {
+      public LottieResult<LottieComposition> call()
+      {
+        return LottieCompositionFactory.fromJsonReaderSync(val$reader, paramString);
+      }
+    });
+  }
+  
+  @WorkerThread
+  public static LottieResult<LottieComposition> fromJsonReaderSync(JsonReader paramJsonReader, @Nullable String paramString)
+  {
+    return fromJsonReaderSyncInternal(paramJsonReader, paramString, true);
+  }
+  
+  /* Error */
+  private static LottieResult<LottieComposition> fromJsonReaderSyncInternal(JsonReader paramJsonReader, @Nullable String paramString, boolean paramBoolean)
+  {
+    // Byte code:
+    //   0: aload_0
+    //   1: invokestatic 259	com/airbnb/lottie/parser/LottieCompositionMoshiParser:parse	(Lcom/airbnb/lottie/parser/moshi/JsonReader;)Lcom/airbnb/lottie/LottieComposition;
+    //   4: astore_3
+    //   5: invokestatic 51	com/airbnb/lottie/model/LottieCompositionCache:getInstance	()Lcom/airbnb/lottie/model/LottieCompositionCache;
+    //   8: aload_1
+    //   9: aload_3
+    //   10: invokevirtual 262	com/airbnb/lottie/model/LottieCompositionCache:put	(Ljava/lang/String;Lcom/airbnb/lottie/LottieComposition;)V
+    //   13: new 191	com/airbnb/lottie/LottieResult
+    //   16: dup
+    //   17: aload_3
+    //   18: invokespecial 265	com/airbnb/lottie/LottieResult:<init>	(Ljava/lang/Object;)V
+    //   21: astore_1
+    //   22: iload_2
+    //   23: ifeq +7 -> 30
+    //   26: aload_0
+    //   27: invokestatic 239	com/airbnb/lottie/utils/Utils:closeQuietly	(Ljava/io/Closeable;)V
+    //   30: aload_1
+    //   31: areturn
+    //   32: astore_1
+    //   33: goto +23 -> 56
+    //   36: astore_1
+    //   37: new 191	com/airbnb/lottie/LottieResult
+    //   40: dup
+    //   41: aload_1
+    //   42: invokespecial 194	com/airbnb/lottie/LottieResult:<init>	(Ljava/lang/Throwable;)V
+    //   45: astore_1
+    //   46: iload_2
+    //   47: ifeq +7 -> 54
+    //   50: aload_0
+    //   51: invokestatic 239	com/airbnb/lottie/utils/Utils:closeQuietly	(Ljava/io/Closeable;)V
+    //   54: aload_1
+    //   55: areturn
+    //   56: iload_2
+    //   57: ifeq +7 -> 64
+    //   60: aload_0
+    //   61: invokestatic 239	com/airbnb/lottie/utils/Utils:closeQuietly	(Ljava/io/Closeable;)V
+    //   64: aload_1
+    //   65: athrow
+    // Local variable table:
+    //   start	length	slot	name	signature
+    //   0	66	0	paramJsonReader	JsonReader
+    //   0	66	1	paramString	String
+    //   0	66	2	paramBoolean	boolean
+    //   4	14	3	localLottieComposition	LottieComposition
+    // Exception table:
+    //   from	to	target	type
+    //   0	22	32	finally
+    //   37	46	32	finally
+    //   0	22	36	java/lang/Exception
+  }
+  
+  public static LottieTask<LottieComposition> fromJsonString(String paramString1, @Nullable final String paramString2)
+  {
+    cache(paramString2, new Callable()
+    {
+      public LottieResult<LottieComposition> call()
+      {
+        return LottieCompositionFactory.fromJsonStringSync(val$json, paramString2);
+      }
+    });
+  }
+  
+  @WorkerThread
+  public static LottieResult<LottieComposition> fromJsonStringSync(String paramString1, @Nullable String paramString2)
+  {
+    return fromJsonReaderSync(JsonReader.of(Okio.buffer(Okio.source(new ByteArrayInputStream(paramString1.getBytes())))), paramString2);
+  }
+  
+  @Deprecated
+  @WorkerThread
+  public static LottieResult<LottieComposition> fromJsonSync(JSONObject paramJSONObject, @Nullable String paramString)
+  {
+    return fromJsonStringSync(paramJSONObject.toString(), paramString);
+  }
+  
+  public static LottieTask<LottieComposition> fromRawRes(Context paramContext, @RawRes final int paramInt)
+  {
+    paramContext = paramContext.getApplicationContext();
+    cache(rawResCacheKey(paramInt), new Callable()
+    {
+      public LottieResult<LottieComposition> call()
+      {
+        return LottieCompositionFactory.fromRawResSync(val$appContext, paramInt);
+      }
+    });
+  }
+  
+  @WorkerThread
+  public static LottieResult<LottieComposition> fromRawResSync(Context paramContext, @RawRes int paramInt)
+  {
+    try
+    {
+      paramContext = fromJsonInputStreamSync(paramContext.getResources().openRawResource(paramInt), rawResCacheKey(paramInt));
+      return paramContext;
+    }
+    catch (Resources.NotFoundException paramContext) {}
+    return new LottieResult(paramContext);
+  }
+  
+  public static LottieTask<LottieComposition> fromUrl(Context paramContext, final String paramString)
+  {
+    StringBuilder localStringBuilder = new StringBuilder();
+    localStringBuilder.append("url_");
+    localStringBuilder.append(paramString);
+    cache(localStringBuilder.toString(), new Callable()
+    {
+      public LottieResult<LottieComposition> call()
+      {
+        return NetworkFetcher.fetchSync(val$context, paramString);
+      }
+    });
+  }
+  
+  @WorkerThread
+  public static LottieResult<LottieComposition> fromUrlSync(Context paramContext, String paramString)
+  {
+    return NetworkFetcher.fetchSync(paramContext, paramString);
+  }
+  
+  public static LottieTask<LottieComposition> fromZipStream(ZipInputStream paramZipInputStream, @Nullable final String paramString)
+  {
+    cache(paramString, new Callable()
+    {
+      public LottieResult<LottieComposition> call()
+      {
+        return LottieCompositionFactory.fromZipStreamSync(val$inputStream, paramString);
+      }
+    });
+  }
+  
+  @WorkerThread
+  public static LottieResult<LottieComposition> fromZipStreamSync(ZipInputStream paramZipInputStream, @Nullable String paramString)
+  {
+    try
+    {
+      paramString = fromZipStreamSyncInternal(paramZipInputStream, paramString);
+      return paramString;
+    }
+    finally
+    {
+      Utils.closeQuietly(paramZipInputStream);
+    }
+  }
+  
+  @WorkerThread
+  private static LottieResult<LottieComposition> fromZipStreamSyncInternal(ZipInputStream paramZipInputStream, @Nullable String paramString)
+  {
+    Object localObject2 = new HashMap();
+    try
+    {
+      Object localObject1 = paramZipInputStream.getNextEntry();
+      LottieComposition localLottieComposition = null;
+      while (localObject1 != null)
+      {
+        String str = ((ZipEntry)localObject1).getName();
+        if (str.contains("__MACOSX"))
+        {
+          paramZipInputStream.closeEntry();
+        }
+        else if (((ZipEntry)localObject1).getName().contains(".json"))
+        {
+          localLottieComposition = (LottieComposition)fromJsonReaderSyncInternal(JsonReader.of(Okio.buffer(Okio.source(paramZipInputStream))), null, false).getValue();
+        }
+        else if ((!str.contains(".png")) && (!str.contains(".webp")))
+        {
+          paramZipInputStream.closeEntry();
+        }
+        else
+        {
+          localObject1 = str.split("/");
+          ((Map)localObject2).put(localObject1[(localObject1.length - 1)], BitmapFactory.decodeStream(paramZipInputStream));
+        }
+        localObject1 = paramZipInputStream.getNextEntry();
+      }
+      if (localLottieComposition == null) {
+        return new LottieResult(new IllegalArgumentException("Unable to parse composition"));
+      }
+      paramZipInputStream = ((Map)localObject2).entrySet().iterator();
+      while (paramZipInputStream.hasNext())
+      {
+        localObject1 = (Map.Entry)paramZipInputStream.next();
+        localObject2 = findImageAssetForFileName(localLottieComposition, (String)((Map.Entry)localObject1).getKey());
+        if (localObject2 != null) {
+          ((LottieImageAsset)localObject2).setBitmap(Utils.resizeBitmapIfNeeded((Bitmap)((Map.Entry)localObject1).getValue(), ((LottieImageAsset)localObject2).getWidth(), ((LottieImageAsset)localObject2).getHeight()));
+        }
+      }
+      localObject1 = localLottieComposition.getImages().entrySet().iterator();
+      while (((Iterator)localObject1).hasNext())
+      {
+        paramZipInputStream = (Map.Entry)((Iterator)localObject1).next();
+        if (((LottieImageAsset)paramZipInputStream.getValue()).getBitmap() == null)
+        {
+          paramString = new StringBuilder();
+          paramString.append("There is no image for ");
+          paramString.append(((LottieImageAsset)paramZipInputStream.getValue()).getFileName());
+          return new LottieResult(new IllegalStateException(paramString.toString()));
+        }
+      }
+      LottieCompositionCache.getInstance().put(paramString, localLottieComposition);
+      return new LottieResult(localLottieComposition);
+    }
+    catch (IOException paramZipInputStream) {}
+    return new LottieResult(paramZipInputStream);
+  }
+  
+  private static String rawResCacheKey(@RawRes int paramInt)
+  {
+    StringBuilder localStringBuilder = new StringBuilder();
+    localStringBuilder.append("rawRes_");
+    localStringBuilder.append(paramInt);
+    return localStringBuilder.toString();
+  }
+  
+  public static void setMaxCacheSize(int paramInt)
+  {
+    LottieCompositionCache.getInstance().resize(paramInt);
+  }
+}

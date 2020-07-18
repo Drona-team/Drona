@@ -1,0 +1,32 @@
+package com.facebook.react.views.unimplementedview;
+
+import androidx.annotation.Nullable;
+import com.facebook.react.module.annotations.ReactModule;
+import com.facebook.react.uimanager.ThemedReactContext;
+import com.facebook.react.uimanager.ViewGroupManager;
+import com.facebook.react.uimanager.annotations.ReactProp;
+
+@ReactModule(name="UnimplementedNativeView")
+public class ReactUnimplementedViewManager
+  extends ViewGroupManager<ReactUnimplementedView>
+{
+  public static final String REACT_CLASS = "UnimplementedNativeView";
+  
+  public ReactUnimplementedViewManager() {}
+  
+  protected ReactUnimplementedView createViewInstance(ThemedReactContext paramThemedReactContext)
+  {
+    return new ReactUnimplementedView(paramThemedReactContext);
+  }
+  
+  public String getName()
+  {
+    return "UnimplementedNativeView";
+  }
+  
+  @ReactProp(name="name")
+  public void setName(ReactUnimplementedView paramReactUnimplementedView, @Nullable String paramString)
+  {
+    paramReactUnimplementedView.setName(paramString);
+  }
+}

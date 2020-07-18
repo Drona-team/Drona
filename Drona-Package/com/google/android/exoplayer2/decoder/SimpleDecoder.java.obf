@@ -1,0 +1,326 @@
+package com.google.android.exoplayer2.decoder;
+
+import androidx.annotation.Nullable;
+import com.google.android.exoplayer2.util.Assertions;
+import java.util.ArrayDeque;
+
+public abstract class SimpleDecoder<I extends DecoderInputBuffer, O extends OutputBuffer, E extends Exception>
+  implements Decoder<I, O, E>
+{
+  private int availableInputBufferCount;
+  private final I[] availableInputBuffers;
+  private int availableOutputBufferCount;
+  private final O[] availableOutputBuffers;
+  private final Thread decodeThread;
+  private I dequeuedInputBuffer;
+  private E exception;
+  private boolean flushed;
+  private final Object lock = new Object();
+  private final ArrayDeque<I> queuedInputBuffers = new ArrayDeque();
+  private final ArrayDeque<O> queuedOutputBuffers = new ArrayDeque();
+  private boolean released;
+  private int skippedOutputBufferCount;
+  
+  protected SimpleDecoder(I[] paramArrayOfI, O[] paramArrayOfO)
+  {
+    availableInputBuffers = paramArrayOfI;
+    availableInputBufferCount = paramArrayOfI.length;
+    int j = 0;
+    int i = 0;
+    while (i < availableInputBufferCount)
+    {
+      availableInputBuffers[i] = createInputBuffer();
+      i += 1;
+    }
+    availableOutputBuffers = paramArrayOfO;
+    availableOutputBufferCount = paramArrayOfO.length;
+    i = j;
+    while (i < availableOutputBufferCount)
+    {
+      availableOutputBuffers[i] = createOutputBuffer();
+      i += 1;
+    }
+    decodeThread = new Thread()
+    {
+      public void run()
+      {
+        SimpleDecoder.this.run();
+      }
+    };
+    decodeThread.start();
+  }
+  
+  private boolean canDecodeBuffer()
+  {
+    return (!queuedInputBuffers.isEmpty()) && (availableOutputBufferCount > 0);
+  }
+  
+  private boolean decode()
+    throws InterruptedException
+  {
+    synchronized (lock)
+    {
+      while ((!released) && (!canDecodeBuffer())) {
+        lock.wait();
+      }
+      if (released) {
+        return false;
+      }
+      ??? = (DecoderInputBuffer)queuedInputBuffers.removeFirst();
+      Object localObject4 = availableOutputBuffers;
+      int i = availableOutputBufferCount - 1;
+      availableOutputBufferCount = i;
+      localObject4 = localObject4[i];
+      boolean bool = flushed;
+      flushed = false;
+      if (((DecoderInputBuffer)???).isEndOfStream())
+      {
+        ((OutputBuffer)localObject4).addFlag(4);
+      }
+      else
+      {
+        if (((DecoderInputBuffer)???).isDecodeOnly()) {
+          ((OutputBuffer)localObject4).addFlag(Integer.MIN_VALUE);
+        }
+        try
+        {
+          exception = decode((DecoderInputBuffer)???, (OutputBuffer)localObject4, bool);
+        }
+        catch (OutOfMemoryError localOutOfMemoryError)
+        {
+          exception = createUnexpectedDecodeException(localOutOfMemoryError);
+        }
+        catch (RuntimeException localRuntimeException)
+        {
+          exception = createUnexpectedDecodeException(localRuntimeException);
+        }
+        if (exception != null) {
+          synchronized (lock)
+          {
+            return false;
+          }
+        }
+      }
+      synchronized (lock)
+      {
+        if (flushed)
+        {
+          localObject5.release();
+        }
+        else if (localObject5.isDecodeOnly())
+        {
+          skippedOutputBufferCount += 1;
+          localObject5.release();
+        }
+        else
+        {
+          skippedOutputBufferCount = skippedOutputBufferCount;
+          skippedOutputBufferCount = 0;
+          queuedOutputBuffers.addLast(localObject5);
+        }
+        releaseInputBufferInternal((DecoderInputBuffer)???);
+        return true;
+      }
+    }
+  }
+  
+  private void maybeNotifyDecodeLoop()
+  {
+    if (canDecodeBuffer()) {
+      lock.notify();
+    }
+  }
+  
+  private void maybeThrowException()
+    throws Exception
+  {
+    if (exception == null) {
+      return;
+    }
+    throw exception;
+  }
+  
+  private void releaseInputBufferInternal(I paramI)
+  {
+    paramI.clear();
+    DecoderInputBuffer[] arrayOfDecoderInputBuffer = availableInputBuffers;
+    int i = availableInputBufferCount;
+    availableInputBufferCount = (i + 1);
+    arrayOfDecoderInputBuffer[i] = paramI;
+  }
+  
+  private void releaseOutputBufferInternal(O paramO)
+  {
+    paramO.clear();
+    OutputBuffer[] arrayOfOutputBuffer = availableOutputBuffers;
+    int i = availableOutputBufferCount;
+    availableOutputBufferCount = (i + 1);
+    arrayOfOutputBuffer[i] = paramO;
+  }
+  
+  private void run()
+  {
+    try
+    {
+      boolean bool;
+      do
+      {
+        bool = decode();
+      } while (bool);
+      return;
+    }
+    catch (InterruptedException localInterruptedException)
+    {
+      throw new IllegalStateException(localInterruptedException);
+    }
+  }
+  
+  protected abstract I createInputBuffer();
+  
+  protected abstract O createOutputBuffer();
+  
+  protected abstract E createUnexpectedDecodeException(Throwable paramThrowable);
+  
+  @Nullable
+  protected abstract E decode(I paramI, O paramO, boolean paramBoolean);
+  
+  public final I dequeueInputBuffer()
+    throws Exception
+  {
+    for (;;)
+    {
+      synchronized (lock)
+      {
+        maybeThrowException();
+        if (dequeuedInputBuffer == null)
+        {
+          bool = true;
+          Assertions.checkState(bool);
+          if (availableInputBufferCount == 0)
+          {
+            localObject1 = null;
+          }
+          else
+          {
+            localObject1 = availableInputBuffers;
+            int i = availableInputBufferCount - 1;
+            availableInputBufferCount = i;
+            localObject1 = localObject1[i];
+          }
+          dequeuedInputBuffer = ((DecoderInputBuffer)localObject1);
+          Object localObject1 = dequeuedInputBuffer;
+          return localObject1;
+        }
+      }
+      boolean bool = false;
+    }
+  }
+  
+  public final O dequeueOutputBuffer()
+    throws Exception
+  {
+    synchronized (lock)
+    {
+      maybeThrowException();
+      if (queuedOutputBuffers.isEmpty()) {
+        return null;
+      }
+      OutputBuffer localOutputBuffer = (OutputBuffer)queuedOutputBuffers.removeFirst();
+      return localOutputBuffer;
+    }
+  }
+  
+  public final void flush()
+  {
+    synchronized (lock)
+    {
+      flushed = true;
+      skippedOutputBufferCount = 0;
+      if (dequeuedInputBuffer != null)
+      {
+        releaseInputBufferInternal(dequeuedInputBuffer);
+        dequeuedInputBuffer = null;
+      }
+      while (!queuedInputBuffers.isEmpty()) {
+        releaseInputBufferInternal((DecoderInputBuffer)queuedInputBuffers.removeFirst());
+      }
+      while (!queuedOutputBuffers.isEmpty()) {
+        ((OutputBuffer)queuedOutputBuffers.removeFirst()).release();
+      }
+      return;
+    }
+  }
+  
+  public final void queueInputBuffer(I paramI)
+    throws Exception
+  {
+    for (;;)
+    {
+      synchronized (lock)
+      {
+        maybeThrowException();
+        if (paramI == dequeuedInputBuffer)
+        {
+          bool = true;
+          Assertions.checkArgument(bool);
+          queuedInputBuffers.addLast(paramI);
+          maybeNotifyDecodeLoop();
+          dequeuedInputBuffer = null;
+          return;
+        }
+      }
+      boolean bool = false;
+    }
+  }
+  
+  public void release()
+  {
+    synchronized (lock)
+    {
+      released = true;
+      lock.notify();
+      try
+      {
+        decodeThread.join();
+        return;
+      }
+      catch (InterruptedException localInterruptedException)
+      {
+        for (;;) {}
+      }
+      Thread.currentThread().interrupt();
+      return;
+    }
+  }
+  
+  protected void releaseOutputBuffer(O paramO)
+  {
+    synchronized (lock)
+    {
+      releaseOutputBufferInternal(paramO);
+      maybeNotifyDecodeLoop();
+      return;
+    }
+  }
+  
+  protected final void setInitialInputBufferSize(int paramInt)
+  {
+    int j = availableInputBufferCount;
+    int k = availableInputBuffers.length;
+    int i = 0;
+    boolean bool;
+    if (j == k) {
+      bool = true;
+    } else {
+      bool = false;
+    }
+    Assertions.checkState(bool);
+    DecoderInputBuffer[] arrayOfDecoderInputBuffer = availableInputBuffers;
+    j = arrayOfDecoderInputBuffer.length;
+    while (i < j)
+    {
+      arrayOfDecoderInputBuffer[i].ensureSpaceForWrite(paramInt);
+      i += 1;
+    }
+  }
+}

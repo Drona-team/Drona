@@ -1,0 +1,154 @@
+package com.bumptech.glide.util;
+
+import androidx.annotation.NonNull;
+import androidx.annotation.Nullable;
+import java.io.IOException;
+import java.io.InputStream;
+import java.util.Queue;
+
+public class ExceptionCatchingInputStream
+  extends InputStream
+{
+  private static final Queue<ExceptionCatchingInputStream> QUEUE = Util.createQueue(0);
+  private IOException exception;
+  private InputStream wrapped;
+  
+  ExceptionCatchingInputStream() {}
+  
+  static void clearQueue()
+  {
+    while (!QUEUE.isEmpty()) {
+      QUEUE.remove();
+    }
+  }
+  
+  @NonNull
+  public static ExceptionCatchingInputStream obtain(@NonNull InputStream paramInputStream)
+  {
+    synchronized (QUEUE)
+    {
+      ExceptionCatchingInputStream localExceptionCatchingInputStream = (ExceptionCatchingInputStream)QUEUE.poll();
+      ??? = localExceptionCatchingInputStream;
+      if (localExceptionCatchingInputStream == null) {
+        ??? = new ExceptionCatchingInputStream();
+      }
+      ((ExceptionCatchingInputStream)???).setInputStream(paramInputStream);
+      return ???;
+    }
+  }
+  
+  public int available()
+    throws IOException
+  {
+    return wrapped.available();
+  }
+  
+  public void close()
+    throws IOException
+  {
+    wrapped.close();
+  }
+  
+  @Nullable
+  public IOException getException()
+  {
+    return exception;
+  }
+  
+  public void mark(int paramInt)
+  {
+    wrapped.mark(paramInt);
+  }
+  
+  public boolean markSupported()
+  {
+    return wrapped.markSupported();
+  }
+  
+  public int read()
+  {
+    try
+    {
+      int i = wrapped.read();
+      return i;
+    }
+    catch (IOException localIOException)
+    {
+      exception = localIOException;
+    }
+    return -1;
+  }
+  
+  public int read(byte[] paramArrayOfByte)
+  {
+    try
+    {
+      int i = wrapped.read(paramArrayOfByte);
+      return i;
+    }
+    catch (IOException paramArrayOfByte)
+    {
+      exception = paramArrayOfByte;
+    }
+    return -1;
+  }
+  
+  public int read(byte[] paramArrayOfByte, int paramInt1, int paramInt2)
+  {
+    try
+    {
+      paramInt1 = wrapped.read(paramArrayOfByte, paramInt1, paramInt2);
+      return paramInt1;
+    }
+    catch (IOException paramArrayOfByte)
+    {
+      exception = paramArrayOfByte;
+    }
+    return -1;
+  }
+  
+  public void release()
+  {
+    exception = null;
+    wrapped = null;
+    synchronized (QUEUE)
+    {
+      QUEUE.offer(this);
+      return;
+    }
+  }
+  
+  public void reset()
+    throws IOException
+  {
+    try
+    {
+      wrapped.reset();
+      return;
+    }
+    finally
+    {
+      localObject = finally;
+      throw localObject;
+    }
+  }
+  
+  void setInputStream(@NonNull InputStream paramInputStream)
+  {
+    wrapped = paramInputStream;
+  }
+  
+  public long skip(long paramLong)
+  {
+    try
+    {
+      paramLong = wrapped.skip(paramLong);
+      return paramLong;
+    }
+    catch (IOException localIOException)
+    {
+      exception = localIOException;
+    }
+    return 0L;
+  }
+}

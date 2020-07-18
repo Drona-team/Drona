@@ -1,0 +1,229 @@
+package androidx.room;
+
+import androidx.annotation.RestrictTo;
+import androidx.annotation.VisibleForTesting;
+import androidx.sqlite.db.SupportSQLiteProgram;
+import androidx.sqlite.db.SupportSQLiteQuery;
+import java.util.Arrays;
+import java.util.Iterator;
+import java.util.Map.Entry;
+import java.util.NavigableSet;
+import java.util.TreeMap;
+
+@RestrictTo({androidx.annotation.RestrictTo.Scope.LIBRARY_GROUP_PREFIX})
+public class RoomSQLiteQuery
+  implements SupportSQLiteQuery, SupportSQLiteProgram
+{
+  private static final int BLOB = 5;
+  @VisibleForTesting
+  static final int DESIRED_POOL_SIZE = 10;
+  private static final int DOUBLE = 3;
+  private static final int LONG = 2;
+  private static final int NULL = 1;
+  @VisibleForTesting
+  static final int POOL_LIMIT = 15;
+  private static final int STRING = 4;
+  @VisibleForTesting
+  static final TreeMap<Integer, RoomSQLiteQuery> sQueryPool = new TreeMap();
+  @VisibleForTesting
+  int mArgCount;
+  private final int[] mBindingTypes;
+  @VisibleForTesting
+  final byte[][] mBlobBindings;
+  @VisibleForTesting
+  final int mCapacity;
+  @VisibleForTesting
+  final double[] mDoubleBindings;
+  @VisibleForTesting
+  final long[] mLongBindings;
+  private volatile String mQuery;
+  @VisibleForTesting
+  final String[] mStringBindings;
+  
+  private RoomSQLiteQuery(int paramInt)
+  {
+    mCapacity = paramInt;
+    paramInt += 1;
+    mBindingTypes = new int[paramInt];
+    mLongBindings = new long[paramInt];
+    mDoubleBindings = new double[paramInt];
+    mStringBindings = new String[paramInt];
+    mBlobBindings = new byte[paramInt][];
+  }
+  
+  public static RoomSQLiteQuery acquire(String paramString, int paramInt)
+  {
+    synchronized (sQueryPool)
+    {
+      Object localObject2 = sQueryPool.ceilingEntry(Integer.valueOf(paramInt));
+      if (localObject2 != null)
+      {
+        sQueryPool.remove(((Map.Entry)localObject2).getKey());
+        localObject2 = (RoomSQLiteQuery)((Map.Entry)localObject2).getValue();
+        ((RoomSQLiteQuery)localObject2).init(paramString, paramInt);
+        return localObject2;
+      }
+      ??? = new RoomSQLiteQuery(paramInt);
+      ((RoomSQLiteQuery)???).init(paramString, paramInt);
+      return ???;
+    }
+  }
+  
+  public static RoomSQLiteQuery copyFrom(SupportSQLiteQuery paramSupportSQLiteQuery)
+  {
+    RoomSQLiteQuery localRoomSQLiteQuery = acquire(paramSupportSQLiteQuery.getSql(), paramSupportSQLiteQuery.getArgCount());
+    paramSupportSQLiteQuery.bindTo(new SupportSQLiteProgram()
+    {
+      public void bindBlob(int paramAnonymousInt, byte[] paramAnonymousArrayOfByte)
+      {
+        val$query.bindBlob(paramAnonymousInt, paramAnonymousArrayOfByte);
+      }
+      
+      public void bindDouble(int paramAnonymousInt, double paramAnonymousDouble)
+      {
+        val$query.bindDouble(paramAnonymousInt, paramAnonymousDouble);
+      }
+      
+      public void bindLong(int paramAnonymousInt, long paramAnonymousLong)
+      {
+        val$query.bindLong(paramAnonymousInt, paramAnonymousLong);
+      }
+      
+      public void bindNull(int paramAnonymousInt)
+      {
+        val$query.bindNull(paramAnonymousInt);
+      }
+      
+      public void bindString(int paramAnonymousInt, String paramAnonymousString)
+      {
+        val$query.bindString(paramAnonymousInt, paramAnonymousString);
+      }
+      
+      public void clearBindings()
+      {
+        val$query.clearBindings();
+      }
+      
+      public void close() {}
+    });
+    return localRoomSQLiteQuery;
+  }
+  
+  private static void prunePoolLocked()
+  {
+    if (sQueryPool.size() > 15)
+    {
+      int i = sQueryPool.size() - 10;
+      Iterator localIterator = sQueryPool.descendingKeySet().iterator();
+      while (i > 0)
+      {
+        localIterator.next();
+        localIterator.remove();
+        i -= 1;
+      }
+    }
+  }
+  
+  public void bindBlob(int paramInt, byte[] paramArrayOfByte)
+  {
+    mBindingTypes[paramInt] = 5;
+    mBlobBindings[paramInt] = paramArrayOfByte;
+  }
+  
+  public void bindDouble(int paramInt, double paramDouble)
+  {
+    mBindingTypes[paramInt] = 3;
+    mDoubleBindings[paramInt] = paramDouble;
+  }
+  
+  public void bindLong(int paramInt, long paramLong)
+  {
+    mBindingTypes[paramInt] = 2;
+    mLongBindings[paramInt] = paramLong;
+  }
+  
+  public void bindNull(int paramInt)
+  {
+    mBindingTypes[paramInt] = 1;
+  }
+  
+  public void bindString(int paramInt, String paramString)
+  {
+    mBindingTypes[paramInt] = 4;
+    mStringBindings[paramInt] = paramString;
+  }
+  
+  public void bindTo(SupportSQLiteProgram paramSupportSQLiteProgram)
+  {
+    int i = 1;
+    while (i <= mArgCount)
+    {
+      switch (mBindingTypes[i])
+      {
+      default: 
+        break;
+      case 5: 
+        paramSupportSQLiteProgram.bindBlob(i, mBlobBindings[i]);
+        break;
+      case 4: 
+        paramSupportSQLiteProgram.bindString(i, mStringBindings[i]);
+        break;
+      case 3: 
+        paramSupportSQLiteProgram.bindDouble(i, mDoubleBindings[i]);
+        break;
+      case 2: 
+        paramSupportSQLiteProgram.bindLong(i, mLongBindings[i]);
+        break;
+      case 1: 
+        paramSupportSQLiteProgram.bindNull(i);
+      }
+      i += 1;
+    }
+  }
+  
+  public void clearBindings()
+  {
+    Arrays.fill(mBindingTypes, 1);
+    Arrays.fill(mStringBindings, null);
+    Arrays.fill(mBlobBindings, null);
+    mQuery = null;
+  }
+  
+  public void close() {}
+  
+  public void copyArgumentsFrom(RoomSQLiteQuery paramRoomSQLiteQuery)
+  {
+    int i = paramRoomSQLiteQuery.getArgCount() + 1;
+    System.arraycopy(mBindingTypes, 0, mBindingTypes, 0, i);
+    System.arraycopy(mLongBindings, 0, mLongBindings, 0, i);
+    System.arraycopy(mStringBindings, 0, mStringBindings, 0, i);
+    System.arraycopy(mBlobBindings, 0, mBlobBindings, 0, i);
+    System.arraycopy(mDoubleBindings, 0, mDoubleBindings, 0, i);
+  }
+  
+  public int getArgCount()
+  {
+    return mArgCount;
+  }
+  
+  public String getSql()
+  {
+    return mQuery;
+  }
+  
+  void init(String paramString, int paramInt)
+  {
+    mQuery = paramString;
+    mArgCount = paramInt;
+  }
+  
+  public void release()
+  {
+    synchronized (sQueryPool)
+    {
+      sQueryPool.put(Integer.valueOf(mCapacity), this);
+      prunePoolLocked();
+      return;
+    }
+  }
+}

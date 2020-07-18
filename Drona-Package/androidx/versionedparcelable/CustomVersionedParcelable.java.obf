@@ -1,0 +1,16 @@
+package androidx.versionedparcelable;
+
+import androidx.annotation.RestrictTo;
+
+@RestrictTo({androidx.annotation.RestrictTo.Scope.LIBRARY_GROUP_PREFIX})
+public abstract class CustomVersionedParcelable
+  implements VersionedParcelable
+{
+  public CustomVersionedParcelable() {}
+  
+  @RestrictTo({androidx.annotation.RestrictTo.Scope.LIBRARY_GROUP_PREFIX})
+  public void onPostParceling() {}
+  
+  @RestrictTo({androidx.annotation.RestrictTo.Scope.LIBRARY_GROUP_PREFIX})
+  public void onPreParceling(boolean paramBoolean) {}
+}

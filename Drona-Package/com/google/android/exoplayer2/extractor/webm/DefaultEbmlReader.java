@@ -1,0 +1,208 @@
+package com.google.android.exoplayer2.extractor.webm;
+
+import com.google.android.exoplayer2.ParserException;
+import com.google.android.exoplayer2.extractor.ExtractorInput;
+import com.google.android.exoplayer2.util.Assertions;
+import java.io.IOException;
+import java.util.ArrayDeque;
+
+final class DefaultEbmlReader
+  implements EbmlReader
+{
+  private static final int ELEMENT_STATE_READ_CONTENT = 2;
+  private static final int ELEMENT_STATE_READ_CONTENT_SIZE = 1;
+  private static final int ELEMENT_STATE_READ_ID = 0;
+  private static final int MAX_ID_BYTES = 4;
+  private static final int MAX_INTEGER_ELEMENT_SIZE_BYTES = 8;
+  private static final int MAX_LENGTH_BYTES = 8;
+  private static final int VALID_FLOAT32_ELEMENT_SIZE_BYTES = 4;
+  private static final int VALID_FLOAT64_ELEMENT_SIZE_BYTES = 8;
+  private long elementContentSize;
+  private int elementId;
+  private int elementState;
+  private final ArrayDeque<com.google.android.exoplayer2.extractor.mkv.DefaultEbmlReader.MasterElement> masterElementsStack = new ArrayDeque();
+  private EbmlReaderOutput output;
+  private final byte[] scratch = new byte[8];
+  private final VarintReader varintReader = new VarintReader();
+  
+  public DefaultEbmlReader() {}
+  
+  private long maybeResyncToNextLevel1Element(ExtractorInput paramExtractorInput)
+    throws IOException, InterruptedException
+  {
+    paramExtractorInput.resetPeekPosition();
+    for (;;)
+    {
+      paramExtractorInput.peekFully(scratch, 0, 4);
+      int i = VarintReader.parseUnsignedVarintLength(scratch[0]);
+      if ((i != -1) && (i <= 4))
+      {
+        int j = (int)VarintReader.assembleVarint(scratch, i, false);
+        if (output.isLevel1Element(j))
+        {
+          paramExtractorInput.skipFully(i);
+          return j;
+        }
+      }
+      paramExtractorInput.skipFully(1);
+    }
+  }
+  
+  private double readFloat(ExtractorInput paramExtractorInput, int paramInt)
+    throws IOException, InterruptedException
+  {
+    long l = readInteger(paramExtractorInput, paramInt);
+    if (paramInt == 4) {
+      return Float.intBitsToFloat((int)l);
+    }
+    return Double.longBitsToDouble(l);
+  }
+  
+  private long readInteger(ExtractorInput paramExtractorInput, int paramInt)
+    throws IOException, InterruptedException
+  {
+    byte[] arrayOfByte = scratch;
+    int i = 0;
+    paramExtractorInput.readFully(arrayOfByte, 0, paramInt);
+    long l = 0L;
+    while (i < paramInt)
+    {
+      l = l << 8 | scratch[i] & 0xFF;
+      i += 1;
+    }
+    return l;
+  }
+  
+  private String readString(ExtractorInput paramExtractorInput, int paramInt)
+    throws IOException, InterruptedException
+  {
+    if (paramInt == 0) {
+      return "";
+    }
+    byte[] arrayOfByte = new byte[paramInt];
+    paramExtractorInput.readFully(arrayOfByte, 0, paramInt);
+    while ((paramInt > 0) && (arrayOfByte[(paramInt - 1)] == 0)) {
+      paramInt -= 1;
+    }
+    return new String(arrayOfByte, 0, paramInt);
+  }
+  
+  public void init(EbmlReaderOutput paramEbmlReaderOutput)
+  {
+    output = paramEbmlReaderOutput;
+  }
+  
+  public boolean read(ExtractorInput paramExtractorInput)
+    throws IOException, InterruptedException
+  {
+    boolean bool;
+    if (output != null) {
+      bool = true;
+    } else {
+      bool = false;
+    }
+    Assertions.checkState(bool);
+    for (;;)
+    {
+      if ((!masterElementsStack.isEmpty()) && (paramExtractorInput.getPosition() >= masterElementsStack.peek()).elementEndPosition))
+      {
+        output.endMasterElement(masterElementsStack.pop()).elementId);
+        return true;
+      }
+      long l2;
+      long l1;
+      if (elementState == 0)
+      {
+        l2 = varintReader.readUnsignedVarint(paramExtractorInput, true, false, 4);
+        l1 = l2;
+        if (l2 == -2L) {
+          l1 = maybeResyncToNextLevel1Element(paramExtractorInput);
+        }
+        if (l1 == -1L) {
+          return false;
+        }
+        elementId = ((int)l1);
+        elementState = 1;
+      }
+      if (elementState == 1)
+      {
+        elementContentSize = varintReader.readUnsignedVarint(paramExtractorInput, false, true, 8);
+        elementState = 2;
+      }
+      int i = output.getElementType(elementId);
+      switch (i)
+      {
+      default: 
+        paramExtractorInput = new StringBuilder();
+        paramExtractorInput.append("Invalid element type ");
+        paramExtractorInput.append(i);
+        throw new ParserException(paramExtractorInput.toString());
+      case 5: 
+        if ((elementContentSize != 4L) && (elementContentSize != 8L))
+        {
+          paramExtractorInput = new StringBuilder();
+          paramExtractorInput.append("Invalid float size: ");
+          paramExtractorInput.append(elementContentSize);
+          throw new ParserException(paramExtractorInput.toString());
+        }
+        output.floatElement(elementId, readFloat(paramExtractorInput, (int)elementContentSize));
+        elementState = 0;
+        return true;
+      case 4: 
+        output.binaryElement(elementId, (int)elementContentSize, paramExtractorInput);
+        elementState = 0;
+        return true;
+      case 3: 
+        if (elementContentSize <= 2147483647L)
+        {
+          output.stringElement(elementId, readString(paramExtractorInput, (int)elementContentSize));
+          elementState = 0;
+          return true;
+        }
+        paramExtractorInput = new StringBuilder();
+        paramExtractorInput.append("String element size: ");
+        paramExtractorInput.append(elementContentSize);
+        throw new ParserException(paramExtractorInput.toString());
+      case 2: 
+        if (elementContentSize <= 8L)
+        {
+          output.integerElement(elementId, readInteger(paramExtractorInput, (int)elementContentSize));
+          elementState = 0;
+          return true;
+        }
+        paramExtractorInput = new StringBuilder();
+        paramExtractorInput.append("Invalid integer size: ");
+        paramExtractorInput.append(elementContentSize);
+        throw new ParserException(paramExtractorInput.toString());
+      case 1: 
+        l1 = paramExtractorInput.getPosition();
+        l2 = elementContentSize;
+        masterElementsStack.push(new MasterElement(elementId, l2 + l1, null));
+        output.startMasterElement(elementId, l1, elementContentSize);
+        elementState = 0;
+        return true;
+      }
+      paramExtractorInput.skipFully((int)elementContentSize);
+      elementState = 0;
+    }
+  }
+  
+  public void reset()
+  {
+    elementState = 0;
+    masterElementsStack.clear();
+    varintReader.reset();
+  }
+  
+  final class MasterElement
+  {
+    private final long elementEndPosition;
+    private final int elementId;
+    
+    private MasterElement(long paramLong)
+    {
+      elementId = this$1;
+      elementEndPosition = paramLong;
+    }
+  }
+}

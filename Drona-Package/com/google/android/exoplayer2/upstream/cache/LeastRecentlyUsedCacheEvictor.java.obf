@@ -1,0 +1,69 @@
+package com.google.android.exoplayer2.upstream.cache;
+
+import java.util.Comparator;
+import java.util.TreeSet;
+
+public final class LeastRecentlyUsedCacheEvictor
+  implements CacheEvictor, Comparator<CacheSpan>
+{
+  private long currentSize;
+  private final TreeSet<CacheSpan> leastRecentlyUsed;
+  private final long maxBytes;
+  
+  public LeastRecentlyUsedCacheEvictor(long paramLong)
+  {
+    maxBytes = paramLong;
+    leastRecentlyUsed = new TreeSet(this);
+  }
+  
+  private void evictCache(Cache paramCache, long paramLong)
+  {
+    while ((currentSize + paramLong > maxBytes) && (!leastRecentlyUsed.isEmpty())) {
+      try
+      {
+        paramCache.removeSpan((CacheSpan)leastRecentlyUsed.first());
+      }
+      catch (Cache.CacheException localCacheException)
+      {
+        for (;;) {}
+      }
+    }
+  }
+  
+  public int compare(CacheSpan paramCacheSpan1, CacheSpan paramCacheSpan2)
+  {
+    if (lastAccessTimestamp - lastAccessTimestamp == 0L) {
+      return paramCacheSpan1.compareTo(paramCacheSpan2);
+    }
+    if (lastAccessTimestamp < lastAccessTimestamp) {
+      return -1;
+    }
+    return 1;
+  }
+  
+  public void onCacheInitialized() {}
+  
+  public void onSpanAdded(Cache paramCache, CacheSpan paramCacheSpan)
+  {
+    leastRecentlyUsed.add(paramCacheSpan);
+    currentSize += length;
+    evictCache(paramCache, 0L);
+  }
+  
+  public void onSpanRemoved(Cache paramCache, CacheSpan paramCacheSpan)
+  {
+    leastRecentlyUsed.remove(paramCacheSpan);
+    currentSize -= length;
+  }
+  
+  public void onSpanTouched(Cache paramCache, CacheSpan paramCacheSpan1, CacheSpan paramCacheSpan2)
+  {
+    onSpanRemoved(paramCache, paramCacheSpan1);
+    onSpanAdded(paramCache, paramCacheSpan2);
+  }
+  
+  public void onStartFile(Cache paramCache, String paramString, long paramLong1, long paramLong2)
+  {
+    evictCache(paramCache, paramLong2);
+  }
+}

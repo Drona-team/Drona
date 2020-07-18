@@ -1,0 +1,776 @@
+package com.bumptech.glide.load.resource.bitmap;
+
+import android.annotation.TargetApi;
+import android.graphics.Bitmap;
+import android.graphics.Bitmap.Config;
+import android.graphics.BitmapFactory.Options;
+import android.os.Build.VERSION;
+import android.util.DisplayMetrics;
+import android.util.Log;
+import androidx.annotation.Nullable;
+import com.bumptech.glide.load.DecodeFormat;
+import com.bumptech.glide.load.ImageHeaderParser;
+import com.bumptech.glide.load.ImageHeaderParser.ImageType;
+import com.bumptech.glide.load.ImageHeaderParserUtils;
+import com.bumptech.glide.load.Option;
+import com.bumptech.glide.load.Options;
+import com.bumptech.glide.load.engine.Resource;
+import com.bumptech.glide.load.engine.bitmap_recycle.ArrayPool;
+import com.bumptech.glide.load.engine.bitmap_recycle.BitmapPool;
+import com.bumptech.glide.util.LogTime;
+import com.bumptech.glide.util.Preconditions;
+import com.bumptech.glide.util.Util;
+import java.io.IOException;
+import java.io.InputStream;
+import java.nio.ByteBuffer;
+import java.util.Arrays;
+import java.util.Collections;
+import java.util.EnumSet;
+import java.util.HashSet;
+import java.util.List;
+import java.util.Queue;
+import java.util.Set;
+
+public final class Downsampler
+{
+  public static final Option<Boolean> ALLOW_HARDWARE_CONFIG;
+  public static final Option<DecodeFormat> DECODE_FORMAT = Option.memory("com.bumptech.glide.load.resource.bitmap.Downsampler.DecodeFormat", DecodeFormat.DEFAULT);
+  @Deprecated
+  public static final Option<DownsampleStrategy> DOWNSAMPLE_STRATEGY = DownsampleStrategy.OPTION;
+  private static final DecodeCallbacks EMPTY_CALLBACKS;
+  public static final Option<Boolean> FIX_BITMAP_SIZE_TO_REQUESTED_DIMENSIONS = Option.memory("com.bumptech.glide.load.resource.bitmap.Downsampler.FixBitmapSize", Boolean.valueOf(false));
+  private static final String ICO_MIME_TYPE = "image/x-ico";
+  private static final int MARK_POSITION = 10485760;
+  private static final Set<String> NO_DOWNSAMPLE_PRE_N_MIME_TYPES;
+  private static final Queue<BitmapFactory.Options> OPTIONS_QUEUE = Util.createQueue(0);
+  static final String TAG = "Downsampler";
+  private static final Set<ImageHeaderParser.ImageType> TYPES_THAT_USE_POOL_PRE_KITKAT;
+  private static final String WBMP_MIME_TYPE = "image/vnd.wap.wbmp";
+  private final BitmapPool bitmapPool;
+  private final ArrayPool byteArrayPool;
+  private final DisplayMetrics displayMetrics;
+  private final HardwareConfigState hardwareConfigState = HardwareConfigState.getInstance();
+  private final List<ImageHeaderParser> parsers;
+  
+  static
+  {
+    ALLOW_HARDWARE_CONFIG = Option.memory("com.bumptech.glide.load.resource.bitmap.Downsampler.AllowHardwareDecode", Boolean.valueOf(false));
+    NO_DOWNSAMPLE_PRE_N_MIME_TYPES = Collections.unmodifiableSet(new HashSet(Arrays.asList(new String[] { "image/vnd.wap.wbmp", "image/x-ico" })));
+    EMPTY_CALLBACKS = new DecodeCallbacks()
+    {
+      public void onDecodeComplete(BitmapPool paramAnonymousBitmapPool, Bitmap paramAnonymousBitmap) {}
+      
+      public void onObtainBounds() {}
+    };
+    TYPES_THAT_USE_POOL_PRE_KITKAT = Collections.unmodifiableSet(EnumSet.of(ImageHeaderParser.ImageType.JPEG, ImageHeaderParser.ImageType.PNG_A, ImageHeaderParser.ImageType.PNG));
+  }
+  
+  public Downsampler(List<ImageHeaderParser> paramList, DisplayMetrics paramDisplayMetrics, BitmapPool paramBitmapPool, ArrayPool paramArrayPool)
+  {
+    parsers = paramList;
+    displayMetrics = ((DisplayMetrics)Preconditions.checkNotNull(paramDisplayMetrics));
+    bitmapPool = ((BitmapPool)Preconditions.checkNotNull(paramBitmapPool));
+    byteArrayPool = ((ArrayPool)Preconditions.checkNotNull(paramArrayPool));
+  }
+  
+  private static int adjustTargetDensityForError(double paramDouble)
+  {
+    int i = getDensityMultiplier(paramDouble);
+    int j = round(i * paramDouble);
+    return round(paramDouble / (j / i) * j);
+  }
+  
+  private void calculateConfig(InputStream paramInputStream, DecodeFormat paramDecodeFormat, boolean paramBoolean1, boolean paramBoolean2, BitmapFactory.Options paramOptions, int paramInt1, int paramInt2)
+  {
+    if (hardwareConfigState.setHardwareConfigIfAllowed(paramInt1, paramInt2, paramOptions, paramDecodeFormat, paramBoolean1, paramBoolean2)) {
+      return;
+    }
+    if ((paramDecodeFormat != DecodeFormat.PREFER_ARGB_8888) && (Build.VERSION.SDK_INT != 16))
+    {
+      try
+      {
+        paramBoolean1 = ImageHeaderParserUtils.getType(parsers, paramInputStream, byteArrayPool).hasAlpha();
+      }
+      catch (IOException paramInputStream)
+      {
+        if (Log.isLoggable("Downsampler", 3))
+        {
+          StringBuilder localStringBuilder = new StringBuilder();
+          localStringBuilder.append("Cannot determine whether the image has alpha or not from header, format ");
+          localStringBuilder.append(paramDecodeFormat);
+          Log.d("Downsampler", localStringBuilder.toString(), paramInputStream);
+        }
+        paramBoolean1 = false;
+      }
+      if (paramBoolean1) {
+        paramInputStream = Bitmap.Config.ARGB_8888;
+      } else {
+        paramInputStream = Bitmap.Config.RGB_565;
+      }
+      inPreferredConfig = paramInputStream;
+      if (inPreferredConfig == Bitmap.Config.RGB_565) {
+        inDither = true;
+      }
+      return;
+    }
+    inPreferredConfig = Bitmap.Config.ARGB_8888;
+  }
+  
+  private static void calculateScaling(ImageHeaderParser.ImageType paramImageType, InputStream paramInputStream, DecodeCallbacks paramDecodeCallbacks, BitmapPool paramBitmapPool, DownsampleStrategy paramDownsampleStrategy, int paramInt1, int paramInt2, int paramInt3, int paramInt4, int paramInt5, BitmapFactory.Options paramOptions)
+    throws IOException
+  {
+    if ((paramInt2 > 0) && (paramInt3 > 0))
+    {
+      float f1;
+      if ((paramInt1 != 90) && (paramInt1 != 270)) {
+        f1 = paramDownsampleStrategy.getScaleFactor(paramInt2, paramInt3, paramInt4, paramInt5);
+      } else {
+        f1 = paramDownsampleStrategy.getScaleFactor(paramInt3, paramInt2, paramInt4, paramInt5);
+      }
+      if (f1 > 0.0F)
+      {
+        DownsampleStrategy.SampleSizeRounding localSampleSizeRounding = paramDownsampleStrategy.getSampleSizeRounding(paramInt2, paramInt3, paramInt4, paramInt5);
+        if (localSampleSizeRounding != null)
+        {
+          float f2 = paramInt2;
+          int i = round(f1 * f2);
+          float f3 = paramInt3;
+          paramInt1 = round(f1 * f3);
+          i = paramInt2 / i;
+          paramInt1 = paramInt3 / paramInt1;
+          if (localSampleSizeRounding == DownsampleStrategy.SampleSizeRounding.MEMORY) {
+            paramInt1 = Math.max(i, paramInt1);
+          } else {
+            paramInt1 = Math.min(i, paramInt1);
+          }
+          int j;
+          if ((Build.VERSION.SDK_INT <= 23) && (NO_DOWNSAMPLE_PRE_N_MIME_TYPES.contains(outMimeType)))
+          {
+            j = 1;
+          }
+          else
+          {
+            j = Math.max(1, Integer.highestOneBit(paramInt1));
+            if ((localSampleSizeRounding == DownsampleStrategy.SampleSizeRounding.MEMORY) && (j < 1.0F / f1)) {
+              j <<= 1;
+            }
+          }
+          inSampleSize = j;
+          float f4;
+          if (paramImageType == ImageHeaderParser.ImageType.JPEG)
+          {
+            f4 = Math.min(j, 8);
+            int m = (int)Math.ceil(f2 / f4);
+            int k = (int)Math.ceil(f3 / f4);
+            int n = j / 8;
+            paramInt1 = k;
+            i = m;
+            if (n > 0)
+            {
+              i = m / n;
+              paramInt1 = k / n;
+            }
+          }
+          else if ((paramImageType != ImageHeaderParser.ImageType.PNG) && (paramImageType != ImageHeaderParser.ImageType.PNG_A))
+          {
+            if ((paramImageType != ImageHeaderParser.ImageType.WEBP) && (paramImageType != ImageHeaderParser.ImageType.WEBP_A))
+            {
+              if ((paramInt2 % j == 0) && (paramInt3 % j == 0))
+              {
+                i = paramInt2 / j;
+                paramInt1 = paramInt3 / j;
+              }
+              else
+              {
+                paramImageType = getDimensions(paramInputStream, paramOptions, paramDecodeCallbacks, paramBitmapPool);
+                i = paramImageType[0];
+                paramInt1 = paramImageType[1];
+              }
+            }
+            else if (Build.VERSION.SDK_INT >= 24)
+            {
+              f4 = j;
+              i = Math.round(f2 / f4);
+              paramInt1 = Math.round(f3 / f4);
+            }
+            else
+            {
+              f4 = j;
+              i = (int)Math.floor(f2 / f4);
+              paramInt1 = (int)Math.floor(f3 / f4);
+            }
+          }
+          else
+          {
+            f4 = j;
+            i = (int)Math.floor(f2 / f4);
+            paramInt1 = (int)Math.floor(f3 / f4);
+          }
+          double d = paramDownsampleStrategy.getScaleFactor(i, paramInt1, paramInt4, paramInt5);
+          if (Build.VERSION.SDK_INT >= 19)
+          {
+            inTargetDensity = adjustTargetDensityForError(d);
+            inDensity = getDensityMultiplier(d);
+          }
+          if (isScaling(paramOptions))
+          {
+            inScaled = true;
+          }
+          else
+          {
+            inTargetDensity = 0;
+            inDensity = 0;
+          }
+          if (Log.isLoggable("Downsampler", 2))
+          {
+            paramImageType = new StringBuilder();
+            paramImageType.append("Calculate scaling, source: [");
+            paramImageType.append(paramInt2);
+            paramImageType.append("x");
+            paramImageType.append(paramInt3);
+            paramImageType.append("], target: [");
+            paramImageType.append(paramInt4);
+            paramImageType.append("x");
+            paramImageType.append(paramInt5);
+            paramImageType.append("], power of two scaled: [");
+            paramImageType.append(i);
+            paramImageType.append("x");
+            paramImageType.append(paramInt1);
+            paramImageType.append("], exact scale factor: ");
+            paramImageType.append(f1);
+            paramImageType.append(", power of 2 sample size: ");
+            paramImageType.append(j);
+            paramImageType.append(", adjusted scale factor: ");
+            paramImageType.append(d);
+            paramImageType.append(", target density: ");
+            paramImageType.append(inTargetDensity);
+            paramImageType.append(", density: ");
+            paramImageType.append(inDensity);
+            Log.v("Downsampler", paramImageType.toString());
+          }
+          return;
+        }
+        throw new IllegalArgumentException("Cannot round with null rounding");
+      }
+      paramImageType = new StringBuilder();
+      paramImageType.append("Cannot scale with factor: ");
+      paramImageType.append(f1);
+      paramImageType.append(" from: ");
+      paramImageType.append(paramDownsampleStrategy);
+      paramImageType.append(", source: [");
+      paramImageType.append(paramInt2);
+      paramImageType.append("x");
+      paramImageType.append(paramInt3);
+      paramImageType.append("], target: [");
+      paramImageType.append(paramInt4);
+      paramImageType.append("x");
+      paramImageType.append(paramInt5);
+      paramImageType.append("]");
+      throw new IllegalArgumentException(paramImageType.toString());
+    }
+    if (Log.isLoggable("Downsampler", 3))
+    {
+      paramInputStream = new StringBuilder();
+      paramInputStream.append("Unable to determine dimensions for: ");
+      paramInputStream.append(paramImageType);
+      paramInputStream.append(" with target [");
+      paramInputStream.append(paramInt4);
+      paramInputStream.append("x");
+      paramInputStream.append(paramInt5);
+      paramInputStream.append("]");
+      Log.d("Downsampler", paramInputStream.toString());
+    }
+  }
+  
+  private Bitmap decodeFromWrappedStreams(InputStream paramInputStream, BitmapFactory.Options paramOptions, DownsampleStrategy paramDownsampleStrategy, DecodeFormat paramDecodeFormat, boolean paramBoolean1, int paramInt1, int paramInt2, boolean paramBoolean2, DecodeCallbacks paramDecodeCallbacks)
+    throws IOException
+  {
+    long l = LogTime.getLogTime();
+    Object localObject = getDimensions(paramInputStream, paramOptions, paramDecodeCallbacks, bitmapPool);
+    int k = 0;
+    int m = localObject[0];
+    int n = localObject[1];
+    localObject = outMimeType;
+    if ((m != -1) && (n != -1)) {
+      break label60;
+    }
+    paramBoolean1 = false;
+    label60:
+    int i2 = ImageHeaderParserUtils.getOrientation(parsers, paramInputStream, byteArrayPool);
+    int i1 = TransformationUtils.getExifOrientationDegrees(i2);
+    boolean bool = TransformationUtils.isExifOrientationRequired(i2);
+    int i;
+    if (paramInt1 == Integer.MIN_VALUE) {
+      i = m;
+    } else {
+      i = paramInt1;
+    }
+    int j = paramInt2;
+    if (j == Integer.MIN_VALUE) {
+      j = n;
+    }
+    ImageHeaderParser.ImageType localImageType = ImageHeaderParserUtils.getType(parsers, paramInputStream, byteArrayPool);
+    calculateScaling(localImageType, paramInputStream, paramDecodeCallbacks, bitmapPool, paramDownsampleStrategy, i1, m, n, i, j, paramOptions);
+    calculateConfig(paramInputStream, paramDecodeFormat, paramBoolean1, bool, paramOptions, i, j);
+    if (Build.VERSION.SDK_INT >= 19) {
+      k = 1;
+    }
+    if ((inSampleSize != 1) && (k == 0)) {
+      break label540;
+    }
+    paramDownsampleStrategy = this;
+    if (paramDownsampleStrategy.shouldUsePool(localImageType))
+    {
+      if ((m < 0) || (n < 0) || (!paramBoolean2) || (k == 0))
+      {
+        float f1;
+        if (isScaling(paramOptions)) {
+          f1 = inTargetDensity / inDensity;
+        } else {
+          f1 = 1.0F;
+        }
+        int i3 = inSampleSize;
+        float f2 = m;
+        float f3 = i3;
+        j = (int)Math.ceil(f2 / f3);
+        i = (int)Math.ceil(n / f3);
+        k = Math.round(j * f1);
+        i1 = Math.round(i * f1);
+        i = k;
+        j = i1;
+        if (Log.isLoggable("Downsampler", 2))
+        {
+          paramDecodeFormat = new StringBuilder();
+          paramDecodeFormat.append("Calculated target [");
+          paramDecodeFormat.append(k);
+          paramDecodeFormat.append("x");
+          paramDecodeFormat.append(i1);
+          paramDecodeFormat.append("] for source [");
+          paramDecodeFormat.append(m);
+          paramDecodeFormat.append("x");
+          paramDecodeFormat.append(n);
+          paramDecodeFormat.append("], sampleSize: ");
+          paramDecodeFormat.append(i3);
+          paramDecodeFormat.append(", targetDensity: ");
+          paramDecodeFormat.append(inTargetDensity);
+          paramDecodeFormat.append(", density: ");
+          paramDecodeFormat.append(inDensity);
+          paramDecodeFormat.append(", density multiplier: ");
+          paramDecodeFormat.append(f1);
+          Log.v("Downsampler", paramDecodeFormat.toString());
+          j = i1;
+          i = k;
+        }
+      }
+      if ((i > 0) && (j > 0)) {
+        setInBitmap(paramOptions, bitmapPool, i, j);
+      }
+    }
+    label540:
+    paramDownsampleStrategy = this;
+    paramDecodeFormat = decodeStream(paramInputStream, paramOptions, paramDecodeCallbacks, bitmapPool);
+    paramDecodeCallbacks.onDecodeComplete(bitmapPool, paramDecodeFormat);
+    if (Log.isLoggable("Downsampler", 2)) {
+      logDecode(m, n, (String)localObject, paramOptions, paramDecodeFormat, paramInt1, paramInt2, l);
+    }
+    paramInputStream = null;
+    if (paramDecodeFormat != null)
+    {
+      paramDecodeFormat.setDensity(displayMetrics.densityDpi);
+      paramOptions = TransformationUtils.rotateImageExif(bitmapPool, paramDecodeFormat, i2);
+      paramInputStream = paramOptions;
+      if (!paramDecodeFormat.equals(paramOptions))
+      {
+        bitmapPool.put(paramDecodeFormat);
+        paramInputStream = paramOptions;
+      }
+    }
+    return paramInputStream;
+  }
+  
+  /* Error */
+  private static Bitmap decodeStream(InputStream paramInputStream, BitmapFactory.Options paramOptions, DecodeCallbacks paramDecodeCallbacks, BitmapPool paramBitmapPool)
+    throws IOException
+  {
+    // Byte code:
+    //   0: aload_1
+    //   1: getfield 466	android/graphics/BitmapFactory$Options:inJustDecodeBounds	Z
+    //   4: ifeq +12 -> 16
+    //   7: aload_0
+    //   8: ldc 27
+    //   10: invokevirtual 471	java/io/InputStream:mark	(I)V
+    //   13: goto +9 -> 22
+    //   16: aload_2
+    //   17: invokeinterface 474 1 0
+    //   22: aload_1
+    //   23: getfield 477	android/graphics/BitmapFactory$Options:outWidth	I
+    //   26: istore 4
+    //   28: aload_1
+    //   29: getfield 480	android/graphics/BitmapFactory$Options:outHeight	I
+    //   32: istore 5
+    //   34: aload_1
+    //   35: getfield 284	android/graphics/BitmapFactory$Options:outMimeType	Ljava/lang/String;
+    //   38: astore 6
+    //   40: invokestatic 484	com/bumptech/glide/load/resource/bitmap/TransformationUtils:getBitmapDrawableLock	()Ljava/util/concurrent/locks/Lock;
+    //   43: invokeinterface 489 1 0
+    //   48: aload_0
+    //   49: aconst_null
+    //   50: aload_1
+    //   51: invokestatic 494	android/graphics/BitmapFactory:decodeStream	(Ljava/io/InputStream;Landroid/graphics/Rect;Landroid/graphics/BitmapFactory$Options;)Landroid/graphics/Bitmap;
+    //   54: astore 7
+    //   56: invokestatic 484	com/bumptech/glide/load/resource/bitmap/TransformationUtils:getBitmapDrawableLock	()Ljava/util/concurrent/locks/Lock;
+    //   59: invokeinterface 497 1 0
+    //   64: aload_1
+    //   65: getfield 466	android/graphics/BitmapFactory$Options:inJustDecodeBounds	Z
+    //   68: ifeq +7 -> 75
+    //   71: aload_0
+    //   72: invokevirtual 500	java/io/InputStream:reset	()V
+    //   75: aload 7
+    //   77: areturn
+    //   78: astore_0
+    //   79: goto +93 -> 172
+    //   82: astore 7
+    //   84: aload 7
+    //   86: iload 4
+    //   88: iload 5
+    //   90: aload 6
+    //   92: aload_1
+    //   93: invokestatic 504	com/bumptech/glide/load/resource/bitmap/Downsampler:newIoExceptionForInBitmapAssertion	(Ljava/lang/IllegalArgumentException;IILjava/lang/String;Landroid/graphics/BitmapFactory$Options;)Ljava/io/IOException;
+    //   96: astore 6
+    //   98: ldc 36
+    //   100: iconst_3
+    //   101: invokestatic 218	android/util/Log:isLoggable	(Ljava/lang/String;I)Z
+    //   104: ifeq +14 -> 118
+    //   107: ldc 36
+    //   109: ldc_w 506
+    //   112: aload 6
+    //   114: invokestatic 238	android/util/Log:d	(Ljava/lang/String;Ljava/lang/String;Ljava/lang/Throwable;)I
+    //   117: pop
+    //   118: aload_1
+    //   119: getfield 510	android/graphics/BitmapFactory$Options:inBitmap	Landroid/graphics/Bitmap;
+    //   122: astore 7
+    //   124: aload 7
+    //   126: ifnull +43 -> 169
+    //   129: aload_0
+    //   130: invokevirtual 500	java/io/InputStream:reset	()V
+    //   133: aload_3
+    //   134: aload_1
+    //   135: getfield 510	android/graphics/BitmapFactory$Options:inBitmap	Landroid/graphics/Bitmap;
+    //   138: invokeinterface 463 2 0
+    //   143: aload_1
+    //   144: aconst_null
+    //   145: putfield 510	android/graphics/BitmapFactory$Options:inBitmap	Landroid/graphics/Bitmap;
+    //   148: aload_0
+    //   149: aload_1
+    //   150: aload_2
+    //   151: aload_3
+    //   152: invokestatic 435	com/bumptech/glide/load/resource/bitmap/Downsampler:decodeStream	(Ljava/io/InputStream;Landroid/graphics/BitmapFactory$Options;Lcom/bumptech/glide/load/resource/bitmap/Downsampler$DecodeCallbacks;Lcom/bumptech/glide/load/engine/bitmap_recycle/BitmapPool;)Landroid/graphics/Bitmap;
+    //   155: astore_0
+    //   156: invokestatic 484	com/bumptech/glide/load/resource/bitmap/TransformationUtils:getBitmapDrawableLock	()Ljava/util/concurrent/locks/Lock;
+    //   159: invokeinterface 497 1 0
+    //   164: aload_0
+    //   165: areturn
+    //   166: aload 6
+    //   168: athrow
+    //   169: aload 6
+    //   171: athrow
+    //   172: invokestatic 484	com/bumptech/glide/load/resource/bitmap/TransformationUtils:getBitmapDrawableLock	()Ljava/util/concurrent/locks/Lock;
+    //   175: invokeinterface 497 1 0
+    //   180: aload_0
+    //   181: athrow
+    //   182: astore_0
+    //   183: goto -17 -> 166
+    // Local variable table:
+    //   start	length	slot	name	signature
+    //   0	186	0	paramInputStream	InputStream
+    //   0	186	1	paramOptions	BitmapFactory.Options
+    //   0	186	2	paramDecodeCallbacks	DecodeCallbacks
+    //   0	186	3	paramBitmapPool	BitmapPool
+    //   26	61	4	i	int
+    //   32	57	5	j	int
+    //   38	132	6	localObject	Object
+    //   54	22	7	localBitmap1	Bitmap
+    //   82	3	7	localIllegalArgumentException	IllegalArgumentException
+    //   122	3	7	localBitmap2	Bitmap
+    // Exception table:
+    //   from	to	target	type
+    //   48	56	78	finally
+    //   84	118	78	finally
+    //   118	124	78	finally
+    //   129	156	78	finally
+    //   166	169	78	finally
+    //   169	172	78	finally
+    //   48	56	82	java/lang/IllegalArgumentException
+    //   129	156	182	java/io/IOException
+  }
+  
+  @TargetApi(19)
+  @Nullable
+  private static String getBitmapString(Bitmap paramBitmap)
+  {
+    if (paramBitmap == null) {
+      return null;
+    }
+    Object localObject;
+    if (Build.VERSION.SDK_INT >= 19)
+    {
+      localObject = new StringBuilder();
+      ((StringBuilder)localObject).append(" (");
+      ((StringBuilder)localObject).append(paramBitmap.getAllocationByteCount());
+      ((StringBuilder)localObject).append(")");
+      localObject = ((StringBuilder)localObject).toString();
+    }
+    else
+    {
+      localObject = "";
+    }
+    StringBuilder localStringBuilder = new StringBuilder();
+    localStringBuilder.append("[");
+    localStringBuilder.append(paramBitmap.getWidth());
+    localStringBuilder.append("x");
+    localStringBuilder.append(paramBitmap.getHeight());
+    localStringBuilder.append("] ");
+    localStringBuilder.append(paramBitmap.getConfig());
+    localStringBuilder.append((String)localObject);
+    return localStringBuilder.toString();
+  }
+  
+  /* Error */
+  private static BitmapFactory.Options getDefaultOptions()
+  {
+    // Byte code:
+    //   0: ldc 2
+    //   2: monitorenter
+    //   3: getstatic 145	com/bumptech/glide/load/resource/bitmap/Downsampler:OPTIONS_QUEUE	Ljava/util/Queue;
+    //   6: astore_0
+    //   7: aload_0
+    //   8: monitorenter
+    //   9: getstatic 145	com/bumptech/glide/load/resource/bitmap/Downsampler:OPTIONS_QUEUE	Ljava/util/Queue;
+    //   12: invokeinterface 549 1 0
+    //   17: checkcast 249	android/graphics/BitmapFactory$Options
+    //   20: astore_1
+    //   21: aload_0
+    //   22: monitorexit
+    //   23: aload_1
+    //   24: astore_0
+    //   25: aload_1
+    //   26: ifnonnull +15 -> 41
+    //   29: new 249	android/graphics/BitmapFactory$Options
+    //   32: dup
+    //   33: invokespecial 550	android/graphics/BitmapFactory$Options:<init>	()V
+    //   36: astore_0
+    //   37: aload_0
+    //   38: invokestatic 554	com/bumptech/glide/load/resource/bitmap/Downsampler:resetOptions	(Landroid/graphics/BitmapFactory$Options;)V
+    //   41: ldc 2
+    //   43: monitorexit
+    //   44: aload_0
+    //   45: areturn
+    //   46: astore_1
+    //   47: aload_0
+    //   48: monitorexit
+    //   49: aload_1
+    //   50: athrow
+    //   51: astore_0
+    //   52: ldc 2
+    //   54: monitorexit
+    //   55: aload_0
+    //   56: athrow
+    // Local variable table:
+    //   start	length	slot	name	signature
+    //   51	5	0	localObject2	Object
+    //   20	6	1	localOptions	BitmapFactory.Options
+    //   46	4	1	localObject3	Object
+    // Exception table:
+    //   from	to	target	type
+    //   9	23	46	finally
+    //   47	49	46	finally
+    //   3	9	51	finally
+    //   29	41	51	finally
+    //   49	51	51	finally
+  }
+  
+  private static int getDensityMultiplier(double paramDouble)
+  {
+    if (paramDouble > 1.0D) {
+      paramDouble = 1.0D / paramDouble;
+    }
+    return (int)Math.round(paramDouble * 2.147483647E9D);
+  }
+  
+  private static int[] getDimensions(InputStream paramInputStream, BitmapFactory.Options paramOptions, DecodeCallbacks paramDecodeCallbacks, BitmapPool paramBitmapPool)
+    throws IOException
+  {
+    inJustDecodeBounds = true;
+    decodeStream(paramInputStream, paramOptions, paramDecodeCallbacks, paramBitmapPool);
+    inJustDecodeBounds = false;
+    return new int[] { outWidth, outHeight };
+  }
+  
+  private static String getInBitmapString(BitmapFactory.Options paramOptions)
+  {
+    return getBitmapString(inBitmap);
+  }
+  
+  private static boolean isScaling(BitmapFactory.Options paramOptions)
+  {
+    return (inTargetDensity > 0) && (inDensity > 0) && (inTargetDensity != inDensity);
+  }
+  
+  private static void logDecode(int paramInt1, int paramInt2, String paramString, BitmapFactory.Options paramOptions, Bitmap paramBitmap, int paramInt3, int paramInt4, long paramLong)
+  {
+    StringBuilder localStringBuilder = new StringBuilder();
+    localStringBuilder.append("Decoded ");
+    localStringBuilder.append(getBitmapString(paramBitmap));
+    localStringBuilder.append(" from [");
+    localStringBuilder.append(paramInt1);
+    localStringBuilder.append("x");
+    localStringBuilder.append(paramInt2);
+    localStringBuilder.append("] ");
+    localStringBuilder.append(paramString);
+    localStringBuilder.append(" with inBitmap ");
+    localStringBuilder.append(getInBitmapString(paramOptions));
+    localStringBuilder.append(" for [");
+    localStringBuilder.append(paramInt3);
+    localStringBuilder.append("x");
+    localStringBuilder.append(paramInt4);
+    localStringBuilder.append("], sample size: ");
+    localStringBuilder.append(inSampleSize);
+    localStringBuilder.append(", density: ");
+    localStringBuilder.append(inDensity);
+    localStringBuilder.append(", target density: ");
+    localStringBuilder.append(inTargetDensity);
+    localStringBuilder.append(", thread: ");
+    localStringBuilder.append(Thread.currentThread().getName());
+    localStringBuilder.append(", duration: ");
+    localStringBuilder.append(LogTime.getElapsedMillis(paramLong));
+    Log.v("Downsampler", localStringBuilder.toString());
+  }
+  
+  private static IOException newIoExceptionForInBitmapAssertion(IllegalArgumentException paramIllegalArgumentException, int paramInt1, int paramInt2, String paramString, BitmapFactory.Options paramOptions)
+  {
+    StringBuilder localStringBuilder = new StringBuilder();
+    localStringBuilder.append("Exception decoding bitmap, outWidth: ");
+    localStringBuilder.append(paramInt1);
+    localStringBuilder.append(", outHeight: ");
+    localStringBuilder.append(paramInt2);
+    localStringBuilder.append(", outMimeType: ");
+    localStringBuilder.append(paramString);
+    localStringBuilder.append(", inBitmap: ");
+    localStringBuilder.append(getInBitmapString(paramOptions));
+    return new IOException(localStringBuilder.toString(), paramIllegalArgumentException);
+  }
+  
+  private static void releaseOptions(BitmapFactory.Options paramOptions)
+  {
+    resetOptions(paramOptions);
+    synchronized (OPTIONS_QUEUE)
+    {
+      OPTIONS_QUEUE.offer(paramOptions);
+      return;
+    }
+  }
+  
+  private static void resetOptions(BitmapFactory.Options paramOptions)
+  {
+    inTempStorage = null;
+    inDither = false;
+    inScaled = false;
+    inSampleSize = 1;
+    inPreferredConfig = null;
+    inJustDecodeBounds = false;
+    inDensity = 0;
+    inTargetDensity = 0;
+    outWidth = 0;
+    outHeight = 0;
+    outMimeType = null;
+    inBitmap = null;
+    inMutable = true;
+  }
+  
+  private static int round(double paramDouble)
+  {
+    return (int)(paramDouble + 0.5D);
+  }
+  
+  @TargetApi(26)
+  private static void setInBitmap(BitmapFactory.Options paramOptions, BitmapPool paramBitmapPool, int paramInt1, int paramInt2)
+  {
+    Bitmap.Config localConfig1;
+    if (Build.VERSION.SDK_INT >= 26)
+    {
+      if (inPreferredConfig == Bitmap.Config.HARDWARE) {
+        return;
+      }
+      localConfig1 = outConfig;
+    }
+    else
+    {
+      localConfig1 = null;
+    }
+    Bitmap.Config localConfig2 = localConfig1;
+    if (localConfig1 == null) {
+      localConfig2 = inPreferredConfig;
+    }
+    inBitmap = paramBitmapPool.getDirty(paramInt1, paramInt2, localConfig2);
+  }
+  
+  private boolean shouldUsePool(ImageHeaderParser.ImageType paramImageType)
+  {
+    if (Build.VERSION.SDK_INT >= 19) {
+      return true;
+    }
+    return TYPES_THAT_USE_POOL_PRE_KITKAT.contains(paramImageType);
+  }
+  
+  public Resource<Bitmap> decode(InputStream paramInputStream, int paramInt1, int paramInt2, Options paramOptions)
+    throws IOException
+  {
+    return decode(paramInputStream, paramInt1, paramInt2, paramOptions, EMPTY_CALLBACKS);
+  }
+  
+  public Resource<Bitmap> decode(InputStream paramInputStream, int paramInt1, int paramInt2, Options paramOptions, DecodeCallbacks paramDecodeCallbacks)
+    throws IOException
+  {
+    Preconditions.checkArgument(paramInputStream.markSupported(), "You must provide an InputStream that supports mark()");
+    byte[] arrayOfByte = (byte[])byteArrayPool.get(65536, [B.class);
+    BitmapFactory.Options localOptions = getDefaultOptions();
+    inTempStorage = arrayOfByte;
+    DecodeFormat localDecodeFormat = (DecodeFormat)paramOptions.get(DECODE_FORMAT);
+    DownsampleStrategy localDownsampleStrategy = (DownsampleStrategy)paramOptions.get(DownsampleStrategy.OPTION);
+    boolean bool2 = ((Boolean)paramOptions.get(FIX_BITMAP_SIZE_TO_REQUESTED_DIMENSIONS)).booleanValue();
+    boolean bool1;
+    if ((paramOptions.get(ALLOW_HARDWARE_CONFIG) != null) && (((Boolean)paramOptions.get(ALLOW_HARDWARE_CONFIG)).booleanValue())) {
+      bool1 = true;
+    } else {
+      bool1 = false;
+    }
+    try
+    {
+      paramInputStream = BitmapResource.obtain(decodeFromWrappedStreams(paramInputStream, localOptions, localDownsampleStrategy, localDecodeFormat, bool1, paramInt1, paramInt2, bool2, paramDecodeCallbacks), bitmapPool);
+      return paramInputStream;
+    }
+    finally
+    {
+      releaseOptions(localOptions);
+      byteArrayPool.put(arrayOfByte);
+    }
+  }
+  
+  public boolean handles(InputStream paramInputStream)
+  {
+    return true;
+  }
+  
+  public boolean handles(ByteBuffer paramByteBuffer)
+  {
+    return true;
+  }
+  
+  public static abstract interface DecodeCallbacks
+  {
+    public abstract void onDecodeComplete(BitmapPool paramBitmapPool, Bitmap paramBitmap)
+      throws IOException;
+    
+    public abstract void onObtainBounds();
+  }
+}

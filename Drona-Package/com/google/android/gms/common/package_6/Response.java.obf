@@ -1,0 +1,26 @@
+package com.google.android.gms.common.api;
+
+import androidx.annotation.NonNull;
+
+public class Response<T extends Result>
+{
+  private T zzap;
+  
+  public Response() {}
+  
+  protected Response(@NonNull T paramT)
+  {
+    zzap = paramT;
+  }
+  
+  @NonNull
+  protected T getResult()
+  {
+    return zzap;
+  }
+  
+  public void setResult(@NonNull T paramT)
+  {
+    zzap = paramT;
+  }
+}

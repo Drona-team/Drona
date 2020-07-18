@@ -1,0 +1,177 @@
+package com.google.android.exoplayer2.extractor.ts;
+
+import android.util.SparseArray;
+import com.google.android.exoplayer2.Format;
+import com.google.android.exoplayer2.text.cea.Cea708InitializationData;
+import com.google.android.exoplayer2.util.ParsableByteArray;
+import java.lang.annotation.Annotation;
+import java.lang.annotation.Documented;
+import java.lang.annotation.Retention;
+import java.lang.annotation.RetentionPolicy;
+import java.util.ArrayList;
+import java.util.Collections;
+import java.util.List;
+
+public final class DefaultTsPayloadReaderFactory
+  implements TsPayloadReader.Factory
+{
+  private static final int DESCRIPTOR_TAG_CAPTION_SERVICE = 134;
+  public static final int FLAG_ALLOW_NON_IDR_KEYFRAMES = 1;
+  public static final int FLAG_DETECT_ACCESS_UNITS = 8;
+  public static final int FLAG_IGNORE_AAC_STREAM = 2;
+  public static final int FLAG_IGNORE_H264_STREAM = 4;
+  public static final int FLAG_IGNORE_SPLICE_INFO_STREAM = 16;
+  public static final int FLAG_OVERRIDE_CAPTION_DESCRIPTORS = 32;
+  private final List<Format> closedCaptionFormats;
+  private final int flags;
+  
+  public DefaultTsPayloadReaderFactory()
+  {
+    this(0);
+  }
+  
+  public DefaultTsPayloadReaderFactory(int paramInt)
+  {
+    this(paramInt, Collections.singletonList(Format.createTextSampleFormat(null, "application/cea-608", 0, null)));
+  }
+  
+  public DefaultTsPayloadReaderFactory(int paramInt, List<Format> paramList)
+  {
+    flags = paramInt;
+    closedCaptionFormats = paramList;
+  }
+  
+  private SeiReader buildSeiReader(TsPayloadReader.EsInfo paramEsInfo)
+  {
+    return new SeiReader(getClosedCaptionFormats(paramEsInfo));
+  }
+  
+  private UserDataReader buildUserDataReader(TsPayloadReader.EsInfo paramEsInfo)
+  {
+    return new UserDataReader(getClosedCaptionFormats(paramEsInfo));
+  }
+  
+  private List<Format> getClosedCaptionFormats(TsPayloadReader.EsInfo paramEsInfo)
+  {
+    if (isSet(32)) {
+      return closedCaptionFormats;
+    }
+    ParsableByteArray localParsableByteArray = new ParsableByteArray(descriptorBytes);
+    paramEsInfo = closedCaptionFormats;
+    while (localParsableByteArray.bytesLeft() > 0)
+    {
+      int i = localParsableByteArray.readUnsignedByte();
+      int m = localParsableByteArray.readUnsignedByte();
+      int n = localParsableByteArray.getPosition();
+      if (i == 134)
+      {
+        ArrayList localArrayList = new ArrayList();
+        int i1 = localParsableByteArray.readUnsignedByte();
+        i = 0;
+        for (;;)
+        {
+          paramEsInfo = localArrayList;
+          if (i >= (i1 & 0x1F)) {
+            break;
+          }
+          String str = localParsableByteArray.readString(3);
+          int k = localParsableByteArray.readUnsignedByte();
+          boolean bool = true;
+          int j;
+          if ((k & 0x80) != 0) {
+            j = 1;
+          } else {
+            j = 0;
+          }
+          if (j != 0)
+          {
+            k &= 0x3F;
+            paramEsInfo = "application/cea-708";
+          }
+          else
+          {
+            paramEsInfo = "application/cea-608";
+            k = 1;
+          }
+          int i2 = (byte)localParsableByteArray.readUnsignedByte();
+          localParsableByteArray.skipBytes(1);
+          List localList;
+          if (j != 0)
+          {
+            if ((i2 & 0x40) == 0) {
+              bool = false;
+            }
+            localList = Cea708InitializationData.buildData(bool);
+          }
+          else
+          {
+            localList = null;
+          }
+          localArrayList.add(Format.createTextSampleFormat(null, paramEsInfo, null, -1, 0, str, k, null, Long.MAX_VALUE, localList));
+          i += 1;
+        }
+      }
+      localParsableByteArray.setPosition(n + m);
+    }
+    return paramEsInfo;
+  }
+  
+  private boolean isSet(int paramInt)
+  {
+    return (paramInt & flags) != 0;
+  }
+  
+  public SparseArray<TsPayloadReader> createInitialPayloadReaders()
+  {
+    return new SparseArray();
+  }
+  
+  public TsPayloadReader createPayloadReader(int paramInt, TsPayloadReader.EsInfo paramEsInfo)
+  {
+    switch (paramInt)
+    {
+    default: 
+      return null;
+    case 134: 
+      if (isSet(16)) {
+        return null;
+      }
+      return new SectionReader(new SpliceInfoSectionReader());
+    case 130: 
+    case 138: 
+      return new PesReader(new DtsReader(language));
+    case 129: 
+    case 135: 
+      return new PesReader(new Ac3Reader(language));
+    case 89: 
+      return new PesReader(new DvbSubtitleReader(dvbSubtitleInfos));
+    case 36: 
+      return new PesReader(new H265Reader(buildSeiReader(paramEsInfo)));
+    case 27: 
+      if (isSet(4)) {
+        return null;
+      }
+      return new PesReader(new H264Reader(buildSeiReader(paramEsInfo), isSet(1), isSet(8)));
+    case 21: 
+      return new PesReader(new Id3Reader());
+    case 17: 
+      if (isSet(2)) {
+        return null;
+      }
+      return new PesReader(new LatmReader(language));
+    case 15: 
+      if (isSet(2)) {
+        return null;
+      }
+      return new PesReader(new AdtsReader(false, language));
+    case 3: 
+    case 4: 
+      return new PesReader(new MpegAudioReader(language));
+    }
+    return new PesReader(new H262Reader(buildUserDataReader(paramEsInfo)));
+  }
+  
+  @Documented
+  @Retention(RetentionPolicy.SOURCE)
+  public static @interface Flags {}
+}

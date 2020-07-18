@@ -1,0 +1,254 @@
+package com.airbnb.lottie.parser;
+
+import android.graphics.PointF;
+import com.airbnb.lottie.LottieComposition;
+import com.airbnb.lottie.model.animatable.AnimatableFloatValue;
+import com.airbnb.lottie.model.animatable.AnimatableIntegerValue;
+import com.airbnb.lottie.model.animatable.AnimatablePathValue;
+import com.airbnb.lottie.model.animatable.AnimatableScaleValue;
+import com.airbnb.lottie.model.animatable.AnimatableSplitDimensionPathValue;
+import com.airbnb.lottie.model.animatable.AnimatableTransform;
+import com.airbnb.lottie.model.animatable.AnimatableValue;
+import com.airbnb.lottie.parser.moshi.JsonReader;
+import com.airbnb.lottie.parser.moshi.JsonReader.Options;
+import com.airbnb.lottie.parser.moshi.JsonReader.Token;
+import com.airbnb.lottie.value.Keyframe;
+import com.airbnb.lottie.value.ScaleXY;
+import java.io.IOException;
+import java.util.List;
+
+public class AnimatableTransformParser
+{
+  private static JsonReader.Options ANIMATABLE_NAMES = JsonReader.Options.of(new String[] { "k" });
+  private static JsonReader.Options NAMES = JsonReader.Options.of(new String[] { "a", "p", "s", "rz", "r", "o", "so", "eo", "sk", "sa" });
+  
+  private AnimatableTransformParser() {}
+  
+  private static boolean isAnchorPointIdentity(AnimatablePathValue paramAnimatablePathValue)
+  {
+    boolean bool2 = false;
+    boolean bool1;
+    if (paramAnimatablePathValue != null)
+    {
+      bool1 = bool2;
+      if (paramAnimatablePathValue.isStatic())
+      {
+        bool1 = bool2;
+        if (!((PointF)getKeyframesget0startValue).equals(0.0F, 0.0F)) {}
+      }
+    }
+    else
+    {
+      bool1 = true;
+    }
+    return bool1;
+  }
+  
+  private static boolean isPositionIdentity(AnimatableValue<PointF, PointF> paramAnimatableValue)
+  {
+    boolean bool2 = false;
+    boolean bool1;
+    if (paramAnimatableValue != null)
+    {
+      bool1 = bool2;
+      if (!(paramAnimatableValue instanceof AnimatableSplitDimensionPathValue))
+      {
+        bool1 = bool2;
+        if (paramAnimatableValue.isStatic())
+        {
+          bool1 = bool2;
+          if (!((PointF)getKeyframesget0startValue).equals(0.0F, 0.0F)) {}
+        }
+      }
+    }
+    else
+    {
+      bool1 = true;
+    }
+    return bool1;
+  }
+  
+  private static boolean isRotationIdentity(AnimatableFloatValue paramAnimatableFloatValue)
+  {
+    boolean bool2 = false;
+    boolean bool1;
+    if (paramAnimatableFloatValue != null)
+    {
+      bool1 = bool2;
+      if (paramAnimatableFloatValue.isStatic())
+      {
+        bool1 = bool2;
+        if (((Float)getKeyframesget0startValue).floatValue() != 0.0F) {}
+      }
+    }
+    else
+    {
+      bool1 = true;
+    }
+    return bool1;
+  }
+  
+  private static boolean isScaleIdentity(AnimatableScaleValue paramAnimatableScaleValue)
+  {
+    boolean bool2 = false;
+    boolean bool1;
+    if (paramAnimatableScaleValue != null)
+    {
+      bool1 = bool2;
+      if (paramAnimatableScaleValue.isStatic())
+      {
+        bool1 = bool2;
+        if (!((ScaleXY)getKeyframesget0startValue).equals(1.0F, 1.0F)) {}
+      }
+    }
+    else
+    {
+      bool1 = true;
+    }
+    return bool1;
+  }
+  
+  private static boolean isSkewAngleIdentity(AnimatableFloatValue paramAnimatableFloatValue)
+  {
+    boolean bool2 = false;
+    boolean bool1;
+    if (paramAnimatableFloatValue != null)
+    {
+      bool1 = bool2;
+      if (paramAnimatableFloatValue.isStatic())
+      {
+        bool1 = bool2;
+        if (((Float)getKeyframesget0startValue).floatValue() != 0.0F) {}
+      }
+    }
+    else
+    {
+      bool1 = true;
+    }
+    return bool1;
+  }
+  
+  private static boolean isSkewIdentity(AnimatableFloatValue paramAnimatableFloatValue)
+  {
+    boolean bool2 = false;
+    boolean bool1;
+    if (paramAnimatableFloatValue != null)
+    {
+      bool1 = bool2;
+      if (paramAnimatableFloatValue.isStatic())
+      {
+        bool1 = bool2;
+        if (((Float)getKeyframesget0startValue).floatValue() != 0.0F) {}
+      }
+    }
+    else
+    {
+      bool1 = true;
+    }
+    return bool1;
+  }
+  
+  public static AnimatableTransform parse(JsonReader paramJsonReader, LottieComposition paramLottieComposition)
+    throws IOException
+  {
+    int i;
+    if (paramJsonReader.peek() == JsonReader.Token.BEGIN_OBJECT) {
+      i = 1;
+    } else {
+      i = 0;
+    }
+    if (i != 0) {
+      paramJsonReader.beginObject();
+    }
+    AnimatableFloatValue localAnimatableFloatValue3 = null;
+    Object localObject = null;
+    AnimatableValue localAnimatableValue = null;
+    AnimatableScaleValue localAnimatableScaleValue = null;
+    AnimatableFloatValue localAnimatableFloatValue2 = null;
+    AnimatableFloatValue localAnimatableFloatValue1 = null;
+    AnimatableIntegerValue localAnimatableIntegerValue = null;
+    AnimatableFloatValue localAnimatableFloatValue5 = null;
+    AnimatableFloatValue localAnimatableFloatValue4 = null;
+    if (paramJsonReader.hasNext())
+    {
+      switch (paramJsonReader.selectName(NAMES))
+      {
+      default: 
+        paramJsonReader.skipName();
+        paramJsonReader.skipValue();
+      }
+      for (;;)
+      {
+        break;
+        localAnimatableFloatValue1 = AnimatableValueParser.parseFloat(paramJsonReader, paramLottieComposition, false);
+        break;
+        localAnimatableFloatValue2 = AnimatableValueParser.parseFloat(paramJsonReader, paramLottieComposition, false);
+        break;
+        localAnimatableFloatValue4 = AnimatableValueParser.parseFloat(paramJsonReader, paramLottieComposition, false);
+        break;
+        localAnimatableFloatValue5 = AnimatableValueParser.parseFloat(paramJsonReader, paramLottieComposition, false);
+        break;
+        localAnimatableIntegerValue = AnimatableValueParser.parseInteger(paramJsonReader, paramLottieComposition);
+        break;
+        paramLottieComposition.addWarning("Lottie doesn't support 3D layers.");
+        localAnimatableFloatValue3 = AnimatableValueParser.parseFloat(paramJsonReader, paramLottieComposition, false);
+        if (localAnimatableFloatValue3.getKeyframes().isEmpty()) {
+          localAnimatableFloatValue3.getKeyframes().add(new Keyframe(paramLottieComposition, Float.valueOf(0.0F), Float.valueOf(0.0F), null, 0.0F, Float.valueOf(paramLottieComposition.getEndFrame())));
+        }
+        for (;;)
+        {
+          break;
+          if (getKeyframesget0startValue == null) {
+            localAnimatableFloatValue3.getKeyframes().set(0, new Keyframe(paramLottieComposition, Float.valueOf(0.0F), Float.valueOf(0.0F), null, 0.0F, Float.valueOf(paramLottieComposition.getEndFrame())));
+          }
+        }
+        continue;
+        localAnimatableScaleValue = AnimatableValueParser.parseScale(paramJsonReader, paramLottieComposition);
+        continue;
+        localAnimatableValue = AnimatablePathValueParser.parseSplitPath(paramJsonReader, paramLottieComposition);
+        continue;
+        paramJsonReader.beginObject();
+        while (paramJsonReader.hasNext()) {
+          if (paramJsonReader.selectName(ANIMATABLE_NAMES) != 0)
+          {
+            paramJsonReader.skipName();
+            paramJsonReader.skipValue();
+          }
+          else
+          {
+            localObject = AnimatablePathValueParser.parse(paramJsonReader, paramLottieComposition);
+          }
+        }
+        paramJsonReader.endObject();
+      }
+    }
+    if (i != 0) {
+      paramJsonReader.endObject();
+    }
+    if (isAnchorPointIdentity((AnimatablePathValue)localObject)) {
+      paramJsonReader = null;
+    } else {
+      paramJsonReader = (JsonReader)localObject;
+    }
+    if (isPositionIdentity(localAnimatableValue)) {
+      paramLottieComposition = null;
+    } else {
+      paramLottieComposition = localAnimatableValue;
+    }
+    if (isRotationIdentity(localAnimatableFloatValue3)) {
+      localObject = null;
+    } else {
+      localObject = localAnimatableFloatValue3;
+    }
+    if (isScaleIdentity(localAnimatableScaleValue)) {
+      localAnimatableScaleValue = null;
+    }
+    if (isSkewIdentity(localAnimatableFloatValue2)) {
+      localAnimatableFloatValue2 = null;
+    }
+    if (isSkewAngleIdentity(localAnimatableFloatValue1)) {
+      localAnimatableFloatValue1 = null;
+    }
+    return new AnimatableTransform(paramJsonReader, paramLottieComposition, localAnimatableScaleValue, (AnimatableFloatValue)localObject, localAnimatableIntegerValue, localAnimatableFloatValue5, localAnimatableFloatValue4, localAnimatableFloatValue2, localAnimatableFloatValue1);
+  }
+}

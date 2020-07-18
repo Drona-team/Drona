@@ -1,0 +1,214 @@
+package com.facebook.react.modules.blob;
+
+import android.content.ContentProvider;
+import android.content.ContentValues;
+import android.database.Cursor;
+import android.net.Uri;
+import androidx.annotation.Nullable;
+
+public final class BlobProvider
+  extends ContentProvider
+{
+  public BlobProvider() {}
+  
+  public int delete(Uri paramUri, String paramString, String[] paramArrayOfString)
+  {
+    return 0;
+  }
+  
+  @Nullable
+  public String getType(Uri paramUri)
+  {
+    return null;
+  }
+  
+  @Nullable
+  public Uri insert(Uri paramUri, ContentValues paramContentValues)
+  {
+    return null;
+  }
+  
+  public boolean onCreate()
+  {
+    return true;
+  }
+  
+  /* Error */
+  public android.os.ParcelFileDescriptor openFile(Uri paramUri, String paramString)
+    throws java.io.FileNotFoundException
+  {
+    // Byte code:
+    //   0: aload_2
+    //   1: ldc 29
+    //   3: invokevirtual 35	java/lang/String:equals	(Ljava/lang/Object;)Z
+    //   6: ifeq +182 -> 188
+    //   9: aload_0
+    //   10: invokevirtual 39	com/facebook/react/modules/blob/BlobProvider:getContext	()Landroid/content/Context;
+    //   13: invokevirtual 44	android/content/Context:getApplicationContext	()Landroid/content/Context;
+    //   16: astore_2
+    //   17: aload_2
+    //   18: instanceof 46
+    //   21: ifeq +30 -> 51
+    //   24: aload_2
+    //   25: checkcast 46	com/facebook/react/ReactApplication
+    //   28: invokeinterface 50 1 0
+    //   33: invokevirtual 56	com/facebook/react/ReactNativeHost:getReactInstanceManager	()Lcom/facebook/react/ReactInstanceManager;
+    //   36: invokevirtual 62	com/facebook/react/ReactInstanceManager:getCurrentReactContext	()Lcom/facebook/react/bridge/ReactContext;
+    //   39: ldc 64
+    //   41: invokevirtual 70	com/facebook/react/bridge/ReactContext:getNativeModule	(Ljava/lang/Class;)Lcom/facebook/react/bridge/NativeModule;
+    //   44: checkcast 64	com/facebook/react/modules/blob/BlobModule
+    //   47: astore_2
+    //   48: goto +5 -> 53
+    //   51: aconst_null
+    //   52: astore_2
+    //   53: aload_2
+    //   54: ifnull +124 -> 178
+    //   57: aload_2
+    //   58: aload_1
+    //   59: invokevirtual 74	com/facebook/react/modules/blob/BlobModule:resolve	(Landroid/net/Uri;)[B
+    //   62: astore_2
+    //   63: aload_2
+    //   64: ifnull +71 -> 135
+    //   67: invokestatic 80	android/os/ParcelFileDescriptor:createPipe	()[Landroid/os/ParcelFileDescriptor;
+    //   70: astore_3
+    //   71: aload_3
+    //   72: iconst_0
+    //   73: aaload
+    //   74: astore_1
+    //   75: aload_3
+    //   76: iconst_1
+    //   77: aaload
+    //   78: astore_3
+    //   79: new 82	android/os/ParcelFileDescriptor$AutoCloseOutputStream
+    //   82: dup
+    //   83: aload_3
+    //   84: invokespecial 85	android/os/ParcelFileDescriptor$AutoCloseOutputStream:<init>	(Landroid/os/ParcelFileDescriptor;)V
+    //   87: astore_3
+    //   88: aload_3
+    //   89: aload_2
+    //   90: invokevirtual 91	java/io/OutputStream:write	([B)V
+    //   93: aload_3
+    //   94: invokevirtual 94	java/io/OutputStream:close	()V
+    //   97: aload_1
+    //   98: areturn
+    //   99: astore_1
+    //   100: aconst_null
+    //   101: astore_2
+    //   102: goto +7 -> 109
+    //   105: astore_2
+    //   106: aload_2
+    //   107: athrow
+    //   108: astore_1
+    //   109: aload_2
+    //   110: ifnull +19 -> 129
+    //   113: aload_3
+    //   114: invokevirtual 94	java/io/OutputStream:close	()V
+    //   117: goto +16 -> 133
+    //   120: astore_3
+    //   121: aload_2
+    //   122: aload_3
+    //   123: invokevirtual 98	java/lang/Throwable:addSuppressed	(Ljava/lang/Throwable;)V
+    //   126: goto +7 -> 133
+    //   129: aload_3
+    //   130: invokevirtual 94	java/io/OutputStream:close	()V
+    //   133: aload_1
+    //   134: athrow
+    //   135: new 100	java/lang/StringBuilder
+    //   138: dup
+    //   139: invokespecial 101	java/lang/StringBuilder:<init>	()V
+    //   142: astore_2
+    //   143: aload_2
+    //   144: ldc 103
+    //   146: invokevirtual 107	java/lang/StringBuilder:append	(Ljava/lang/String;)Ljava/lang/StringBuilder;
+    //   149: pop
+    //   150: aload_2
+    //   151: aload_1
+    //   152: invokevirtual 113	android/net/Uri:toString	()Ljava/lang/String;
+    //   155: invokevirtual 107	java/lang/StringBuilder:append	(Ljava/lang/String;)Ljava/lang/StringBuilder;
+    //   158: pop
+    //   159: aload_2
+    //   160: ldc 115
+    //   162: invokevirtual 107	java/lang/StringBuilder:append	(Ljava/lang/String;)Ljava/lang/StringBuilder;
+    //   165: pop
+    //   166: new 23	java/io/FileNotFoundException
+    //   169: dup
+    //   170: aload_2
+    //   171: invokevirtual 116	java/lang/StringBuilder:toString	()Ljava/lang/String;
+    //   174: invokespecial 119	java/io/FileNotFoundException:<init>	(Ljava/lang/String;)V
+    //   177: athrow
+    //   178: new 121	java/lang/RuntimeException
+    //   181: dup
+    //   182: ldc 123
+    //   184: invokespecial 124	java/lang/RuntimeException:<init>	(Ljava/lang/String;)V
+    //   187: athrow
+    //   188: new 100	java/lang/StringBuilder
+    //   191: dup
+    //   192: invokespecial 101	java/lang/StringBuilder:<init>	()V
+    //   195: astore_3
+    //   196: aload_3
+    //   197: ldc 103
+    //   199: invokevirtual 107	java/lang/StringBuilder:append	(Ljava/lang/String;)Ljava/lang/StringBuilder;
+    //   202: pop
+    //   203: aload_3
+    //   204: aload_1
+    //   205: invokevirtual 113	android/net/Uri:toString	()Ljava/lang/String;
+    //   208: invokevirtual 107	java/lang/StringBuilder:append	(Ljava/lang/String;)Ljava/lang/StringBuilder;
+    //   211: pop
+    //   212: aload_3
+    //   213: ldc 126
+    //   215: invokevirtual 107	java/lang/StringBuilder:append	(Ljava/lang/String;)Ljava/lang/StringBuilder;
+    //   218: pop
+    //   219: aload_3
+    //   220: aload_2
+    //   221: invokevirtual 107	java/lang/StringBuilder:append	(Ljava/lang/String;)Ljava/lang/StringBuilder;
+    //   224: pop
+    //   225: aload_3
+    //   226: ldc -128
+    //   228: invokevirtual 107	java/lang/StringBuilder:append	(Ljava/lang/String;)Ljava/lang/StringBuilder;
+    //   231: pop
+    //   232: new 23	java/io/FileNotFoundException
+    //   235: dup
+    //   236: aload_3
+    //   237: invokevirtual 116	java/lang/StringBuilder:toString	()Ljava/lang/String;
+    //   240: invokespecial 119	java/io/FileNotFoundException:<init>	(Ljava/lang/String;)V
+    //   243: athrow
+    //   244: astore_1
+    //   245: aconst_null
+    //   246: areturn
+    //   247: astore_1
+    //   248: aconst_null
+    //   249: areturn
+    // Local variable table:
+    //   start	length	slot	name	signature
+    //   0	250	0	this	BlobProvider
+    //   0	250	1	paramUri	Uri
+    //   0	250	2	paramString	String
+    //   70	44	3	localObject	Object
+    //   120	10	3	localThrowable	Throwable
+    //   195	42	3	localStringBuilder	StringBuilder
+    // Exception table:
+    //   from	to	target	type
+    //   88	93	99	finally
+    //   88	93	105	java/lang/Throwable
+    //   106	108	108	finally
+    //   113	117	120	java/lang/Throwable
+    //   67	71	244	java/io/IOException
+    //   79	88	247	java/io/IOException
+    //   93	97	247	java/io/IOException
+    //   113	117	247	java/io/IOException
+    //   121	126	247	java/io/IOException
+    //   129	133	247	java/io/IOException
+    //   133	135	247	java/io/IOException
+  }
+  
+  @Nullable
+  public Cursor query(Uri paramUri, String[] paramArrayOfString1, String paramString1, String[] paramArrayOfString2, String paramString2)
+  {
+    return null;
+  }
+  
+  public int update(Uri paramUri, ContentValues paramContentValues, String paramString, String[] paramArrayOfString)
+  {
+    return 0;
+  }
+}

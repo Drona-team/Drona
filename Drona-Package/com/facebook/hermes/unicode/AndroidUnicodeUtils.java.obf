@@ -1,0 +1,80 @@
+package com.facebook.hermes.unicode;
+
+import com.facebook.proguard.annotations.DoNotStrip;
+import java.text.Collator;
+import java.text.DateFormat;
+import java.text.Normalizer;
+import java.text.Normalizer.Form;
+import java.util.Locale;
+
+@DoNotStrip
+public class AndroidUnicodeUtils
+{
+  public AndroidUnicodeUtils() {}
+  
+  @DoNotStrip
+  public static String convertToCase(String paramString, int paramInt, boolean paramBoolean)
+  {
+    Locale localLocale;
+    if (paramBoolean) {
+      localLocale = Locale.getDefault();
+    } else {
+      localLocale = Locale.ENGLISH;
+    }
+    switch (paramInt)
+    {
+    default: 
+      throw new RuntimeException("Invalid target case");
+    case 1: 
+      return paramString.toLowerCase(localLocale);
+    }
+    return paramString.toUpperCase(localLocale);
+  }
+  
+  @DoNotStrip
+  public static String dateFormat(double paramDouble, boolean paramBoolean1, boolean paramBoolean2)
+  {
+    DateFormat localDateFormat;
+    if ((paramBoolean1) && (paramBoolean2))
+    {
+      localDateFormat = DateFormat.getDateTimeInstance(2, 2);
+    }
+    else if (paramBoolean1)
+    {
+      localDateFormat = DateFormat.getDateInstance(2);
+    }
+    else
+    {
+      if (!paramBoolean2) {
+        break label55;
+      }
+      localDateFormat = DateFormat.getTimeInstance(2);
+    }
+    return localDateFormat.format(Long.valueOf(paramDouble)).toString();
+    label55:
+    throw new RuntimeException("Bad dateFormat configuration");
+  }
+  
+  @DoNotStrip
+  public static int localeCompare(String paramString1, String paramString2)
+  {
+    return Collator.getInstance().compare(paramString1, paramString2);
+  }
+  
+  @DoNotStrip
+  public static String normalize(String paramString, int paramInt)
+  {
+    switch (paramInt)
+    {
+    default: 
+      throw new RuntimeException("Invalid form");
+    case 3: 
+      return Normalizer.normalize(paramString, Normalizer.Form.NFKD);
+    case 2: 
+      return Normalizer.normalize(paramString, Normalizer.Form.NFKC);
+    case 1: 
+      return Normalizer.normalize(paramString, Normalizer.Form.NFD);
+    }
+    return Normalizer.normalize(paramString, Normalizer.Form.NFC);
+  }
+}

@@ -1,0 +1,43 @@
+package com.bumptech.glide.request.transition;
+
+import android.graphics.Bitmap;
+import android.graphics.drawable.BitmapDrawable;
+import android.graphics.drawable.Drawable;
+import android.view.View;
+import com.bumptech.glide.load.DataSource;
+
+public abstract class BitmapContainerTransitionFactory<R>
+  implements TransitionFactory<R>
+{
+  private final TransitionFactory<Drawable> realFactory;
+  
+  public BitmapContainerTransitionFactory(TransitionFactory<Drawable> paramTransitionFactory)
+  {
+    realFactory = paramTransitionFactory;
+  }
+  
+  public Transition<R> build(DataSource paramDataSource, boolean paramBoolean)
+  {
+    return new BitmapGlideAnimation(realFactory.build(paramDataSource, paramBoolean));
+  }
+  
+  protected abstract Bitmap getBitmap(R paramR);
+  
+  private final class BitmapGlideAnimation
+    implements Transition<R>
+  {
+    private final Transition<Drawable> transition;
+    
+    BitmapGlideAnimation()
+    {
+      Object localObject;
+      transition = localObject;
+    }
+    
+    public boolean transition(R paramR, Transition.ViewAdapter paramViewAdapter)
+    {
+      paramR = new BitmapDrawable(paramViewAdapter.getView().getResources(), getBitmap(paramR));
+      return transition.transition(paramR, paramViewAdapter);
+    }
+  }
+}

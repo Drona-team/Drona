@@ -1,0 +1,433 @@
+package com.google.android.exoplayer2.extractor.mp3;
+
+import com.google.android.exoplayer2.Format;
+import com.google.android.exoplayer2.ParserException;
+import com.google.android.exoplayer2.extractor.Extractor;
+import com.google.android.exoplayer2.extractor.ExtractorInput;
+import com.google.android.exoplayer2.extractor.ExtractorOutput;
+import com.google.android.exoplayer2.extractor.ExtractorsFactory;
+import com.google.android.exoplayer2.extractor.GaplessInfoHolder;
+import com.google.android.exoplayer2.extractor.Id3Peeker;
+import com.google.android.exoplayer2.extractor.MpegAudioHeader;
+import com.google.android.exoplayer2.extractor.PositionHolder;
+import com.google.android.exoplayer2.extractor.SeekMap;
+import com.google.android.exoplayer2.extractor.TrackOutput;
+import com.google.android.exoplayer2.metadata.Metadata;
+import com.google.android.exoplayer2.metadata.Metadata.Entry;
+import com.google.android.exoplayer2.metadata.configurations.Id3Decoder.FramePredicate;
+import com.google.android.exoplayer2.metadata.configurations.MlltFrame;
+import com.google.android.exoplayer2.util.ParsableByteArray;
+import com.google.android.exoplayer2.util.Util;
+import java.io.EOFException;
+import java.io.IOException;
+import java.lang.annotation.Annotation;
+import java.lang.annotation.Documented;
+import java.lang.annotation.Retention;
+import java.lang.annotation.RetentionPolicy;
+
+public final class Mp3Extractor
+  implements Extractor
+{
+  public static final ExtractorsFactory FACTORY = -..Lambda.Mp3Extractor.6eyGfoogMVGFHZKg1gVp93FAKZA.INSTANCE;
+  public static final int FLAG_DISABLE_ID3_METADATA = 2;
+  public static final int FLAG_ENABLE_CONSTANT_BITRATE_SEEKING = 1;
+  private static final int MAX_SNIFF_BYTES = 16384;
+  private static final int MAX_SYNC_BYTES = 131072;
+  private static final int MPEG_AUDIO_HEADER_MASK = -128000;
+  private static final Id3Decoder.FramePredicate REQUIRED_ID3_FRAME_PREDICATE = -..Lambda.Mp3Extractor.bb754AZIAMUosKBF4SefP1vYq88.INSTANCE;
+  private static final int SCRATCH_LENGTH = 10;
+  private static final int SEEK_HEADER_INFO = Util.getIntegerCodeForString("Info");
+  private static final int SEEK_HEADER_UNSET = 0;
+  private static final int SEEK_HEADER_VBRI = Util.getIntegerCodeForString("VBRI");
+  private static final int SEEK_HEADER_XING = Util.getIntegerCodeForString("Xing");
+  private long basisTimeUs;
+  private ExtractorOutput extractorOutput;
+  private final int flags;
+  private final long forcedFirstSampleTimestampUs;
+  private final GaplessInfoHolder gaplessInfoHolder;
+  private final Id3Peeker id3Peeker;
+  private Metadata metadata;
+  private int sampleBytesRemaining;
+  private long samplesRead;
+  private final ParsableByteArray scratch;
+  private Seeker seeker;
+  private final MpegAudioHeader synchronizedHeader;
+  private int synchronizedHeaderData;
+  private TrackOutput trackOutput;
+  
+  public Mp3Extractor()
+  {
+    this(0);
+  }
+  
+  public Mp3Extractor(int paramInt)
+  {
+    this(paramInt, -9223372036854775807L);
+  }
+  
+  public Mp3Extractor(int paramInt, long paramLong)
+  {
+    flags = paramInt;
+    forcedFirstSampleTimestampUs = paramLong;
+    scratch = new ParsableByteArray(10);
+    synchronizedHeader = new MpegAudioHeader();
+    gaplessInfoHolder = new GaplessInfoHolder();
+    basisTimeUs = -9223372036854775807L;
+    id3Peeker = new Id3Peeker();
+  }
+  
+  private Seeker getConstantBitrateSeeker(ExtractorInput paramExtractorInput)
+    throws IOException, InterruptedException
+  {
+    paramExtractorInput.peekFully(scratch.data, 0, 4);
+    scratch.setPosition(0);
+    MpegAudioHeader.populateHeader(scratch.readInt(), synchronizedHeader);
+    return new ConstantBitrateSeeker(paramExtractorInput.getLength(), paramExtractorInput.getPosition(), synchronizedHeader);
+  }
+  
+  private static int getSeekFrameHeader(ParsableByteArray paramParsableByteArray, int paramInt)
+  {
+    if (paramParsableByteArray.limit() >= paramInt + 4)
+    {
+      paramParsableByteArray.setPosition(paramInt);
+      paramInt = paramParsableByteArray.readInt();
+      if (paramInt == SEEK_HEADER_XING) {
+        return paramInt;
+      }
+      if (paramInt == SEEK_HEADER_INFO) {
+        return paramInt;
+      }
+    }
+    if (paramParsableByteArray.limit() >= 40)
+    {
+      paramParsableByteArray.setPosition(36);
+      if (paramParsableByteArray.readInt() == SEEK_HEADER_VBRI) {
+        return SEEK_HEADER_VBRI;
+      }
+    }
+    return 0;
+    return paramInt;
+  }
+  
+  private static boolean headersMatch(int paramInt, long paramLong)
+  {
+    return (paramInt & 0xFFFE0C00) == (paramLong & 0xFFFFFFFFFFFE0C00);
+  }
+  
+  private static MlltSeeker maybeHandleSeekMetadata(Metadata paramMetadata, long paramLong)
+  {
+    if (paramMetadata != null)
+    {
+      int j = paramMetadata.length();
+      int i = 0;
+      while (i < j)
+      {
+        Metadata.Entry localEntry = paramMetadata.getFormat(i);
+        if ((localEntry instanceof MlltFrame)) {
+          return MlltSeeker.create(paramLong, (MlltFrame)localEntry);
+        }
+        i += 1;
+      }
+    }
+    return null;
+  }
+  
+  private Seeker maybeReadSeekFrame(ExtractorInput paramExtractorInput)
+    throws IOException, InterruptedException
+  {
+    Object localObject = new ParsableByteArray(synchronizedHeader.frameSize);
+    paramExtractorInput.peekFully(data, 0, synchronizedHeader.frameSize);
+    if ((synchronizedHeader.version & 0x1) != 0) {
+      if (synchronizedHeader.channels != 1)
+      {
+        i = 36;
+        break label87;
+      }
+    }
+    while (synchronizedHeader.channels != 1)
+    {
+      i = 21;
+      break;
+    }
+    int i = 13;
+    label87:
+    int j = getSeekFrameHeader((ParsableByteArray)localObject, i);
+    if ((j != SEEK_HEADER_XING) && (j != SEEK_HEADER_INFO))
+    {
+      if (j == SEEK_HEADER_VBRI)
+      {
+        localObject = VbriSeeker.create(paramExtractorInput.getLength(), paramExtractorInput.getPosition(), synchronizedHeader, (ParsableByteArray)localObject);
+        paramExtractorInput.skipFully(synchronizedHeader.frameSize);
+        return localObject;
+      }
+      paramExtractorInput.resetPeekPosition();
+      return null;
+    }
+    localObject = XingSeeker.create(paramExtractorInput.getLength(), paramExtractorInput.getPosition(), synchronizedHeader, (ParsableByteArray)localObject);
+    if ((localObject != null) && (!gaplessInfoHolder.hasGaplessInfo()))
+    {
+      paramExtractorInput.resetPeekPosition();
+      paramExtractorInput.advancePeekPosition(i + 141);
+      paramExtractorInput.peekFully(scratch.data, 0, 3);
+      scratch.setPosition(0);
+      gaplessInfoHolder.setFromXingHeaderValue(scratch.readUnsignedInt24());
+    }
+    paramExtractorInput.skipFully(synchronizedHeader.frameSize);
+    if ((localObject != null) && (!((SeekMap)localObject).isSeekable()) && (j == SEEK_HEADER_INFO)) {
+      return getConstantBitrateSeeker(paramExtractorInput);
+    }
+    return localObject;
+  }
+  
+  private boolean peekEndOfStreamOrHeader(ExtractorInput paramExtractorInput)
+    throws IOException, InterruptedException
+  {
+    if ((seeker == null) || (paramExtractorInput.getPeekPosition() != seeker.getDataEndPosition())) {
+      return !paramExtractorInput.peekFully(scratch.data, 0, 4, true);
+    }
+    return true;
+  }
+  
+  private int readSample(ExtractorInput paramExtractorInput)
+    throws IOException, InterruptedException
+  {
+    if (sampleBytesRemaining == 0)
+    {
+      paramExtractorInput.resetPeekPosition();
+      if (peekEndOfStreamOrHeader(paramExtractorInput)) {
+        return -1;
+      }
+      scratch.setPosition(0);
+      i = scratch.readInt();
+      if ((headersMatch(i, synchronizedHeaderData)) && (MpegAudioHeader.getFrameSize(i) != -1))
+      {
+        MpegAudioHeader.populateHeader(i, synchronizedHeader);
+        if (basisTimeUs == -9223372036854775807L)
+        {
+          basisTimeUs = seeker.getTimeUs(paramExtractorInput.getPosition());
+          if (forcedFirstSampleTimestampUs != -9223372036854775807L)
+          {
+            l1 = seeker.getTimeUs(0L);
+            basisTimeUs += forcedFirstSampleTimestampUs - l1;
+          }
+        }
+        sampleBytesRemaining = synchronizedHeader.frameSize;
+      }
+      else
+      {
+        paramExtractorInput.skipFully(1);
+        synchronizedHeaderData = 0;
+        return 0;
+      }
+    }
+    int i = trackOutput.sampleData(paramExtractorInput, sampleBytesRemaining, true);
+    if (i == -1) {
+      return -1;
+    }
+    sampleBytesRemaining -= i;
+    if (sampleBytesRemaining > 0) {
+      return 0;
+    }
+    long l1 = basisTimeUs;
+    long l2 = samplesRead * 1000000L / synchronizedHeader.sampleRate;
+    trackOutput.sampleMetadata(l1 + l2, 1, synchronizedHeader.frameSize, 0, null);
+    samplesRead += synchronizedHeader.samplesPerFrame;
+    sampleBytesRemaining = 0;
+    return 0;
+  }
+  
+  private boolean synchronize(ExtractorInput paramExtractorInput, boolean paramBoolean)
+    throws IOException, InterruptedException
+  {
+    int m;
+    if (paramBoolean) {
+      m = 16384;
+    } else {
+      m = 131072;
+    }
+    paramExtractorInput.resetPeekPosition();
+    int i;
+    int n;
+    int j;
+    int k;
+    if (paramExtractorInput.getPosition() == 0L)
+    {
+      if ((flags & 0x2) == 0) {
+        i = 1;
+      } else {
+        i = 0;
+      }
+      Id3Decoder.FramePredicate localFramePredicate;
+      if (i != 0) {
+        localFramePredicate = null;
+      } else {
+        localFramePredicate = REQUIRED_ID3_FRAME_PREDICATE;
+      }
+      metadata = id3Peeker.peekId3Data(paramExtractorInput, localFramePredicate);
+      if (metadata != null) {
+        gaplessInfoHolder.setFromMetadata(metadata);
+      }
+      n = (int)paramExtractorInput.getPeekPosition();
+      if (!paramBoolean) {
+        paramExtractorInput.skipFully(n);
+      }
+      i = 0;
+      j = 0;
+      k = 0;
+    }
+    else
+    {
+      i = 0;
+      j = 0;
+      k = 0;
+      n = 0;
+    }
+    for (;;)
+    {
+      int i1;
+      int i2;
+      if (peekEndOfStreamOrHeader(paramExtractorInput))
+      {
+        if (i <= 0) {
+          throw new EOFException();
+        }
+      }
+      else
+      {
+        scratch.setPosition(0);
+        i1 = scratch.readInt();
+        if ((j == 0) || (headersMatch(i1, j)))
+        {
+          i2 = MpegAudioHeader.getFrameSize(i1);
+          if (i2 != -1) {}
+        }
+        else
+        {
+          i = k + 1;
+          if (k == m)
+          {
+            if (paramBoolean) {
+              return false;
+            }
+            throw new ParserException("Searched too many bytes.");
+          }
+          if (paramBoolean)
+          {
+            paramExtractorInput.resetPeekPosition();
+            paramExtractorInput.advancePeekPosition(n + i);
+          }
+          else
+          {
+            paramExtractorInput.skipFully(1);
+          }
+          k = i;
+          i = 0;
+          j = 0;
+          continue;
+        }
+        i += 1;
+        if (i == 1)
+        {
+          MpegAudioHeader.populateHeader(i1, synchronizedHeader);
+          break label342;
+        }
+        i1 = j;
+        if (i != 4) {
+          break label342;
+        }
+      }
+      if (paramBoolean) {
+        paramExtractorInput.skipFully(n + k);
+      } else {
+        paramExtractorInput.resetPeekPosition();
+      }
+      synchronizedHeaderData = j;
+      return true;
+      label342:
+      paramExtractorInput.advancePeekPosition(i2 - 4);
+      j = i1;
+    }
+  }
+  
+  public void init(ExtractorOutput paramExtractorOutput)
+  {
+    extractorOutput = paramExtractorOutput;
+    trackOutput = extractorOutput.track(0, 1);
+    extractorOutput.endTracks();
+  }
+  
+  public int read(ExtractorInput paramExtractorInput, PositionHolder paramPositionHolder)
+    throws IOException, InterruptedException
+  {
+    if (synchronizedHeaderData == 0) {}
+    try
+    {
+      synchronize(paramExtractorInput, false);
+    }
+    catch (EOFException paramExtractorInput)
+    {
+      Object localObject;
+      String str;
+      int i;
+      int j;
+      int k;
+      int m;
+      for (;;) {}
+    }
+    return -1;
+    if (seeker == null)
+    {
+      paramPositionHolder = maybeReadSeekFrame(paramExtractorInput);
+      localObject = maybeHandleSeekMetadata(metadata, paramExtractorInput.getPosition());
+      if (localObject != null) {
+        seeker = ((Seeker)localObject);
+      } else if (paramPositionHolder != null) {
+        seeker = paramPositionHolder;
+      }
+      if ((seeker == null) || ((!seeker.isSeekable()) && ((flags & 0x1) != 0))) {
+        seeker = getConstantBitrateSeeker(paramExtractorInput);
+      }
+      extractorOutput.seekMap(seeker);
+      localObject = trackOutput;
+      str = synchronizedHeader.mimeType;
+      i = synchronizedHeader.channels;
+      j = synchronizedHeader.sampleRate;
+      k = gaplessInfoHolder.encoderDelay;
+      m = gaplessInfoHolder.encoderPadding;
+      if ((flags & 0x2) != 0) {}
+      for (paramPositionHolder = null;; paramPositionHolder = metadata) {
+        break;
+      }
+      ((TrackOutput)localObject).format(Format.createAudioSampleFormat(null, str, null, -1, 4096, i, j, -1, k, m, null, null, 0, null, paramPositionHolder));
+    }
+    return readSample(paramExtractorInput);
+  }
+  
+  public void release() {}
+  
+  public void seek(long paramLong1, long paramLong2)
+  {
+    synchronizedHeaderData = 0;
+    basisTimeUs = -9223372036854775807L;
+    samplesRead = 0L;
+    sampleBytesRemaining = 0;
+  }
+  
+  public boolean sniff(ExtractorInput paramExtractorInput)
+    throws IOException, InterruptedException
+  {
+    return synchronize(paramExtractorInput, true);
+  }
+  
+  @Documented
+  @Retention(RetentionPolicy.SOURCE)
+  public static @interface Flags {}
+  
+  static abstract interface Seeker
+    extends SeekMap
+  {
+    public abstract long getDataEndPosition();
+    
+    public abstract long getTimeUs(long paramLong);
+  }
+}

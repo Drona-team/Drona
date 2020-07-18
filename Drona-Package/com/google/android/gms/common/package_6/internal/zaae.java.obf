@@ -1,0 +1,73 @@
+package com.google.android.gms.common.api.internal;
+
+import android.app.Activity;
+import androidx.collection.ArraySet;
+import com.google.android.gms.common.ConnectionResult;
+import com.google.android.gms.common.internal.Preconditions;
+
+public class zaae
+  extends zal
+{
+  private GoogleApiManager zabm;
+  private final ArraySet<zai<?>> zafp = new ArraySet();
+  
+  private zaae(LifecycleFragment paramLifecycleFragment)
+  {
+    super(paramLifecycleFragment);
+    mLifecycleFragment.addCallback("ConnectionlessLifecycleHelper", this);
+  }
+  
+  public static void zaa(Activity paramActivity, GoogleApiManager paramGoogleApiManager, zai<?> paramZai)
+  {
+    LifecycleFragment localLifecycleFragment = getFragment(paramActivity);
+    zaae localZaae = (zaae)localLifecycleFragment.getCallbackOrNull("ConnectionlessLifecycleHelper", zaae.class);
+    paramActivity = localZaae;
+    if (localZaae == null) {
+      paramActivity = new zaae(localLifecycleFragment);
+    }
+    zabm = paramGoogleApiManager;
+    Preconditions.checkNotNull(paramZai, "ApiKey cannot be null");
+    zafp.add(paramZai);
+    paramGoogleApiManager.zaa(paramActivity);
+  }
+  
+  private final void zaak()
+  {
+    if (!zafp.isEmpty()) {
+      zabm.zaa(this);
+    }
+  }
+  
+  public void onResume()
+  {
+    super.onResume();
+    zaak();
+  }
+  
+  public void onStart()
+  {
+    super.onStart();
+    zaak();
+  }
+  
+  public void onStop()
+  {
+    super.onStop();
+    zabm.zab(this);
+  }
+  
+  protected final void zaa(ConnectionResult paramConnectionResult, int paramInt)
+  {
+    zabm.zaa(paramConnectionResult, paramInt);
+  }
+  
+  final ArraySet<zai<?>> zaaj()
+  {
+    return zafp;
+  }
+  
+  protected final void zao()
+  {
+    zabm.zao();
+  }
+}

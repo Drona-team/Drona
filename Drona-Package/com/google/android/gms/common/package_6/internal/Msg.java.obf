@@ -1,0 +1,61 @@
+package com.google.android.gms.common.api.internal;
+
+import com.google.android.gms.common.api.Api;
+import com.google.android.gms.common.api.Api.ApiOptions;
+import com.google.android.gms.common.internal.Objects;
+
+public final class zai<O extends Api.ApiOptions>
+{
+  private final Api<O> mApi;
+  private final O zabh;
+  private final boolean zacu;
+  private final int zacv;
+  
+  private zai(Api<O> paramApi)
+  {
+    zacu = true;
+    mApi = paramApi;
+    zabh = null;
+    zacv = System.identityHashCode(this);
+  }
+  
+  private zai(Api<O> paramApi, O paramO)
+  {
+    zacu = false;
+    mApi = paramApi;
+    zabh = paramO;
+    zacv = Objects.hashCode(new Object[] { mApi, zabh });
+  }
+  
+  public static <O extends Api.ApiOptions> zai<O> zaa(Api<O> paramApi)
+  {
+    return new zai(paramApi);
+  }
+  
+  public static <O extends Api.ApiOptions> zai<O> zaa(Api<O> paramApi, O paramO)
+  {
+    return new zai(paramApi, paramO);
+  }
+  
+  public final boolean equals(Object paramObject)
+  {
+    if (paramObject == this) {
+      return true;
+    }
+    if (!(paramObject instanceof zai)) {
+      return false;
+    }
+    paramObject = (zai)paramObject;
+    return (!zacu) && (!zacu) && (Objects.equal(mApi, mApi)) && (Objects.equal(zabh, zabh));
+  }
+  
+  public final int hashCode()
+  {
+    return zacv;
+  }
+  
+  public final String zan()
+  {
+    return mApi.getName();
+  }
+}

@@ -1,0 +1,21 @@
+package com.facebook.react.devsupport;
+
+import android.app.Activity;
+import androidx.annotation.Nullable;
+import com.facebook.react.bridge.JavaJSExecutor.Factory;
+import com.facebook.react.bridge.JavaScriptExecutorFactory;
+import com.facebook.react.bridge.NativeDeltaClient;
+
+public abstract interface ReactInstanceManagerDevHelper
+{
+  @Nullable
+  public abstract Activity getCurrentActivity();
+  
+  public abstract JavaScriptExecutorFactory getJavaScriptExecutorFactory();
+  
+  public abstract void onJSBundleLoadedFromServer(@Nullable NativeDeltaClient paramNativeDeltaClient);
+  
+  public abstract void onReloadWithJSDebugger(JavaJSExecutor.Factory paramFactory);
+  
+  public abstract void toggleElementInspector();
+}

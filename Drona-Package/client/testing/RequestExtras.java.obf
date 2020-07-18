@@ -1,0 +1,107 @@
+package ai.api;
+
+import ai.api.model.AIContext;
+import ai.api.model.AIRequest;
+import ai.api.model.Entity;
+import ai.api.model.Location;
+import java.util.List;
+import java.util.Map;
+
+public class RequestExtras
+{
+  private Map<String, String> additionalHeaders;
+  private List<AIContext> contexts;
+  private List<Entity> entities;
+  private Location location;
+  private Boolean resetContexts;
+  
+  public RequestExtras()
+  {
+    contexts = null;
+    entities = null;
+  }
+  
+  public RequestExtras(List<AIContext> paramList, List<Entity> paramList1)
+  {
+    contexts = paramList;
+    entities = paramList1;
+  }
+  
+  public void copyTo(AIRequest paramAIRequest)
+  {
+    if (hasContexts()) {
+      paramAIRequest.setContexts(getContexts());
+    }
+    if (hasEntities()) {
+      paramAIRequest.setEntities(getEntities());
+    }
+    if (getResetContexts() != null) {
+      paramAIRequest.setResetContexts(getResetContexts());
+    }
+  }
+  
+  public Map<String, String> getAdditionalHeaders()
+  {
+    return additionalHeaders;
+  }
+  
+  public List<AIContext> getContexts()
+  {
+    return contexts;
+  }
+  
+  public List<Entity> getEntities()
+  {
+    return entities;
+  }
+  
+  public Location getLocation()
+  {
+    return location;
+  }
+  
+  public Boolean getResetContexts()
+  {
+    return resetContexts;
+  }
+  
+  public boolean hasAdditionalHeaders()
+  {
+    return (additionalHeaders != null) && (!additionalHeaders.isEmpty());
+  }
+  
+  public boolean hasContexts()
+  {
+    return (contexts != null) && (!contexts.isEmpty());
+  }
+  
+  public boolean hasEntities()
+  {
+    return (entities != null) && (!entities.isEmpty());
+  }
+  
+  public void setAdditionalHeaders(Map<String, String> paramMap)
+  {
+    additionalHeaders = paramMap;
+  }
+  
+  public void setContexts(List<AIContext> paramList)
+  {
+    contexts = paramList;
+  }
+  
+  public void setEntities(List<Entity> paramList)
+  {
+    entities = paramList;
+  }
+  
+  public void setLocation(Location paramLocation)
+  {
+    location = paramLocation;
+  }
+  
+  public void setResetContexts(boolean paramBoolean)
+  {
+    resetContexts = Boolean.valueOf(paramBoolean);
+  }
+}

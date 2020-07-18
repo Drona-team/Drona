@@ -1,0 +1,133 @@
+package com.google.android.gms.common.api.internal;
+
+import android.os.Looper;
+import android.os.Message;
+import androidx.annotation.NonNull;
+import com.google.android.gms.common.annotation.KeepForSdk;
+import com.google.android.gms.common.internal.Preconditions;
+import com.google.android.gms.internal.base.zap;
+
+@KeepForSdk
+public final class ListenerHolder<L>
+{
+  private final zaa zajj;
+  private volatile L zajk;
+  private final ListenerKey<L> zajl;
+  
+  @KeepForSdk
+  ListenerHolder(@NonNull Looper paramLooper, @NonNull L paramL, @NonNull String paramString)
+  {
+    zajj = new zaa(paramLooper);
+    zajk = Preconditions.checkNotNull(paramL, "Listener must not be null");
+    zajl = new ListenerKey(paramL, Preconditions.checkNotEmpty(paramString));
+  }
+  
+  @KeepForSdk
+  public final void clear()
+  {
+    zajk = null;
+  }
+  
+  @NonNull
+  @KeepForSdk
+  public final ListenerKey<L> getListenerKey()
+  {
+    return zajl;
+  }
+  
+  @KeepForSdk
+  public final boolean hasListener()
+  {
+    return zajk != null;
+  }
+  
+  @KeepForSdk
+  public final void notifyListener(Notifier<? super L> paramNotifier)
+  {
+    Preconditions.checkNotNull(paramNotifier, "Notifier must not be null");
+    paramNotifier = zajj.obtainMessage(1, paramNotifier);
+    zajj.sendMessage(paramNotifier);
+  }
+  
+  @KeepForSdk
+  final void notifyListenerInternal(Notifier<? super L> paramNotifier)
+  {
+    Object localObject = zajk;
+    if (localObject == null)
+    {
+      paramNotifier.onNotifyListenerFailed();
+      return;
+    }
+    try
+    {
+      paramNotifier.notifyListener(localObject);
+      return;
+    }
+    catch (RuntimeException localRuntimeException)
+    {
+      paramNotifier.onNotifyListenerFailed();
+      throw localRuntimeException;
+    }
+  }
+  
+  @KeepForSdk
+  public static final class ListenerKey<L>
+  {
+    private final L zajk;
+    private final String zajn;
+    
+    @KeepForSdk
+    ListenerKey(L paramL, String paramString)
+    {
+      zajk = paramL;
+      zajn = paramString;
+    }
+    
+    public final boolean equals(Object paramObject)
+    {
+      if (this == paramObject) {
+        return true;
+      }
+      if (!(paramObject instanceof ListenerKey)) {
+        return false;
+      }
+      paramObject = (ListenerKey)paramObject;
+      return (zajk == zajk) && (zajn.equals(zajn));
+    }
+    
+    public final int hashCode()
+    {
+      return System.identityHashCode(zajk) * 31 + zajn.hashCode();
+    }
+  }
+  
+  @KeepForSdk
+  public static abstract interface Notifier<L>
+  {
+    @KeepForSdk
+    public abstract void notifyListener(L paramL);
+    
+    @KeepForSdk
+    public abstract void onNotifyListenerFailed();
+  }
+  
+  private final class zaa
+    extends zap
+  {
+    public zaa(Looper paramLooper)
+    {
+      super();
+    }
+    
+    public final void handleMessage(Message paramMessage)
+    {
+      int i = what;
+      boolean bool = true;
+      if (i != 1) {
+        bool = false;
+      }
+      Preconditions.checkArgument(bool);
+      notifyListenerInternal((ListenerHolder.Notifier)obj);
+    }
+  }
+}

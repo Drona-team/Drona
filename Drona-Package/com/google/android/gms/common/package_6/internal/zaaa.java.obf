@@ -1,0 +1,98 @@
+package com.google.android.gms.common.api.internal;
+
+import android.util.Log;
+import androidx.annotation.NonNull;
+import androidx.collection.ArrayMap;
+import com.google.android.gms.common.ConnectionResult;
+import com.google.android.gms.common.api.AvailabilityException;
+import com.google.android.gms.common.api.GoogleApi;
+import com.google.android.gms.tasks.OnCompleteListener;
+import com.google.android.gms.tasks.Task;
+import java.util.Collection;
+import java.util.Collections;
+import java.util.Iterator;
+import java.util.Map;
+import java.util.concurrent.locks.Condition;
+import java.util.concurrent.locks.Lock;
+
+final class zaaa
+  implements OnCompleteListener<Map<zai<?>, String>>
+{
+  private SignInConnectionListener zafj;
+  
+  zaaa(zax paramZax, SignInConnectionListener paramSignInConnectionListener)
+  {
+    zafj = paramSignInConnectionListener;
+  }
+  
+  final void cancel()
+  {
+    zafj.onComplete();
+  }
+  
+  public final void onComplete(@NonNull Task<Map<zai<?>, String>> paramTask)
+  {
+    zax.zaa(zafi).lock();
+    try
+    {
+      if (!zax.zab(zafi))
+      {
+        zafj.onComplete();
+        return;
+      }
+      Object localObject;
+      if (paramTask.isSuccessful())
+      {
+        zax.zab(zafi, new ArrayMap(zax.zam(zafi).size()));
+        paramTask = zax.zam(zafi).values().iterator();
+        while (paramTask.hasNext())
+        {
+          localObject = (zaw)paramTask.next();
+          zax.zag(zafi).put(((GoogleApi)localObject).zak(), ConnectionResult.RESULT_SUCCESS);
+        }
+      }
+      if ((paramTask.getException() instanceof AvailabilityException))
+      {
+        paramTask = (AvailabilityException)paramTask.getException();
+        if (zax.zae(zafi))
+        {
+          zax.zab(zafi, new ArrayMap(zax.zam(zafi).size()));
+          localObject = zax.zam(zafi).values().iterator();
+          while (((Iterator)localObject).hasNext())
+          {
+            zaw localZaw = (zaw)((Iterator)localObject).next();
+            zai localZai = localZaw.zak();
+            ConnectionResult localConnectionResult = paramTask.getConnectionResult(localZaw);
+            if (zax.zaa(zafi, localZaw, localConnectionResult)) {
+              zax.zag(zafi).put(localZai, new ConnectionResult(16));
+            } else {
+              zax.zag(zafi).put(localZai, localConnectionResult);
+            }
+          }
+        }
+        zax.zab(zafi, paramTask.zaj());
+      }
+      else
+      {
+        Log.e("ConnectionlessGAC", "Unexpected availability exception", paramTask.getException());
+        zax.zab(zafi, Collections.emptyMap());
+      }
+      if (zafi.isConnected())
+      {
+        zax.zad(zafi).putAll(zax.zag(zafi));
+        if (zax.zaf(zafi) == null)
+        {
+          zax.zai(zafi);
+          zax.zaj(zafi);
+          zax.zal(zafi).signalAll();
+        }
+      }
+      zafj.onComplete();
+      return;
+    }
+    finally
+    {
+      zax.zaa(zafi).unlock();
+    }
+  }
+}

@@ -1,0 +1,156 @@
+package expo.modules.ads.admob;
+
+import android.content.Context;
+import android.os.Bundle;
+import android.util.Log;
+import android.widget.FrameLayout;
+import android.widget.FrameLayout.LayoutParams;
+import androidx.annotation.NonNull;
+import com.google.ads.mediation.admob.AdMobAdapter;
+import com.google.android.gms.ads.AdListener;
+import com.google.android.gms.ads.AdSize;
+import com.google.android.gms.ads.doubleclick.AppEventListener;
+import com.google.android.gms.ads.doubleclick.PublisherAdRequest.Builder;
+import com.google.android.gms.ads.doubleclick.PublisherAdView;
+import org.unimodules.core.interfaces.services.EventEmitter;
+import org.unimodules.core.interfaces.services.EventEmitter.BaseEvent;
+
+public class PublisherBannerView
+  extends FrameLayout
+  implements AppEventListener
+{
+  private Bundle mAdditionalRequestParams;
+  private EventEmitter mEventEmitter;
+  
+  public PublisherBannerView(@NonNull Context paramContext, EventEmitter paramEventEmitter)
+  {
+    super(paramContext);
+    mEventEmitter = paramEventEmitter;
+    attachNewAdView();
+  }
+  
+  private void loadAd(PublisherAdView paramPublisherAdView)
+  {
+    if ((paramPublisherAdView.getAdSizes() != null) && (paramPublisherAdView.getAdUnitId() != null) && (mAdditionalRequestParams != null))
+    {
+      PublisherAdRequest.Builder localBuilder2 = new PublisherAdRequest.Builder().addNetworkExtrasBundle(AdMobAdapter.class, mAdditionalRequestParams);
+      String str = AdMobModule.getTestDeviceID();
+      PublisherAdRequest.Builder localBuilder1 = localBuilder2;
+      if (str != null) {
+        localBuilder1 = localBuilder2.addTestDevice(str);
+      }
+      paramPublisherAdView.loadAd(localBuilder1.build());
+    }
+  }
+  
+  private void sendEvent(PublisherBannerViewManager.Events paramEvents)
+  {
+    sendEvent(paramEvents, new Bundle());
+  }
+  
+  private void sendEvent(final PublisherBannerViewManager.Events paramEvents, final Bundle paramBundle)
+  {
+    mEventEmitter.emit(getId(), new EventEmitter.BaseEvent()
+    {
+      public Bundle getEventBody()
+      {
+        return paramBundle;
+      }
+      
+      public String getEventName()
+      {
+        return paramEvents.toString();
+      }
+    });
+  }
+  
+  protected void attachEvents()
+  {
+    final PublisherAdView localPublisherAdView = (PublisherAdView)getChildAt(0);
+    localPublisherAdView.setAdListener(new AdListener()
+    {
+      public void onAdClosed()
+      {
+        PublisherBannerView.this.sendEvent(PublisherBannerViewManager.Events.EVENT_WILL_DISMISS);
+      }
+      
+      public void onAdFailedToLoad(int paramAnonymousInt)
+      {
+        PublisherBannerView.this.sendEvent(PublisherBannerViewManager.Events.EVENT_ERROR, AdMobUtils.createEventForAdFailedToLoad(paramAnonymousInt));
+      }
+      
+      public void onAdLeftApplication()
+      {
+        PublisherBannerView.this.sendEvent(PublisherBannerViewManager.Events.EVENT_WILL_LEAVE_APP);
+      }
+      
+      public void onAdLoaded()
+      {
+        int i = localPublisherAdView.getAdSize().getWidthInPixels(getContext());
+        int j = localPublisherAdView.getAdSize().getHeightInPixels(getContext());
+        int k = localPublisherAdView.getLeft();
+        int m = localPublisherAdView.getTop();
+        localPublisherAdView.measure(i, j);
+        localPublisherAdView.layout(k, m, i + k, j + m);
+        PublisherBannerView.this.sendEvent(PublisherBannerViewManager.Events.EVENT_RECEIVE_AD);
+      }
+      
+      public void onAdOpened()
+      {
+        PublisherBannerView.this.sendEvent(PublisherBannerViewManager.Events.EVENT_WILL_PRESENT);
+      }
+    });
+  }
+  
+  protected void attachNewAdView()
+  {
+    PublisherAdView localPublisherAdView1 = new PublisherAdView(getContext());
+    localPublisherAdView1.setAppEventListener(this);
+    PublisherAdView localPublisherAdView2 = (PublisherAdView)getChildAt(0);
+    removeAllViews();
+    if (localPublisherAdView2 != null) {
+      localPublisherAdView2.destroy();
+    }
+    addView(localPublisherAdView1, new FrameLayout.LayoutParams(-1, -1));
+    attachEvents();
+  }
+  
+  public void onAppEvent(String paramString1, String paramString2)
+  {
+    Log.d("PublisherAdBanner", String.format("Received app event (%s, %s)", new Object[] { paramString1, paramString2 }));
+    Bundle localBundle = new Bundle();
+    localBundle.putString(paramString1, paramString2);
+    sendEvent(PublisherBannerViewManager.Events.EVENT_ADMOB_EVENT_RECEIVED, localBundle);
+  }
+  
+  public void setAdUnitID(String paramString)
+  {
+    AdSize[] arrayOfAdSize = ((PublisherAdView)getChildAt(0)).getAdSizes();
+    attachNewAdView();
+    PublisherAdView localPublisherAdView = (PublisherAdView)getChildAt(0);
+    localPublisherAdView.setAdUnitId(paramString);
+    localPublisherAdView.setAdSizes(arrayOfAdSize);
+    loadAd(localPublisherAdView);
+  }
+  
+  public void setAdditionalRequestParams(Bundle paramBundle)
+  {
+    if (!paramBundle.equals(mAdditionalRequestParams))
+    {
+      mAdditionalRequestParams = paramBundle;
+      loadAd((PublisherAdView)getChildAt(0));
+    }
+  }
+  
+  public void setBannerSize(String paramString)
+  {
+    paramString = AdMobUtils.getAdSizeFromString(paramString);
+    String str = ((PublisherAdView)getChildAt(0)).getAdUnitId();
+    attachNewAdView();
+    PublisherAdView localPublisherAdView = (PublisherAdView)getChildAt(0);
+    localPublisherAdView.setAdSizes(new AdSize[] { paramString });
+    localPublisherAdView.setAdUnitId(str);
+    sendEvent(PublisherBannerViewManager.Events.EVENT_SIZE_CHANGE, AdMobUtils.createEventForSizeChange(getContext(), paramString));
+    loadAd(localPublisherAdView);
+  }
+}

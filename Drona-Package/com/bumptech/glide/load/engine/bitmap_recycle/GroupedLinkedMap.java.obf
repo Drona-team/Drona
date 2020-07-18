@@ -1,0 +1,162 @@
+package com.bumptech.glide.load.engine.bitmap_recycle;
+
+import androidx.annotation.Nullable;
+import java.util.ArrayList;
+import java.util.HashMap;
+import java.util.List;
+import java.util.Map;
+
+class GroupedLinkedMap<K extends Poolable, V>
+{
+  private final LinkedEntry<K, V> head = new LinkedEntry();
+  private final Map<K, LinkedEntry<K, V>> keyToEntry = new HashMap();
+  
+  GroupedLinkedMap() {}
+  
+  private void makeHead(LinkedEntry<K, V> paramLinkedEntry)
+  {
+    removeEntry(paramLinkedEntry);
+    prev = head;
+    next = head.next;
+    updateEntry(paramLinkedEntry);
+  }
+  
+  private void makeTail(LinkedEntry<K, V> paramLinkedEntry)
+  {
+    removeEntry(paramLinkedEntry);
+    prev = head.prev;
+    next = head;
+    updateEntry(paramLinkedEntry);
+  }
+  
+  private static <K, V> void removeEntry(LinkedEntry<K, V> paramLinkedEntry)
+  {
+    prev.next = next;
+    next.prev = prev;
+  }
+  
+  private static <K, V> void updateEntry(LinkedEntry<K, V> paramLinkedEntry)
+  {
+    next.prev = paramLinkedEntry;
+    prev.next = paramLinkedEntry;
+  }
+  
+  @Nullable
+  public V get(K paramK)
+  {
+    LinkedEntry localLinkedEntry = (LinkedEntry)keyToEntry.get(paramK);
+    if (localLinkedEntry == null)
+    {
+      localLinkedEntry = new LinkedEntry(paramK);
+      keyToEntry.put(paramK, localLinkedEntry);
+      paramK = localLinkedEntry;
+    }
+    else
+    {
+      paramK.offer();
+      paramK = localLinkedEntry;
+    }
+    makeHead(paramK);
+    return paramK.removeLast();
+  }
+  
+  public void put(K paramK, V paramV)
+  {
+    LinkedEntry localLinkedEntry = (LinkedEntry)keyToEntry.get(paramK);
+    if (localLinkedEntry == null)
+    {
+      localLinkedEntry = new LinkedEntry(paramK);
+      makeTail(localLinkedEntry);
+      keyToEntry.put(paramK, localLinkedEntry);
+      paramK = localLinkedEntry;
+    }
+    else
+    {
+      paramK.offer();
+      paramK = localLinkedEntry;
+    }
+    paramK.add(paramV);
+  }
+  
+  @Nullable
+  public V removeLast()
+  {
+    for (LinkedEntry localLinkedEntry = head.prev; !localLinkedEntry.equals(head); localLinkedEntry = prev)
+    {
+      Object localObject = localLinkedEntry.removeLast();
+      if (localObject != null) {
+        return localObject;
+      }
+      removeEntry(localLinkedEntry);
+      keyToEntry.remove(key);
+      ((Poolable)key).offer();
+    }
+    return null;
+  }
+  
+  public String toString()
+  {
+    StringBuilder localStringBuilder = new StringBuilder("GroupedLinkedMap( ");
+    LinkedEntry localLinkedEntry = head.next;
+    int i = 0;
+    while (!localLinkedEntry.equals(head))
+    {
+      i = 1;
+      localStringBuilder.append('{');
+      localStringBuilder.append(key);
+      localStringBuilder.append(':');
+      localStringBuilder.append(localLinkedEntry.size());
+      localStringBuilder.append("}, ");
+      localLinkedEntry = next;
+    }
+    if (i != 0) {
+      localStringBuilder.delete(localStringBuilder.length() - 2, localStringBuilder.length());
+    }
+    localStringBuilder.append(" )");
+    return localStringBuilder.toString();
+  }
+  
+  private static class LinkedEntry<K, V>
+  {
+    final K key;
+    LinkedEntry<K, V> next = this;
+    LinkedEntry<K, V> prev = this;
+    private List<V> values;
+    
+    LinkedEntry()
+    {
+      this(null);
+    }
+    
+    LinkedEntry(K paramK)
+    {
+      key = paramK;
+    }
+    
+    public void add(V paramV)
+    {
+      if (values == null) {
+        values = new ArrayList();
+      }
+      values.add(paramV);
+    }
+    
+    @Nullable
+    public V removeLast()
+    {
+      int i = size();
+      if (i > 0) {
+        return values.remove(i - 1);
+      }
+      return null;
+    }
+    
+    public int size()
+    {
+      if (values != null) {
+        return values.size();
+      }
+      return 0;
+    }
+  }
+}

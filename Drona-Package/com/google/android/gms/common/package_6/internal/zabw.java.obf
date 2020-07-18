@@ -1,0 +1,16 @@
+package com.google.android.gms.common.api.internal;
+
+import androidx.annotation.NonNull;
+import com.google.android.gms.common.api.Api.AnyClient;
+
+public final class zabw
+{
+  public final RegisterListenerMethod<Api.AnyClient, ?> zajx;
+  public final UnregisterListenerMethod<Api.AnyClient, ?> zajy;
+  
+  public zabw(@NonNull RegisterListenerMethod<Api.AnyClient, ?> paramRegisterListenerMethod, @NonNull UnregisterListenerMethod<Api.AnyClient, ?> paramUnregisterListenerMethod)
+  {
+    zajx = paramRegisterListenerMethod;
+    zajy = paramUnregisterListenerMethod;
+  }
+}

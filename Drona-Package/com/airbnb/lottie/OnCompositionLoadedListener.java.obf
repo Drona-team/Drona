@@ -1,0 +1,9 @@
+package com.airbnb.lottie;
+
+import androidx.annotation.Nullable;
+
+@Deprecated
+public abstract interface OnCompositionLoadedListener
+{
+  public abstract void onCompositionLoaded(@Nullable LottieComposition paramLottieComposition);
+}

@@ -1,0 +1,166 @@
+package androidx.appcompat.widget;
+
+import android.content.Context;
+import android.content.res.ColorStateList;
+import android.graphics.PorterDuff.Mode;
+import android.graphics.drawable.Drawable;
+import android.util.AttributeSet;
+import android.widget.RadioButton;
+import androidx.annotation.DrawableRes;
+import androidx.annotation.Nullable;
+import androidx.annotation.RestrictTo;
+import androidx.appcompat.R.attr;
+import androidx.appcompat.content.res.AppCompatResources;
+import androidx.core.view.TintableBackgroundView;
+import androidx.core.widget.TintableCompoundButton;
+
+public class AppCompatRadioButton
+  extends RadioButton
+  implements TintableCompoundButton, TintableBackgroundView
+{
+  private final AppCompatBackgroundHelper mBackgroundTintHelper;
+  private final AppCompatCompoundButtonHelper mCompoundButtonHelper = new AppCompatCompoundButtonHelper(this);
+  private final AppCompatTextHelper mTextHelper;
+  
+  public AppCompatRadioButton(Context paramContext)
+  {
+    this(paramContext, null);
+  }
+  
+  public AppCompatRadioButton(Context paramContext, AttributeSet paramAttributeSet)
+  {
+    this(paramContext, paramAttributeSet, R.attr.radioButtonStyle);
+  }
+  
+  public AppCompatRadioButton(Context paramContext, AttributeSet paramAttributeSet, int paramInt)
+  {
+    super(TintContextWrapper.wrap(paramContext), paramAttributeSet, paramInt);
+    mCompoundButtonHelper.loadFromAttributes(paramAttributeSet, paramInt);
+    mBackgroundTintHelper = new AppCompatBackgroundHelper(this);
+    mBackgroundTintHelper.loadFromAttributes(paramAttributeSet, paramInt);
+    mTextHelper = new AppCompatTextHelper(this);
+    mTextHelper.loadFromAttributes(paramAttributeSet, paramInt);
+  }
+  
+  protected void drawableStateChanged()
+  {
+    super.drawableStateChanged();
+    if (mBackgroundTintHelper != null) {
+      mBackgroundTintHelper.applySupportBackgroundTint();
+    }
+    if (mTextHelper != null) {
+      mTextHelper.applyCompoundDrawablesTints();
+    }
+  }
+  
+  public int getCompoundPaddingLeft()
+  {
+    int j = super.getCompoundPaddingLeft();
+    int i = j;
+    if (mCompoundButtonHelper != null) {
+      i = mCompoundButtonHelper.getCompoundPaddingLeft(j);
+    }
+    return i;
+  }
+  
+  @Nullable
+  @RestrictTo({androidx.annotation.RestrictTo.Scope.LIBRARY_GROUP_PREFIX})
+  public ColorStateList getSupportBackgroundTintList()
+  {
+    if (mBackgroundTintHelper != null) {
+      return mBackgroundTintHelper.getSupportBackgroundTintList();
+    }
+    return null;
+  }
+  
+  @Nullable
+  @RestrictTo({androidx.annotation.RestrictTo.Scope.LIBRARY_GROUP_PREFIX})
+  public PorterDuff.Mode getSupportBackgroundTintMode()
+  {
+    if (mBackgroundTintHelper != null) {
+      return mBackgroundTintHelper.getSupportBackgroundTintMode();
+    }
+    return null;
+  }
+  
+  @Nullable
+  @RestrictTo({androidx.annotation.RestrictTo.Scope.LIBRARY_GROUP_PREFIX})
+  public ColorStateList getSupportButtonTintList()
+  {
+    if (mCompoundButtonHelper != null) {
+      return mCompoundButtonHelper.getSupportButtonTintList();
+    }
+    return null;
+  }
+  
+  @Nullable
+  @RestrictTo({androidx.annotation.RestrictTo.Scope.LIBRARY_GROUP_PREFIX})
+  public PorterDuff.Mode getSupportButtonTintMode()
+  {
+    if (mCompoundButtonHelper != null) {
+      return mCompoundButtonHelper.getSupportButtonTintMode();
+    }
+    return null;
+  }
+  
+  public void setBackgroundDrawable(Drawable paramDrawable)
+  {
+    super.setBackgroundDrawable(paramDrawable);
+    if (mBackgroundTintHelper != null) {
+      mBackgroundTintHelper.onSetBackgroundDrawable(paramDrawable);
+    }
+  }
+  
+  public void setBackgroundResource(@DrawableRes int paramInt)
+  {
+    super.setBackgroundResource(paramInt);
+    if (mBackgroundTintHelper != null) {
+      mBackgroundTintHelper.onSetBackgroundResource(paramInt);
+    }
+  }
+  
+  public void setButtonDrawable(@DrawableRes int paramInt)
+  {
+    setButtonDrawable(AppCompatResources.getDrawable(getContext(), paramInt));
+  }
+  
+  public void setButtonDrawable(Drawable paramDrawable)
+  {
+    super.setButtonDrawable(paramDrawable);
+    if (mCompoundButtonHelper != null) {
+      mCompoundButtonHelper.onSetButtonDrawable();
+    }
+  }
+  
+  @RestrictTo({androidx.annotation.RestrictTo.Scope.LIBRARY_GROUP_PREFIX})
+  public void setSupportBackgroundTintList(@Nullable ColorStateList paramColorStateList)
+  {
+    if (mBackgroundTintHelper != null) {
+      mBackgroundTintHelper.setSupportBackgroundTintList(paramColorStateList);
+    }
+  }
+  
+  @RestrictTo({androidx.annotation.RestrictTo.Scope.LIBRARY_GROUP_PREFIX})
+  public void setSupportBackgroundTintMode(@Nullable PorterDuff.Mode paramMode)
+  {
+    if (mBackgroundTintHelper != null) {
+      mBackgroundTintHelper.setSupportBackgroundTintMode(paramMode);
+    }
+  }
+  
+  @RestrictTo({androidx.annotation.RestrictTo.Scope.LIBRARY_GROUP_PREFIX})
+  public void setSupportButtonTintList(@Nullable ColorStateList paramColorStateList)
+  {
+    if (mCompoundButtonHelper != null) {
+      mCompoundButtonHelper.setSupportButtonTintList(paramColorStateList);
+    }
+  }
+  
+  @RestrictTo({androidx.annotation.RestrictTo.Scope.LIBRARY_GROUP_PREFIX})
+  public void setSupportButtonTintMode(@Nullable PorterDuff.Mode paramMode)
+  {
+    if (mCompoundButtonHelper != null) {
+      mCompoundButtonHelper.setSupportButtonTintMode(paramMode);
+    }
+  }
+}

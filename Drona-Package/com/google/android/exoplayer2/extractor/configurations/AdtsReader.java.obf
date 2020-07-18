@@ -1,0 +1,409 @@
+package com.google.android.exoplayer2.extractor.ts;
+
+import android.util.Pair;
+import com.google.android.exoplayer2.Format;
+import com.google.android.exoplayer2.ParserException;
+import com.google.android.exoplayer2.extractor.DummyTrackOutput;
+import com.google.android.exoplayer2.extractor.ExtractorOutput;
+import com.google.android.exoplayer2.extractor.TrackOutput;
+import com.google.android.exoplayer2.util.CodecSpecificDataUtil;
+import com.google.android.exoplayer2.util.Log;
+import com.google.android.exoplayer2.util.ParsableBitArray;
+import com.google.android.exoplayer2.util.ParsableByteArray;
+import java.util.Arrays;
+import java.util.Collections;
+
+public final class AdtsReader
+  implements ElementaryStreamReader
+{
+  private static final int CRC_SIZE = 2;
+  private static final int HEADER_SIZE = 5;
+  private static final int ID3_HEADER_SIZE = 10;
+  private static final byte[] ID3_IDENTIFIER = { 73, 68, 51 };
+  private static final int ID3_SIZE_OFFSET = 6;
+  private static final int MATCH_STATE_FF = 512;
+  private static final int MATCH_STATE_I = 768;
+  private static final int MATCH_STATE_ID = 1024;
+  private static final int MATCH_STATE_START = 256;
+  private static final int MATCH_STATE_VALUE_SHIFT = 8;
+  private static final int STATE_CHECKING_ADTS_HEADER = 1;
+  private static final int STATE_FINDING_SAMPLE = 0;
+  private static final int STATE_READING_ADTS_HEADER = 3;
+  private static final int STATE_READING_ID3_HEADER = 2;
+  private static final int STATE_READING_SAMPLE = 4;
+  private static final String TAG = "AdtsReader";
+  private static final int VERSION_UNSET = -1;
+  private final ParsableBitArray adtsScratch = new ParsableBitArray(new byte[7]);
+  private int bytesRead;
+  private int currentFrameVersion;
+  private TrackOutput currentOutput;
+  private long currentSampleDuration;
+  private final boolean exposeId3;
+  private int firstFrameSampleRateIndex;
+  private int firstFrameVersion;
+  private String formatId;
+  private boolean foundFirstFrame;
+  private boolean hasCrc;
+  private boolean hasOutputFormat;
+  private final ParsableByteArray id3HeaderBuffer = new ParsableByteArray(Arrays.copyOf(ID3_IDENTIFIER, 10));
+  private TrackOutput id3Output;
+  private final String language;
+  private int matchState;
+  private TrackOutput output;
+  private long sampleDurationUs;
+  private int sampleSize;
+  private int state;
+  private long timeUs;
+  
+  public AdtsReader(boolean paramBoolean)
+  {
+    this(paramBoolean, null);
+  }
+  
+  public AdtsReader(boolean paramBoolean, String paramString)
+  {
+    setFindingSampleState();
+    firstFrameVersion = -1;
+    firstFrameSampleRateIndex = -1;
+    sampleDurationUs = -9223372036854775807L;
+    exposeId3 = paramBoolean;
+    language = paramString;
+  }
+  
+  private void checkAdtsHeader(ParsableByteArray paramParsableByteArray)
+  {
+    if (paramParsableByteArray.bytesLeft() == 0) {
+      return;
+    }
+    adtsScratch.data[0] = data[paramParsableByteArray.getPosition()];
+    adtsScratch.setPosition(2);
+    int i = adtsScratch.readBits(4);
+    if ((firstFrameSampleRateIndex != -1) && (i != firstFrameSampleRateIndex))
+    {
+      resetSync();
+      return;
+    }
+    if (!foundFirstFrame)
+    {
+      foundFirstFrame = true;
+      firstFrameVersion = currentFrameVersion;
+      firstFrameSampleRateIndex = i;
+    }
+    setReadingAdtsHeaderState();
+  }
+  
+  private boolean checkSyncPositionValid(ParsableByteArray paramParsableByteArray, int paramInt)
+  {
+    paramParsableByteArray.setPosition(paramInt + 1);
+    byte[] arrayOfByte = adtsScratch.data;
+    boolean bool = true;
+    if (!tryRead(paramParsableByteArray, arrayOfByte, 1)) {
+      return false;
+    }
+    adtsScratch.setPosition(4);
+    int i = adtsScratch.readBits(1);
+    if ((firstFrameVersion != -1) && (i != firstFrameVersion)) {
+      return false;
+    }
+    if (firstFrameSampleRateIndex != -1)
+    {
+      if (!tryRead(paramParsableByteArray, adtsScratch.data, 1)) {
+        return true;
+      }
+      adtsScratch.setPosition(2);
+      if (adtsScratch.readBits(4) != firstFrameSampleRateIndex) {
+        return false;
+      }
+      paramParsableByteArray.setPosition(paramInt + 2);
+    }
+    if (!tryRead(paramParsableByteArray, adtsScratch.data, 4)) {
+      return true;
+    }
+    adtsScratch.setPosition(14);
+    int j = adtsScratch.readBits(13);
+    if (j <= 6) {
+      return false;
+    }
+    paramInt += j;
+    j = paramInt + 1;
+    if (j >= paramParsableByteArray.limit()) {
+      return true;
+    }
+    if (isAdtsSyncBytes(data[paramInt], data[j]))
+    {
+      if (firstFrameVersion == -1) {
+        break label242;
+      }
+      if ((data[j] & 0x8) >> 3 == i) {
+        return true;
+      }
+    }
+    bool = false;
+    label242:
+    return bool;
+  }
+  
+  private boolean continueRead(ParsableByteArray paramParsableByteArray, byte[] paramArrayOfByte, int paramInt)
+  {
+    int i = Math.min(paramParsableByteArray.bytesLeft(), paramInt - bytesRead);
+    paramParsableByteArray.readBytes(paramArrayOfByte, bytesRead, i);
+    bytesRead += i;
+    return bytesRead == paramInt;
+  }
+  
+  private void findNextSample(ParsableByteArray paramParsableByteArray)
+  {
+    byte[] arrayOfByte = data;
+    int i = paramParsableByteArray.getPosition();
+    int k = paramParsableByteArray.limit();
+    while (i < k)
+    {
+      int j = i + 1;
+      i = arrayOfByte[i] & 0xFF;
+      if ((matchState == 512) && (isAdtsSyncBytes((byte)-1, (byte)i)) && ((foundFirstFrame) || (checkSyncPositionValid(paramParsableByteArray, j - 2))))
+      {
+        currentFrameVersion = ((i & 0x8) >> 3);
+        boolean bool = true;
+        if ((i & 0x1) != 0) {
+          bool = false;
+        }
+        hasCrc = bool;
+        if (!foundFirstFrame) {
+          setCheckingAdtsHeaderState();
+        } else {
+          setReadingAdtsHeaderState();
+        }
+        paramParsableByteArray.setPosition(j);
+        return;
+      }
+      i |= matchState;
+      if (i != 329)
+      {
+        if (i != 511)
+        {
+          if (i != 836)
+          {
+            if (i != 1075)
+            {
+              i = j;
+              if (matchState != 256)
+              {
+                matchState = 256;
+                i = j - 1;
+              }
+            }
+            else
+            {
+              setReadingId3HeaderState();
+              paramParsableByteArray.setPosition(j);
+            }
+          }
+          else
+          {
+            matchState = 1024;
+            i = j;
+          }
+        }
+        else
+        {
+          matchState = 512;
+          i = j;
+        }
+      }
+      else
+      {
+        matchState = 768;
+        i = j;
+      }
+    }
+    paramParsableByteArray.setPosition(i);
+  }
+  
+  private boolean isAdtsSyncBytes(byte paramByte1, byte paramByte2)
+  {
+    return isAdtsSyncWord((paramByte1 & 0xFF) << 8 | paramByte2 & 0xFF);
+  }
+  
+  public static boolean isAdtsSyncWord(int paramInt)
+  {
+    return (paramInt & 0xFFF6) == 65520;
+  }
+  
+  private void parseAdtsHeader()
+    throws ParserException
+  {
+    adtsScratch.setPosition(0);
+    if (!hasOutputFormat)
+    {
+      j = adtsScratch.readBits(2) + 1;
+      i = j;
+      if (j != 2)
+      {
+        localObject = new StringBuilder();
+        ((StringBuilder)localObject).append("Detected audio object type: ");
+        ((StringBuilder)localObject).append(j);
+        ((StringBuilder)localObject).append(", but assuming AAC LC.");
+        Log.w("AdtsReader", ((StringBuilder)localObject).toString());
+        i = 2;
+      }
+      adtsScratch.skipBits(5);
+      j = adtsScratch.readBits(3);
+      Object localObject = CodecSpecificDataUtil.buildAacAudioSpecificConfig(i, firstFrameSampleRateIndex, j);
+      Pair localPair = CodecSpecificDataUtil.parseAacAudioSpecificConfig((byte[])localObject);
+      localObject = Format.createAudioSampleFormat(formatId, "audio/mp4a-latm", null, -1, -1, ((Integer)second).intValue(), ((Integer)first).intValue(), Collections.singletonList(localObject), null, 0, language);
+      sampleDurationUs = (1024000000L / sampleRate);
+      output.format((Format)localObject);
+      hasOutputFormat = true;
+    }
+    else
+    {
+      adtsScratch.skipBits(10);
+    }
+    adtsScratch.skipBits(4);
+    int j = adtsScratch.readBits(13) - 2 - 5;
+    int i = j;
+    if (hasCrc) {
+      i = j - 2;
+    }
+    setReadingSampleState(output, sampleDurationUs, 0, i);
+  }
+  
+  private void parseId3Header()
+  {
+    id3Output.sampleData(id3HeaderBuffer, 10);
+    id3HeaderBuffer.setPosition(6);
+    setReadingSampleState(id3Output, 0L, 10, id3HeaderBuffer.readSynchSafeInt() + 10);
+  }
+  
+  private void readSample(ParsableByteArray paramParsableByteArray)
+  {
+    int i = Math.min(paramParsableByteArray.bytesLeft(), sampleSize - bytesRead);
+    currentOutput.sampleData(paramParsableByteArray, i);
+    bytesRead += i;
+    if (bytesRead == sampleSize)
+    {
+      currentOutput.sampleMetadata(timeUs, 1, sampleSize, 0, null);
+      timeUs += currentSampleDuration;
+      setFindingSampleState();
+    }
+  }
+  
+  private void resetSync()
+  {
+    foundFirstFrame = false;
+    setFindingSampleState();
+  }
+  
+  private void setCheckingAdtsHeaderState()
+  {
+    state = 1;
+    bytesRead = 0;
+  }
+  
+  private void setFindingSampleState()
+  {
+    state = 0;
+    bytesRead = 0;
+    matchState = 256;
+  }
+  
+  private void setReadingAdtsHeaderState()
+  {
+    state = 3;
+    bytesRead = 0;
+  }
+  
+  private void setReadingId3HeaderState()
+  {
+    state = 2;
+    bytesRead = ID3_IDENTIFIER.length;
+    sampleSize = 0;
+    id3HeaderBuffer.setPosition(0);
+  }
+  
+  private void setReadingSampleState(TrackOutput paramTrackOutput, long paramLong, int paramInt1, int paramInt2)
+  {
+    state = 4;
+    bytesRead = paramInt1;
+    currentOutput = paramTrackOutput;
+    currentSampleDuration = paramLong;
+    sampleSize = paramInt2;
+  }
+  
+  private boolean tryRead(ParsableByteArray paramParsableByteArray, byte[] paramArrayOfByte, int paramInt)
+  {
+    if (paramParsableByteArray.bytesLeft() < paramInt) {
+      return false;
+    }
+    paramParsableByteArray.readBytes(paramArrayOfByte, 0, paramInt);
+    return true;
+  }
+  
+  public void consume(ParsableByteArray paramParsableByteArray)
+    throws ParserException
+  {
+    while (paramParsableByteArray.bytesLeft() > 0) {
+      switch (state)
+      {
+      default: 
+        throw new IllegalStateException();
+      case 4: 
+        readSample(paramParsableByteArray);
+        break;
+      case 3: 
+        int i;
+        if (hasCrc) {
+          i = 7;
+        } else {
+          i = 5;
+        }
+        if (continueRead(paramParsableByteArray, adtsScratch.data, i)) {
+          parseAdtsHeader();
+        }
+        break;
+      case 2: 
+        if (continueRead(paramParsableByteArray, id3HeaderBuffer.data, 10)) {
+          parseId3Header();
+        }
+        break;
+      case 1: 
+        checkAdtsHeader(paramParsableByteArray);
+        break;
+      case 0: 
+        findNextSample(paramParsableByteArray);
+      }
+    }
+  }
+  
+  public void createTracks(ExtractorOutput paramExtractorOutput, TsPayloadReader.TrackIdGenerator paramTrackIdGenerator)
+  {
+    paramTrackIdGenerator.generateNewId();
+    formatId = paramTrackIdGenerator.getFormatId();
+    output = paramExtractorOutput.track(paramTrackIdGenerator.getTrackId(), 1);
+    if (exposeId3)
+    {
+      paramTrackIdGenerator.generateNewId();
+      id3Output = paramExtractorOutput.track(paramTrackIdGenerator.getTrackId(), 4);
+      id3Output.format(Format.createSampleFormat(paramTrackIdGenerator.getFormatId(), "application/id3", null, -1, null));
+      return;
+    }
+    id3Output = new DummyTrackOutput();
+  }
+  
+  public long getSampleDurationUs()
+  {
+    return sampleDurationUs;
+  }
+  
+  public void packetFinished() {}
+  
+  public void packetStarted(long paramLong, boolean paramBoolean)
+  {
+    timeUs = paramLong;
+  }
+  
+  public void seek()
+  {
+    resetSync();
+  }
+}

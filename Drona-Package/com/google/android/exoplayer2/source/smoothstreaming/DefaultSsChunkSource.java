@@ -1,0 +1,248 @@
+package com.google.android.exoplayer2.source.smoothstreaming;
+
+import android.net.Uri;
+import com.google.android.exoplayer2.Format;
+import com.google.android.exoplayer2.SeekParameters;
+import com.google.android.exoplayer2.extractor.ClickListeners.FragmentedMp4Extractor;
+import com.google.android.exoplayer2.extractor.ClickListeners.Track;
+import com.google.android.exoplayer2.extractor.ClickListeners.TrackEncryptionBox;
+import com.google.android.exoplayer2.source.BehindLiveWindowException;
+import com.google.android.exoplayer2.source.chunk.BaseMediaChunkIterator;
+import com.google.android.exoplayer2.source.chunk.Chunk;
+import com.google.android.exoplayer2.source.chunk.ChunkExtractorWrapper;
+import com.google.android.exoplayer2.source.chunk.ChunkHolder;
+import com.google.android.exoplayer2.source.chunk.ContainerMediaChunk;
+import com.google.android.exoplayer2.source.chunk.MediaChunk;
+import com.google.android.exoplayer2.source.chunk.MediaChunkIterator;
+import com.google.android.exoplayer2.source.smoothstreaming.manifest.SsManifest;
+import com.google.android.exoplayer2.source.smoothstreaming.manifest.SsManifest.StreamElement;
+import com.google.android.exoplayer2.trackselection.TrackSelection;
+import com.google.android.exoplayer2.upstream.DataSource;
+import com.google.android.exoplayer2.upstream.DataSource.Factory;
+import com.google.android.exoplayer2.upstream.DataSpec;
+import com.google.android.exoplayer2.upstream.LoaderErrorThrower;
+import com.google.android.exoplayer2.upstream.TransferListener;
+import com.google.android.exoplayer2.util.Util;
+import java.io.IOException;
+import java.util.List;
+
+public class DefaultSsChunkSource
+  implements SsChunkSource
+{
+  private int currentManifestChunkOffset;
+  private final DataSource dataSource;
+  private final ChunkExtractorWrapper[] extractorWrappers;
+  private IOException fatalError;
+  private SsManifest manifest;
+  private final LoaderErrorThrower manifestLoaderErrorThrower;
+  private final int streamElementIndex;
+  private final TrackSelection trackSelection;
+  
+  public DefaultSsChunkSource(LoaderErrorThrower paramLoaderErrorThrower, SsManifest paramSsManifest, int paramInt, TrackSelection paramTrackSelection, DataSource paramDataSource, TrackEncryptionBox[] paramArrayOfTrackEncryptionBox)
+  {
+    manifestLoaderErrorThrower = paramLoaderErrorThrower;
+    manifest = paramSsManifest;
+    streamElementIndex = paramInt;
+    trackSelection = paramTrackSelection;
+    dataSource = paramDataSource;
+    paramLoaderErrorThrower = streamElements[paramInt];
+    extractorWrappers = new ChunkExtractorWrapper[paramTrackSelection.length()];
+    paramInt = 0;
+    while (paramInt < extractorWrappers.length)
+    {
+      int j = paramTrackSelection.getIndexInTrackGroup(paramInt);
+      paramDataSource = formats[j];
+      int i;
+      if (type == 2) {
+        i = 4;
+      } else {
+        i = 0;
+      }
+      FragmentedMp4Extractor localFragmentedMp4Extractor = new FragmentedMp4Extractor(3, null, new Track(j, type, timescale, -9223372036854775807L, durationUs, paramDataSource, 0, paramArrayOfTrackEncryptionBox, i, null, null), null);
+      extractorWrappers[paramInt] = new ChunkExtractorWrapper(localFragmentedMp4Extractor, type, paramDataSource);
+      paramInt += 1;
+    }
+  }
+  
+  private static MediaChunk newMediaChunk(Format paramFormat, DataSource paramDataSource, Uri paramUri, String paramString, int paramInt1, long paramLong1, long paramLong2, long paramLong3, int paramInt2, Object paramObject, ChunkExtractorWrapper paramChunkExtractorWrapper)
+  {
+    return new ContainerMediaChunk(paramDataSource, new DataSpec(paramUri, 0L, -1L, paramString), paramFormat, paramInt2, paramObject, paramLong1, paramLong2, paramLong3, -9223372036854775807L, paramInt1, 1, paramLong1, paramChunkExtractorWrapper);
+  }
+  
+  private long resolveTimeToLiveEdgeUs(long paramLong)
+  {
+    if (!manifest.isLive) {
+      return -9223372036854775807L;
+    }
+    SsManifest.StreamElement localStreamElement = manifest.streamElements[streamElementIndex];
+    int i = chunkCount - 1;
+    return localStreamElement.getStartTimeUs(i) + localStreamElement.getChunkDurationUs(i) - paramLong;
+  }
+  
+  public long getAdjustedSeekPositionUs(long paramLong, SeekParameters paramSeekParameters)
+  {
+    SsManifest.StreamElement localStreamElement = manifest.streamElements[streamElementIndex];
+    int i = localStreamElement.getChunkIndex(paramLong);
+    long l2 = localStreamElement.getStartTimeUs(i);
+    long l1;
+    if ((l2 < paramLong) && (i < chunkCount - 1)) {
+      l1 = localStreamElement.getStartTimeUs(i + 1);
+    } else {
+      l1 = l2;
+    }
+    return Util.resolveSeekPositionUs(paramLong, paramSeekParameters, l2, l1);
+  }
+  
+  public final void getNextChunk(long paramLong1, long paramLong2, List paramList, ChunkHolder paramChunkHolder)
+  {
+    if (fatalError != null) {
+      return;
+    }
+    Object localObject = manifest.streamElements[streamElementIndex];
+    if (chunkCount == 0)
+    {
+      endOfStream = (manifest.isLive ^ true);
+      return;
+    }
+    int i;
+    if (paramList.isEmpty())
+    {
+      i = ((SsManifest.StreamElement)localObject).getChunkIndex(paramLong2);
+    }
+    else
+    {
+      j = (int)(((MediaChunk)paramList.get(paramList.size() - 1)).getNextChunkIndex() - currentManifestChunkOffset);
+      i = j;
+      if (j < 0)
+      {
+        fatalError = new BehindLiveWindowException();
+        return;
+      }
+    }
+    if (i >= chunkCount)
+    {
+      endOfStream = (manifest.isLive ^ true);
+      return;
+    }
+    long l = resolveTimeToLiveEdgeUs(paramLong1);
+    MediaChunkIterator[] arrayOfMediaChunkIterator = new MediaChunkIterator[trackSelection.length()];
+    int j = 0;
+    while (j < arrayOfMediaChunkIterator.length)
+    {
+      arrayOfMediaChunkIterator[j] = new StreamElementIterator((SsManifest.StreamElement)localObject, trackSelection.getIndexInTrackGroup(j), i);
+      j += 1;
+    }
+    trackSelection.updateSelectedTrack(paramLong1, paramLong2 - paramLong1, l, paramList, arrayOfMediaChunkIterator);
+    paramLong1 = ((SsManifest.StreamElement)localObject).getStartTimeUs(i);
+    l = ((SsManifest.StreamElement)localObject).getChunkDurationUs(i);
+    if (!paramList.isEmpty()) {
+      paramLong2 = -9223372036854775807L;
+    }
+    j = currentManifestChunkOffset;
+    int k = trackSelection.getSelectedIndex();
+    paramList = extractorWrappers[k];
+    localObject = ((SsManifest.StreamElement)localObject).buildRequestUri(trackSelection.getIndexInTrackGroup(k), i);
+    chunk = newMediaChunk(trackSelection.getSelectedFormat(), dataSource, (Uri)localObject, null, i + j, paramLong1, paramLong1 + l, paramLong2, trackSelection.getSelectionReason(), trackSelection.getSelectionData(), paramList);
+  }
+  
+  public int getPreferredQueueSize(long paramLong, List paramList)
+  {
+    if ((fatalError == null) && (trackSelection.length() >= 2)) {
+      return trackSelection.evaluateQueueSize(paramLong, paramList);
+    }
+    return paramList.size();
+  }
+  
+  public void maybeThrowError()
+    throws IOException
+  {
+    if (fatalError == null)
+    {
+      manifestLoaderErrorThrower.maybeThrowError();
+      return;
+    }
+    throw fatalError;
+  }
+  
+  public void onChunkLoadCompleted(Chunk paramChunk) {}
+  
+  public boolean onChunkLoadError(Chunk paramChunk, boolean paramBoolean, Exception paramException, long paramLong)
+  {
+    return (paramBoolean) && (paramLong != -9223372036854775807L) && (trackSelection.blacklist(trackSelection.indexOf(trackFormat), paramLong));
+  }
+  
+  public void updateManifest(SsManifest paramSsManifest)
+  {
+    SsManifest.StreamElement localStreamElement1 = manifest.streamElements[streamElementIndex];
+    int i = chunkCount;
+    SsManifest.StreamElement localStreamElement2 = streamElements[streamElementIndex];
+    if ((i != 0) && (chunkCount != 0))
+    {
+      int j = i - 1;
+      long l1 = localStreamElement1.getStartTimeUs(j);
+      long l2 = localStreamElement1.getChunkDurationUs(j);
+      long l3 = localStreamElement2.getStartTimeUs(0);
+      if (l1 + l2 <= l3) {
+        currentManifestChunkOffset += i;
+      } else {
+        currentManifestChunkOffset += localStreamElement1.getChunkIndex(l3);
+      }
+    }
+    else
+    {
+      currentManifestChunkOffset += i;
+    }
+    manifest = paramSsManifest;
+  }
+  
+  public static final class Factory
+    implements SsChunkSource.Factory
+  {
+    private final DataSource.Factory dataSourceFactory;
+    
+    public Factory(DataSource.Factory paramFactory)
+    {
+      dataSourceFactory = paramFactory;
+    }
+    
+    public SsChunkSource createChunkSource(LoaderErrorThrower paramLoaderErrorThrower, SsManifest paramSsManifest, int paramInt, TrackSelection paramTrackSelection, TrackEncryptionBox[] paramArrayOfTrackEncryptionBox, TransferListener paramTransferListener)
+    {
+      DataSource localDataSource = dataSourceFactory.createDataSource();
+      if (paramTransferListener != null) {
+        localDataSource.addTransferListener(paramTransferListener);
+      }
+      return new DefaultSsChunkSource(paramLoaderErrorThrower, paramSsManifest, paramInt, paramTrackSelection, localDataSource, paramArrayOfTrackEncryptionBox);
+    }
+  }
+  
+  private static final class StreamElementIterator
+    extends BaseMediaChunkIterator
+  {
+    private final SsManifest.StreamElement streamElement;
+    private final int trackIndex;
+    
+    public StreamElementIterator(SsManifest.StreamElement paramStreamElement, int paramInt1, int paramInt2)
+    {
+      super(chunkCount - 1);
+      streamElement = paramStreamElement;
+      trackIndex = paramInt1;
+    }
+    
+    public long getChunkEndTimeUs()
+    {
+      return getChunkStartTimeUs() + streamElement.getChunkDurationUs((int)getCurrentIndex());
+    }
+    
+    public long getChunkStartTimeUs()
+    {
+      checkInBounds();
+      return streamElement.getStartTimeUs((int)getCurrentIndex());
+    }
+    
+    public DataSpec getDataSpec()
+    {
+      checkInBounds();
+      return new DataSpec(streamElement.buildRequestUri(trackIndex, (int)getCurrentIndex()));
+    }
+  }
+}

@@ -1,0 +1,62 @@
+package com.google.android.gms.common.api.internal;
+
+import android.os.Bundle;
+import androidx.annotation.NonNull;
+import com.google.android.gms.common.ConnectionResult;
+import com.google.android.gms.common.api.GoogleApiClient.ConnectionCallbacks;
+import com.google.android.gms.common.api.GoogleApiClient.OnConnectionFailedListener;
+import com.google.android.gms.common.internal.ClientSettings;
+import com.google.android.gms.signin.zad;
+import java.util.concurrent.locks.Lock;
+
+final class zaat
+  implements GoogleApiClient.ConnectionCallbacks, GoogleApiClient.OnConnectionFailedListener
+{
+  private zaat(zaak paramZaak) {}
+  
+  public final void onConnected(Bundle paramBundle)
+  {
+    if (zaak.zai(zagj).isSignInClientDisconnectFixEnabled())
+    {
+      zaak.zac(zagj).lock();
+      try
+      {
+        paramBundle = zaak.zaf(zagj);
+        if (paramBundle == null) {
+          return;
+        }
+        zaak.zaf(zagj).zaa(new zaar(zagj));
+        return;
+      }
+      finally
+      {
+        zaak.zac(zagj).unlock();
+      }
+    }
+    zaak.zaf(zagj).zaa(new zaar(zagj));
+  }
+  
+  public final void onConnectionFailed(@NonNull ConnectionResult paramConnectionResult)
+  {
+    zaak.zac(zagj).lock();
+    try
+    {
+      if (zaak.zab(zagj, paramConnectionResult))
+      {
+        zaak.zaj(zagj);
+        zaak.zak(zagj);
+      }
+      else
+      {
+        zaak.zaa(zagj, paramConnectionResult);
+      }
+      return;
+    }
+    finally
+    {
+      zaak.zac(zagj).unlock();
+    }
+  }
+  
+  public final void onConnectionSuspended(int paramInt) {}
+}

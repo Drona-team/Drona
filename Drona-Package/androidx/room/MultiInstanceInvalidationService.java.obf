@@ -1,0 +1,110 @@
+package androidx.room;
+
+import android.app.Service;
+import android.content.Intent;
+import android.os.IBinder;
+import android.os.RemoteCallbackList;
+import android.os.RemoteException;
+import android.util.Log;
+import androidx.annotation.Nullable;
+import androidx.annotation.RestrictTo;
+import androidx.collection.SparseArrayCompat;
+
+@RestrictTo({androidx.annotation.RestrictTo.Scope.LIBRARY_GROUP_PREFIX})
+public class MultiInstanceInvalidationService
+  extends Service
+{
+  private final IMultiInstanceInvalidationService.Stub mBinder = new IMultiInstanceInvalidationService.Stub()
+  {
+    public void broadcastInvalidation(int paramAnonymousInt, String[] paramAnonymousArrayOfString)
+    {
+      synchronized (mCallbackList)
+      {
+        String str1 = (String)mClientNames.get(paramAnonymousInt);
+        if (str1 == null)
+        {
+          Log.w("ROOM", "Remote invalidation client ID not registered");
+          return;
+        }
+        int j = mCallbackList.beginBroadcast();
+        int i = 0;
+        while (i < j) {
+          try
+          {
+            int k = ((Integer)mCallbackList.getBroadcastCookie(i)).intValue();
+            String str2 = (String)mClientNames.get(k);
+            if (paramAnonymousInt != k)
+            {
+              boolean bool = str1.equals(str2);
+              if (bool) {
+                try
+                {
+                  ((IMultiInstanceInvalidationCallback)mCallbackList.getBroadcastItem(i)).onInvalidation(paramAnonymousArrayOfString);
+                }
+                catch (RemoteException localRemoteException)
+                {
+                  Log.w("ROOM", "Error invoking a remote callback", localRemoteException);
+                }
+              }
+            }
+            i += 1;
+          }
+          finally
+          {
+            mCallbackList.finishBroadcast();
+          }
+        }
+        mCallbackList.finishBroadcast();
+        return;
+      }
+    }
+    
+    public int registerCallback(IMultiInstanceInvalidationCallback paramAnonymousIMultiInstanceInvalidationCallback, String paramAnonymousString)
+    {
+      if (paramAnonymousString == null) {
+        return 0;
+      }
+      synchronized (mCallbackList)
+      {
+        MultiInstanceInvalidationService localMultiInstanceInvalidationService = MultiInstanceInvalidationService.this;
+        int i = mMaxClientId + 1;
+        mMaxClientId = i;
+        if (mCallbackList.register(paramAnonymousIMultiInstanceInvalidationCallback, Integer.valueOf(i)))
+        {
+          mClientNames.append(i, paramAnonymousString);
+          return i;
+        }
+        paramAnonymousIMultiInstanceInvalidationCallback = MultiInstanceInvalidationService.this;
+        mMaxClientId -= 1;
+        return 0;
+      }
+    }
+    
+    public void unregisterCallback(IMultiInstanceInvalidationCallback paramAnonymousIMultiInstanceInvalidationCallback, int paramAnonymousInt)
+    {
+      synchronized (mCallbackList)
+      {
+        mCallbackList.unregister(paramAnonymousIMultiInstanceInvalidationCallback);
+        mClientNames.remove(paramAnonymousInt);
+        return;
+      }
+    }
+  };
+  final RemoteCallbackList<IMultiInstanceInvalidationCallback> mCallbackList = new RemoteCallbackList()
+  {
+    public void onCallbackDied(IMultiInstanceInvalidationCallback paramAnonymousIMultiInstanceInvalidationCallback, Object paramAnonymousObject)
+    {
+      mClientNames.remove(((Integer)paramAnonymousObject).intValue());
+    }
+  };
+  final SparseArrayCompat<String> mClientNames = new SparseArrayCompat();
+  int mMaxClientId = 0;
+  
+  public MultiInstanceInvalidationService() {}
+  
+  @Nullable
+  public IBinder onBind(Intent paramIntent)
+  {
+    return mBinder;
+  }
+}

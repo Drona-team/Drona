@@ -1,0 +1,303 @@
+package com.google.android.exoplayer2.trackselection;
+
+import android.util.Pair;
+import androidx.annotation.Nullable;
+import com.google.android.exoplayer2.ExoPlaybackException;
+import com.google.android.exoplayer2.Format;
+import com.google.android.exoplayer2.RendererCapabilities;
+import com.google.android.exoplayer2.RendererConfiguration;
+import com.google.android.exoplayer2.source.TrackGroup;
+import com.google.android.exoplayer2.source.TrackGroupArray;
+import com.google.android.exoplayer2.util.Util;
+import java.util.Arrays;
+
+public abstract class MappingTrackSelector
+  extends TrackSelector
+{
+  @Nullable
+  private MappedTrackInfo currentMappedTrackInfo;
+  
+  public MappingTrackSelector() {}
+  
+  private static int findRenderer(RendererCapabilities[] paramArrayOfRendererCapabilities, TrackGroup paramTrackGroup)
+    throws ExoPlaybackException
+  {
+    int n = paramArrayOfRendererCapabilities.length;
+    int i = 0;
+    int k = 0;
+    while (i < paramArrayOfRendererCapabilities.length)
+    {
+      RendererCapabilities localRendererCapabilities = paramArrayOfRendererCapabilities[i];
+      int j = 0;
+      while (j < length)
+      {
+        int i1 = localRendererCapabilities.supportsFormat(paramTrackGroup.getFormat(j)) & 0x7;
+        int m = k;
+        if (i1 > k)
+        {
+          if (i1 == 4) {
+            return i;
+          }
+          n = i;
+          m = i1;
+        }
+        j += 1;
+        k = m;
+      }
+      i += 1;
+    }
+    return n;
+  }
+  
+  private static int[] getFormatSupport(RendererCapabilities paramRendererCapabilities, TrackGroup paramTrackGroup)
+    throws ExoPlaybackException
+  {
+    int[] arrayOfInt = new int[length];
+    int i = 0;
+    while (i < length)
+    {
+      arrayOfInt[i] = paramRendererCapabilities.supportsFormat(paramTrackGroup.getFormat(i));
+      i += 1;
+    }
+    return arrayOfInt;
+  }
+  
+  private static int[] getMixedMimeTypeAdaptationSupports(RendererCapabilities[] paramArrayOfRendererCapabilities)
+    throws ExoPlaybackException
+  {
+    int[] arrayOfInt = new int[paramArrayOfRendererCapabilities.length];
+    int i = 0;
+    while (i < arrayOfInt.length)
+    {
+      arrayOfInt[i] = paramArrayOfRendererCapabilities[i].supportsMixedMimeTypeAdaptation();
+      i += 1;
+    }
+    return arrayOfInt;
+  }
+  
+  public final MappedTrackInfo getCurrentMappedTrackInfo()
+  {
+    return currentMappedTrackInfo;
+  }
+  
+  public final void onSelectionActivated(Object paramObject)
+  {
+    currentMappedTrackInfo = ((MappedTrackInfo)paramObject);
+  }
+  
+  protected abstract Pair selectTracks(MappedTrackInfo paramMappedTrackInfo, int[][][] paramArrayOfInt, int[] paramArrayOfInt1)
+    throws ExoPlaybackException;
+  
+  public final TrackSelectorResult selectTracks(RendererCapabilities[] paramArrayOfRendererCapabilities, TrackGroupArray paramTrackGroupArray)
+    throws ExoPlaybackException
+  {
+    int[] arrayOfInt3 = new int[paramArrayOfRendererCapabilities.length + 1];
+    TrackGroup[][] arrayOfTrackGroup; = new TrackGroup[paramArrayOfRendererCapabilities.length + 1][];
+    int[][][] arrayOfInt = new int[paramArrayOfRendererCapabilities.length + 1][][];
+    int j = 0;
+    int i = 0;
+    while (i < arrayOfTrackGroup;.length)
+    {
+      arrayOfTrackGroup;[i] = new TrackGroup[length];
+      arrayOfInt[i] = new int[length][];
+      i += 1;
+    }
+    int[] arrayOfInt2 = getMixedMimeTypeAdaptationSupports(paramArrayOfRendererCapabilities);
+    i = 0;
+    while (i < length)
+    {
+      TrackGroup localTrackGroup = paramTrackGroupArray.context(i);
+      int k = findRenderer(paramArrayOfRendererCapabilities, localTrackGroup);
+      if (k == paramArrayOfRendererCapabilities.length) {
+        arrayOfInt1 = new int[length];
+      } else {
+        arrayOfInt1 = getFormatSupport(paramArrayOfRendererCapabilities[k], localTrackGroup);
+      }
+      int m = arrayOfInt3[k];
+      arrayOfTrackGroup;[k][m] = localTrackGroup;
+      arrayOfInt[k][m] = arrayOfInt1;
+      arrayOfInt3[k] += 1;
+      i += 1;
+    }
+    paramTrackGroupArray = new TrackGroupArray[paramArrayOfRendererCapabilities.length];
+    int[] arrayOfInt1 = new int[paramArrayOfRendererCapabilities.length];
+    i = j;
+    while (i < paramArrayOfRendererCapabilities.length)
+    {
+      j = arrayOfInt3[i];
+      paramTrackGroupArray[i] = new TrackGroupArray((TrackGroup[])Util.nullSafeArrayCopy(arrayOfTrackGroup;[i], j));
+      arrayOfInt[i] = ((int[][])Util.nullSafeArrayCopy(arrayOfInt[i], j));
+      arrayOfInt1[i] = paramArrayOfRendererCapabilities[i].getTrackType();
+      i += 1;
+    }
+    i = arrayOfInt3[paramArrayOfRendererCapabilities.length];
+    paramArrayOfRendererCapabilities = new MappedTrackInfo(arrayOfInt1, paramTrackGroupArray, arrayOfInt2, arrayOfInt, new TrackGroupArray((TrackGroup[])Util.nullSafeArrayCopy(arrayOfTrackGroup;[paramArrayOfRendererCapabilities.length], i)));
+    paramTrackGroupArray = selectTracks(paramArrayOfRendererCapabilities, arrayOfInt, arrayOfInt2);
+    return new TrackSelectorResult((RendererConfiguration[])first, (TrackSelection[])second, paramArrayOfRendererCapabilities);
+  }
+  
+  public static final class MappedTrackInfo
+  {
+    public static final int RENDERER_SUPPORT_EXCEEDS_CAPABILITIES_TRACKS = 2;
+    public static final int RENDERER_SUPPORT_NO_TRACKS = 0;
+    public static final int RENDERER_SUPPORT_PLAYABLE_TRACKS = 3;
+    public static final int RENDERER_SUPPORT_UNSUPPORTED_TRACKS = 1;
+    @Deprecated
+    public final int length;
+    private final int rendererCount;
+    private final int[][][] rendererFormatSupports;
+    private final int[] rendererMixedMimeTypeAdaptiveSupports;
+    private final TrackGroupArray[] rendererTrackGroups;
+    private final int[] rendererTrackTypes;
+    private final TrackGroupArray unmappedTrackGroups;
+    
+    MappedTrackInfo(int[] paramArrayOfInt1, TrackGroupArray[] paramArrayOfTrackGroupArray, int[] paramArrayOfInt2, int[][][] paramArrayOfInt, TrackGroupArray paramTrackGroupArray)
+    {
+      rendererTrackTypes = paramArrayOfInt1;
+      rendererTrackGroups = paramArrayOfTrackGroupArray;
+      rendererFormatSupports = paramArrayOfInt;
+      rendererMixedMimeTypeAdaptiveSupports = paramArrayOfInt2;
+      unmappedTrackGroups = paramTrackGroupArray;
+      rendererCount = paramArrayOfInt1.length;
+      length = rendererCount;
+    }
+    
+    public int getAdaptiveSupport(int paramInt1, int paramInt2, boolean paramBoolean)
+    {
+      int m = rendererTrackGroups[paramInt1].context(paramInt2).length;
+      int[] arrayOfInt = new int[m];
+      int i = 0;
+      int k;
+      for (int j = 0; i < m; j = k)
+      {
+        int n = getTrackSupport(paramInt1, paramInt2, i);
+        if (n != 4)
+        {
+          k = j;
+          if (paramBoolean)
+          {
+            k = j;
+            if (n != 3) {}
+          }
+        }
+        else
+        {
+          arrayOfInt[j] = i;
+          k = j + 1;
+        }
+        i += 1;
+      }
+      return getAdaptiveSupport(paramInt1, paramInt2, Arrays.copyOf(arrayOfInt, j));
+    }
+    
+    public int getAdaptiveSupport(int paramInt1, int paramInt2, int[] paramArrayOfInt)
+    {
+      int k = 0;
+      Object localObject = null;
+      int i = 0;
+      boolean bool = false;
+      int j = 16;
+      while (k < paramArrayOfInt.length)
+      {
+        int m = paramArrayOfInt[k];
+        String str = rendererTrackGroups[paramInt1].context(paramInt2).getFormat(m).sampleMimeType;
+        if (i == 0) {
+          localObject = str;
+        } else {
+          bool = Util.areEqual(localObject, str) ^ true | bool;
+        }
+        j = Math.min(j, rendererFormatSupports[paramInt1][paramInt2][k] & 0x18);
+        k += 1;
+        i += 1;
+      }
+      if (bool) {
+        return Math.min(j, rendererMixedMimeTypeAdaptiveSupports[paramInt1]);
+      }
+      return j;
+    }
+    
+    public int getRendererCount()
+    {
+      return rendererCount;
+    }
+    
+    public int getRendererSupport(int paramInt)
+    {
+      int[][] arrayOfInt = rendererFormatSupports[paramInt];
+      int i = 0;
+      paramInt = 0;
+      while (i < arrayOfInt.length)
+      {
+        int j = 0;
+        while (j < arrayOfInt[i].length)
+        {
+          int k;
+          switch (arrayOfInt[i][j] & 0x7)
+          {
+          default: 
+            k = 1;
+            break;
+          case 4: 
+            return 3;
+          case 3: 
+            k = 2;
+          }
+          paramInt = Math.max(paramInt, k);
+          j += 1;
+        }
+        i += 1;
+      }
+      return paramInt;
+    }
+    
+    public int getRendererType(int paramInt)
+    {
+      return rendererTrackTypes[paramInt];
+    }
+    
+    public int getTrackFormatSupport(int paramInt1, int paramInt2, int paramInt3)
+    {
+      return getTrackSupport(paramInt1, paramInt2, paramInt3);
+    }
+    
+    public TrackGroupArray getTrackGroups(int paramInt)
+    {
+      return rendererTrackGroups[paramInt];
+    }
+    
+    public int getTrackSupport(int paramInt1, int paramInt2, int paramInt3)
+    {
+      return rendererFormatSupports[paramInt1][paramInt2][paramInt3] & 0x7;
+    }
+    
+    public int getTrackTypeRendererSupport(int paramInt)
+    {
+      return getTypeSupport(paramInt);
+    }
+    
+    public int getTypeSupport(int paramInt)
+    {
+      int i = 0;
+      int k;
+      for (int j = 0; i < rendererCount; j = k)
+      {
+        k = j;
+        if (rendererTrackTypes[i] == paramInt) {
+          k = Math.max(j, getRendererSupport(i));
+        }
+        i += 1;
+      }
+      return j;
+    }
+    
+    public TrackGroupArray getUnassociatedTrackGroups()
+    {
+      return getUnmappedTrackGroups();
+    }
+    
+    public TrackGroupArray getUnmappedTrackGroups()
+    {
+      return unmappedTrackGroups;
+    }
+  }
+}

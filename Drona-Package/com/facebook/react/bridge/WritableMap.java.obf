@@ -1,0 +1,26 @@
+package com.facebook.react.bridge;
+
+import androidx.annotation.NonNull;
+import androidx.annotation.Nullable;
+
+public abstract interface WritableMap
+  extends ReadableMap
+{
+  public abstract WritableMap copy();
+  
+  public abstract void merge(@NonNull ReadableMap paramReadableMap);
+  
+  public abstract void putArray(@NonNull String paramString, @Nullable ReadableArray paramReadableArray);
+  
+  public abstract void putBoolean(@NonNull String paramString, boolean paramBoolean);
+  
+  public abstract void putDouble(@NonNull String paramString, double paramDouble);
+  
+  public abstract void putInt(@NonNull String paramString, int paramInt);
+  
+  public abstract void putMap(@NonNull String paramString, @Nullable ReadableMap paramReadableMap);
+  
+  public abstract void putNull(@NonNull String paramString);
+  
+  public abstract void putString(@NonNull String paramString1, @Nullable String paramString2);
+}

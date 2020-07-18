@@ -1,0 +1,738 @@
+package com.facebook.react.views.scroll;
+
+import android.graphics.Canvas;
+import android.graphics.Rect;
+import android.graphics.drawable.ColorDrawable;
+import android.graphics.drawable.Drawable;
+import android.util.Log;
+import android.view.KeyEvent;
+import android.view.MotionEvent;
+import android.view.View;
+import android.view.View.MeasureSpec;
+import android.view.View.OnLayoutChangeListener;
+import android.view.ViewGroup.OnHierarchyChangeListener;
+import android.widget.OverScroller;
+import android.widget.ScrollView;
+import androidx.annotation.Nullable;
+import androidx.core.view.ViewCompat;
+import com.facebook.infer.annotation.Assertions;
+import com.facebook.react.bridge.ReactContext;
+import com.facebook.react.uimanager.MeasureSpecAssertions;
+import com.facebook.react.uimanager.ReactClippingViewGroup;
+import com.facebook.react.uimanager.ReactClippingViewGroupHelper;
+import com.facebook.react.uimanager.events.NativeGestureUtil;
+import com.facebook.react.views.view.ReactViewBackgroundManager;
+import java.lang.reflect.Field;
+import java.util.List;
+
+public class ReactScrollView
+  extends ScrollView
+  implements ReactClippingViewGroup, ViewGroup.OnHierarchyChangeListener, View.OnLayoutChangeListener
+{
+  @Nullable
+  private static Field sScrollerField;
+  private static boolean sTriedToGetScrollerField = false;
+  private boolean mActivelyScrolling;
+  @Nullable
+  private Rect mClippingRect;
+  private View mContentView;
+  private float mDecelerationRate = 0.985F;
+  private boolean mDragging;
+  @Nullable
+  private Drawable mEndBackground;
+  private int mEndFillColor = 0;
+  @Nullable
+  private FpsListener mFpsListener = null;
+  private final OnScrollDispatchHelper mOnScrollDispatchHelper = new OnScrollDispatchHelper();
+  @Nullable
+  private String mOverflow = "hidden";
+  private boolean mPagingEnabled = false;
+  @Nullable
+  private Runnable mPostTouchRunnable;
+  private ReactViewBackgroundManager mReactBackgroundManager;
+  private final Rect mRect = new Rect();
+  private boolean mRemoveClippedSubviews;
+  private boolean mScrollEnabled = true;
+  @Nullable
+  private String mScrollPerfTag;
+  @Nullable
+  private final OverScroller mScroller;
+  private boolean mSendMomentumEvents;
+  private int mSnapInterval = 0;
+  @Nullable
+  private List<Integer> mSnapOffsets;
+  private boolean mSnapToEnd = true;
+  private boolean mSnapToStart = true;
+  private final VelocityHelper mVelocityHelper = new VelocityHelper();
+  
+  public ReactScrollView(ReactContext paramReactContext)
+  {
+    this(paramReactContext, null);
+  }
+  
+  public ReactScrollView(ReactContext paramReactContext, @Nullable FpsListener paramFpsListener)
+  {
+    super(paramReactContext);
+    mFpsListener = paramFpsListener;
+    mReactBackgroundManager = new ReactViewBackgroundManager(this);
+    mScroller = getOverScrollerFromParent();
+    setOnHierarchyChangeListener(this);
+    setScrollBarStyle(33554432);
+  }
+  
+  private void disableFpsListener()
+  {
+    if (isScrollPerfLoggingEnabled())
+    {
+      Assertions.assertNotNull(mFpsListener);
+      Assertions.assertNotNull(mScrollPerfTag);
+      mFpsListener.disable(mScrollPerfTag);
+    }
+  }
+  
+  private void enableFpsListener()
+  {
+    if (isScrollPerfLoggingEnabled())
+    {
+      Assertions.assertNotNull(mFpsListener);
+      Assertions.assertNotNull(mScrollPerfTag);
+      mFpsListener.enable(mScrollPerfTag);
+    }
+  }
+  
+  private void flingAndSnap(int paramInt)
+  {
+    if (getChildCount() <= 0) {
+      return;
+    }
+    if ((mSnapInterval == 0) && (mSnapOffsets == null))
+    {
+      smoothScrollAndSnap(paramInt);
+      return;
+    }
+    int i1 = getMaxScrollY();
+    int i3 = predictFinalScrollPosition(paramInt);
+    int i6 = getHeight();
+    int i7 = getPaddingBottom();
+    int i8 = getPaddingTop();
+    int k;
+    int n;
+    int m;
+    if (mSnapOffsets != null)
+    {
+      i4 = ((Integer)mSnapOffsets.get(0)).intValue();
+      int i5 = ((Integer)mSnapOffsets.get(mSnapOffsets.size() - 1)).intValue();
+      j = i1;
+      k = 0;
+      i = 0;
+      while (k < mSnapOffsets.size())
+      {
+        n = ((Integer)mSnapOffsets.get(k)).intValue();
+        m = i;
+        if (n <= i3)
+        {
+          m = i;
+          if (i3 - n < i3 - i) {
+            m = n;
+          }
+        }
+        i2 = j;
+        if (n >= i3)
+        {
+          i2 = j;
+          if (n - i3 < j - i3) {
+            i2 = n;
+          }
+        }
+        k += 1;
+        i = m;
+        j = i2;
+      }
+      k = i5;
+      m = i4;
+    }
+    else
+    {
+      double d1 = getSnapInterval();
+      double d2 = i3 / d1;
+      i = (int)(Math.floor(d2) * d1);
+      j = Math.min((int)(Math.ceil(d2) * d1), i1);
+      k = i1;
+      m = 0;
+    }
+    int i2 = i3 - i;
+    int i4 = j - i3;
+    if (i2 < i4) {
+      n = i;
+    } else {
+      n = j;
+    }
+    if ((!mSnapToEnd) && (i3 >= k))
+    {
+      if (getScrollY() < k)
+      {
+        i = k;
+        break label438;
+      }
+    }
+    else
+    {
+      if ((mSnapToStart) || (i3 > m)) {
+        break label394;
+      }
+      if (getScrollY() > m) {
+        break label387;
+      }
+    }
+    int i = i3;
+    break label438;
+    label387:
+    i = m;
+    break label438;
+    label394:
+    if (paramInt > 0)
+    {
+      paramInt += (int)(i4 * 10.0D);
+      i = j;
+    }
+    else if (paramInt < 0)
+    {
+      paramInt -= (int)(i2 * 10.0D);
+    }
+    else
+    {
+      i = n;
+    }
+    label438:
+    int j = Math.min(Math.max(0, i), i1);
+    if (mScroller != null)
+    {
+      mActivelyScrolling = true;
+      OverScroller localOverScroller = mScroller;
+      k = getScrollX();
+      m = getScrollY();
+      if (paramInt == 0) {
+        for (;;)
+        {
+          paramInt = j - getScrollY();
+        }
+      }
+      if ((j != 0) && (j != i1)) {
+        i = 0;
+      } else {
+        i = (i6 - i7 - i8) / 2;
+      }
+      localOverScroller.fling(k, m, 0, paramInt, 0, 0, j, j, 0, i);
+      postInvalidateOnAnimation();
+      return;
+    }
+    smoothScrollTo(getScrollX(), j);
+  }
+  
+  private int getMaxScrollY()
+  {
+    return Math.max(0, mContentView.getHeight() - (getHeight() - getPaddingBottom() - getPaddingTop()));
+  }
+  
+  @Nullable
+  private OverScroller getOverScrollerFromParent()
+  {
+    if (!sTriedToGetScrollerField) {
+      sTriedToGetScrollerField = true;
+    }
+    try
+    {
+      sScrollerField = ScrollView.class.getDeclaredField("mScroller");
+      sScrollerField.setAccessible(true);
+    }
+    catch (NoSuchFieldException localNoSuchFieldException)
+    {
+      for (;;) {}
+    }
+    Log.w("ReactNative", "Failed to get mScroller field for ScrollView! This app will exhibit the bounce-back scrolling bug :(");
+    if (sScrollerField != null) {
+      try
+      {
+        Object localObject = sScrollerField.get(this);
+        if ((localObject instanceof OverScroller)) {
+          return (OverScroller)localObject;
+        }
+        Log.w("ReactNative", "Failed to cast mScroller field in ScrollView (probably due to OEM changes to AOSP)! This app will exhibit the bounce-back scrolling bug :(");
+        return null;
+      }
+      catch (IllegalAccessException localIllegalAccessException)
+      {
+        throw new RuntimeException("Failed to get mScroller from ScrollView!", localIllegalAccessException);
+      }
+    }
+    return null;
+  }
+  
+  private int getSnapInterval()
+  {
+    if (mSnapInterval != 0) {
+      return mSnapInterval;
+    }
+    return getHeight();
+  }
+  
+  private void handlePostTouchScrolling(int paramInt1, int paramInt2)
+  {
+    if ((!mSendMomentumEvents) && (!mPagingEnabled) && (!isScrollPerfLoggingEnabled())) {
+      return;
+    }
+    if (mPostTouchRunnable != null) {
+      return;
+    }
+    if (mSendMomentumEvents)
+    {
+      enableFpsListener();
+      ReactScrollViewHelper.emitScrollMomentumBeginEvent(this, paramInt1, paramInt2);
+    }
+    mActivelyScrolling = false;
+    mPostTouchRunnable = new Runnable()
+    {
+      private boolean mSnappingToPage = false;
+      
+      public void run()
+      {
+        if (mActivelyScrolling)
+        {
+          ReactScrollView.access$002(ReactScrollView.this, false);
+          ViewCompat.postOnAnimationDelayed(ReactScrollView.this, this, 20L);
+          return;
+        }
+        if ((mPagingEnabled) && (!mSnappingToPage))
+        {
+          mSnappingToPage = true;
+          ReactScrollView.this.flingAndSnap(0);
+          ViewCompat.postOnAnimationDelayed(ReactScrollView.this, this, 20L);
+          return;
+        }
+        if (mSendMomentumEvents) {
+          ReactScrollViewHelper.emitScrollMomentumEndEvent(ReactScrollView.this);
+        }
+        ReactScrollView.access$402(ReactScrollView.this, null);
+        ReactScrollView.this.disableFpsListener();
+      }
+    };
+    ViewCompat.postOnAnimationDelayed(this, mPostTouchRunnable, 20L);
+  }
+  
+  private boolean isScrollPerfLoggingEnabled()
+  {
+    return (mFpsListener != null) && (mScrollPerfTag != null) && (!mScrollPerfTag.isEmpty());
+  }
+  
+  private int predictFinalScrollPosition(int paramInt)
+  {
+    OverScroller localOverScroller = new OverScroller(getContext());
+    localOverScroller.setFriction(1.0F - mDecelerationRate);
+    int i = getMaxScrollY();
+    int j = getHeight();
+    int k = getPaddingBottom();
+    int m = getPaddingTop();
+    localOverScroller.fling(getScrollX(), getScrollY(), 0, paramInt, 0, 0, 0, i, 0, (j - k - m) / 2);
+    return localOverScroller.getFinalY();
+  }
+  
+  private void scrollToChild(View paramView)
+  {
+    Rect localRect = new Rect();
+    paramView.getDrawingRect(localRect);
+    offsetDescendantRectToMyCoords(paramView, localRect);
+    int i = computeScrollDeltaToGetChildRectOnScreen(localRect);
+    if (i != 0) {
+      scrollBy(0, i);
+    }
+  }
+  
+  private void smoothScrollAndSnap(int paramInt)
+  {
+    double d2 = getSnapInterval();
+    double d1 = getScrollY();
+    double d3 = predictFinalScrollPosition(paramInt);
+    double d4 = d1 / d2;
+    int k = (int)Math.floor(d4);
+    int n = (int)Math.ceil(d4);
+    int m = (int)Math.round(d4);
+    int i1 = (int)Math.round(d3 / d2);
+    int j;
+    int i;
+    if ((paramInt > 0) && (n == k))
+    {
+      j = n + 1;
+      i = k;
+    }
+    else
+    {
+      i = k;
+      j = n;
+      if (paramInt < 0)
+      {
+        i = k;
+        j = n;
+        if (k == n)
+        {
+          i = k - 1;
+          j = n;
+        }
+      }
+    }
+    if ((paramInt > 0) && (m < j) && (i1 > i))
+    {
+      k = j;
+    }
+    else
+    {
+      k = m;
+      if (paramInt < 0)
+      {
+        k = m;
+        if (m > i)
+        {
+          k = m;
+          if (i1 < j) {
+            k = i;
+          }
+        }
+      }
+    }
+    d2 = k * d2;
+    if (d2 != d1)
+    {
+      mActivelyScrolling = true;
+      smoothScrollTo(getScrollX(), (int)d2);
+    }
+  }
+  
+  public void draw(Canvas paramCanvas)
+  {
+    int j = mEndFillColor;
+    int i = 0;
+    if (j != 0)
+    {
+      localObject = getChildAt(0);
+      if ((mEndBackground != null) && (localObject != null) && (((View)localObject).getBottom() < getHeight()))
+      {
+        mEndBackground.setBounds(0, ((View)localObject).getBottom(), getWidth(), getHeight());
+        mEndBackground.draw(paramCanvas);
+      }
+    }
+    getDrawingRect(mRect);
+    Object localObject = mOverflow;
+    if ((((String)localObject).hashCode() != 466743410) || (!((String)localObject).equals("visible"))) {
+      i = -1;
+    }
+    if (i != 0) {
+      paramCanvas.clipRect(mRect);
+    }
+    super.draw(paramCanvas);
+  }
+  
+  public boolean executeKeyEvent(KeyEvent paramKeyEvent)
+  {
+    int i = paramKeyEvent.getKeyCode();
+    if ((!mScrollEnabled) && ((i == 19) || (i == 20))) {
+      return false;
+    }
+    return super.executeKeyEvent(paramKeyEvent);
+  }
+  
+  public void flashScrollIndicators()
+  {
+    awakenScrollBars();
+  }
+  
+  public void fling(int paramInt)
+  {
+    float f2 = Math.signum(mOnScrollDispatchHelper.getYFlingVelocity());
+    float f1 = f2;
+    if (f2 == 0.0F) {
+      f1 = Math.signum(paramInt);
+    }
+    paramInt = (int)(Math.abs(paramInt) * f1);
+    if (mPagingEnabled)
+    {
+      flingAndSnap(paramInt);
+    }
+    else if (mScroller != null)
+    {
+      int i = getHeight();
+      int j = getPaddingBottom();
+      int k = getPaddingTop();
+      mScroller.fling(getScrollX(), getScrollY(), 0, paramInt, 0, 0, 0, Integer.MAX_VALUE, 0, (i - j - k) / 2);
+      ViewCompat.postInvalidateOnAnimation(this);
+    }
+    else
+    {
+      super.fling(paramInt);
+    }
+    handlePostTouchScrolling(0, paramInt);
+  }
+  
+  public void getClippingRect(Rect paramRect)
+  {
+    paramRect.set((Rect)Assertions.assertNotNull(mClippingRect));
+  }
+  
+  public boolean getRemoveClippedSubviews()
+  {
+    return mRemoveClippedSubviews;
+  }
+  
+  protected void onAttachedToWindow()
+  {
+    super.onAttachedToWindow();
+    if (mRemoveClippedSubviews) {
+      updateClippingRect();
+    }
+  }
+  
+  public void onChildViewAdded(View paramView1, View paramView2)
+  {
+    mContentView = paramView2;
+    mContentView.addOnLayoutChangeListener(this);
+  }
+  
+  public void onChildViewRemoved(View paramView1, View paramView2)
+  {
+    mContentView.removeOnLayoutChangeListener(this);
+    mContentView = null;
+  }
+  
+  public boolean onInterceptTouchEvent(MotionEvent paramMotionEvent)
+  {
+    if (!mScrollEnabled) {
+      return false;
+    }
+    try
+    {
+      if (super.onInterceptTouchEvent(paramMotionEvent))
+      {
+        NativeGestureUtil.notifyNativeGestureStarted(this, paramMotionEvent);
+        ReactScrollViewHelper.emitScrollBeginDragEvent(this);
+        mDragging = true;
+        enableFpsListener();
+        return true;
+      }
+    }
+    catch (IllegalArgumentException paramMotionEvent)
+    {
+      Log.w("ReactNative", "Error intercepting touch event.", paramMotionEvent);
+    }
+    return false;
+  }
+  
+  protected void onLayout(boolean paramBoolean, int paramInt1, int paramInt2, int paramInt3, int paramInt4)
+  {
+    scrollTo(getScrollX(), getScrollY());
+  }
+  
+  public void onLayoutChange(View paramView, int paramInt1, int paramInt2, int paramInt3, int paramInt4, int paramInt5, int paramInt6, int paramInt7, int paramInt8)
+  {
+    if (mContentView == null) {
+      return;
+    }
+    paramInt1 = getScrollY();
+    paramInt2 = getMaxScrollY();
+    if (paramInt1 > paramInt2) {
+      scrollTo(getScrollX(), paramInt2);
+    }
+  }
+  
+  protected void onMeasure(int paramInt1, int paramInt2)
+  {
+    MeasureSpecAssertions.assertExplicitMeasureSpec(paramInt1, paramInt2);
+    setMeasuredDimension(View.MeasureSpec.getSize(paramInt1), View.MeasureSpec.getSize(paramInt2));
+  }
+  
+  protected void onOverScrolled(int paramInt1, int paramInt2, boolean paramBoolean1, boolean paramBoolean2)
+  {
+    int i = paramInt2;
+    if (mScroller != null)
+    {
+      i = paramInt2;
+      if (mContentView != null)
+      {
+        i = paramInt2;
+        if (!mScroller.isFinished())
+        {
+          i = paramInt2;
+          if (mScroller.getCurrY() != mScroller.getFinalY())
+          {
+            int j = getMaxScrollY();
+            i = paramInt2;
+            if (paramInt2 >= j)
+            {
+              mScroller.abortAnimation();
+              i = j;
+            }
+          }
+        }
+      }
+    }
+    super.onOverScrolled(paramInt1, i, paramBoolean1, paramBoolean2);
+  }
+  
+  protected void onScrollChanged(int paramInt1, int paramInt2, int paramInt3, int paramInt4)
+  {
+    super.onScrollChanged(paramInt1, paramInt2, paramInt3, paramInt4);
+    mActivelyScrolling = true;
+    if (mOnScrollDispatchHelper.onScrollChanged(paramInt1, paramInt2))
+    {
+      if (mRemoveClippedSubviews) {
+        updateClippingRect();
+      }
+      ReactScrollViewHelper.emitScrollEvent(this, mOnScrollDispatchHelper.getXFlingVelocity(), mOnScrollDispatchHelper.getYFlingVelocity());
+    }
+  }
+  
+  protected void onSizeChanged(int paramInt1, int paramInt2, int paramInt3, int paramInt4)
+  {
+    super.onSizeChanged(paramInt1, paramInt2, paramInt3, paramInt4);
+    if (mRemoveClippedSubviews) {
+      updateClippingRect();
+    }
+  }
+  
+  public boolean onTouchEvent(MotionEvent paramMotionEvent)
+  {
+    if (!mScrollEnabled) {
+      return false;
+    }
+    mVelocityHelper.calculateVelocity(paramMotionEvent);
+    if (((paramMotionEvent.getAction() & 0xFF) == 1) && (mDragging))
+    {
+      float f1 = mVelocityHelper.getXVelocity();
+      float f2 = mVelocityHelper.getYVelocity();
+      ReactScrollViewHelper.emitScrollEndDragEvent(this, f1, f2);
+      mDragging = false;
+      handlePostTouchScrolling(Math.round(f1), Math.round(f2));
+    }
+    return super.onTouchEvent(paramMotionEvent);
+  }
+  
+  public void requestChildFocus(View paramView1, View paramView2)
+  {
+    if (paramView2 != null) {
+      scrollToChild(paramView2);
+    }
+    super.requestChildFocus(paramView1, paramView2);
+  }
+  
+  public void setBackgroundColor(int paramInt)
+  {
+    mReactBackgroundManager.setBackgroundColor(paramInt);
+  }
+  
+  public void setBorderColor(int paramInt, float paramFloat1, float paramFloat2)
+  {
+    mReactBackgroundManager.setBorderColor(paramInt, paramFloat1, paramFloat2);
+  }
+  
+  public void setBorderRadius(float paramFloat)
+  {
+    mReactBackgroundManager.setBorderRadius(paramFloat);
+  }
+  
+  public void setBorderRadius(float paramFloat, int paramInt)
+  {
+    mReactBackgroundManager.setBorderRadius(paramFloat, paramInt);
+  }
+  
+  public void setBorderStyle(@Nullable String paramString)
+  {
+    mReactBackgroundManager.setBorderStyle(paramString);
+  }
+  
+  public void setBorderWidth(int paramInt, float paramFloat)
+  {
+    mReactBackgroundManager.setBorderWidth(paramInt, paramFloat);
+  }
+  
+  public void setDecelerationRate(float paramFloat)
+  {
+    mDecelerationRate = paramFloat;
+    if (mScroller != null) {
+      mScroller.setFriction(1.0F - mDecelerationRate);
+    }
+  }
+  
+  public void setEndFillColor(int paramInt)
+  {
+    if (paramInt != mEndFillColor)
+    {
+      mEndFillColor = paramInt;
+      mEndBackground = new ColorDrawable(mEndFillColor);
+    }
+  }
+  
+  public void setOverflow(String paramString)
+  {
+    mOverflow = paramString;
+    invalidate();
+  }
+  
+  public void setPagingEnabled(boolean paramBoolean)
+  {
+    mPagingEnabled = paramBoolean;
+  }
+  
+  public void setRemoveClippedSubviews(boolean paramBoolean)
+  {
+    if ((paramBoolean) && (mClippingRect == null)) {
+      mClippingRect = new Rect();
+    }
+    mRemoveClippedSubviews = paramBoolean;
+    updateClippingRect();
+  }
+  
+  public void setScrollEnabled(boolean paramBoolean)
+  {
+    mScrollEnabled = paramBoolean;
+  }
+  
+  public void setScrollPerfTag(@Nullable String paramString)
+  {
+    mScrollPerfTag = paramString;
+  }
+  
+  public void setSendMomentumEvents(boolean paramBoolean)
+  {
+    mSendMomentumEvents = paramBoolean;
+  }
+  
+  public void setSnapInterval(int paramInt)
+  {
+    mSnapInterval = paramInt;
+  }
+  
+  public void setSnapOffsets(List<Integer> paramList)
+  {
+    mSnapOffsets = paramList;
+  }
+  
+  public void setSnapToEnd(boolean paramBoolean)
+  {
+    mSnapToEnd = paramBoolean;
+  }
+  
+  public void setSnapToStart(boolean paramBoolean)
+  {
+    mSnapToStart = paramBoolean;
+  }
+  
+  public void updateClippingRect()
+  {
+    if (!mRemoveClippedSubviews) {
+      return;
+    }
+    Assertions.assertNotNull(mClippingRect);
+    ReactClippingViewGroupHelper.calculateClippingRect(this, mClippingRect);
+    View localView = getChildAt(0);
+    if ((localView instanceof ReactClippingViewGroup)) {
+      ((ReactClippingViewGroup)localView).updateClippingRect();
+    }
+  }
+}

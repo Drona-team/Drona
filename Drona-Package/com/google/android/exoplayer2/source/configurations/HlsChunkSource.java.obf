@@ -1,0 +1,544 @@
+package com.google.android.exoplayer2.source.hls;
+
+import android.net.Uri;
+import android.os.SystemClock;
+import androidx.annotation.Nullable;
+import com.google.android.exoplayer2.Format;
+import com.google.android.exoplayer2.source.BehindLiveWindowException;
+import com.google.android.exoplayer2.source.TrackGroup;
+import com.google.android.exoplayer2.source.chunk.BaseMediaChunkIterator;
+import com.google.android.exoplayer2.source.chunk.Chunk;
+import com.google.android.exoplayer2.source.chunk.DataChunk;
+import com.google.android.exoplayer2.source.chunk.MediaChunk;
+import com.google.android.exoplayer2.source.chunk.MediaChunkIterator;
+import com.google.android.exoplayer2.source.hls.playlist.HlsMasterPlaylist.HlsUrl;
+import com.google.android.exoplayer2.source.hls.playlist.HlsMediaPlaylist;
+import com.google.android.exoplayer2.source.hls.playlist.HlsMediaPlaylist.Segment;
+import com.google.android.exoplayer2.source.hls.playlist.HlsPlaylistTracker;
+import com.google.android.exoplayer2.trackselection.BaseTrackSelection;
+import com.google.android.exoplayer2.trackselection.TrackSelection;
+import com.google.android.exoplayer2.upstream.DataSource;
+import com.google.android.exoplayer2.upstream.DataSpec;
+import com.google.android.exoplayer2.upstream.TransferListener;
+import com.google.android.exoplayer2.util.TimestampAdjuster;
+import com.google.android.exoplayer2.util.UriUtil;
+import com.google.android.exoplayer2.util.Util;
+import java.io.IOException;
+import java.math.BigInteger;
+import java.util.Arrays;
+import java.util.List;
+
+class HlsChunkSource
+{
+  private final DataSource encryptionDataSource;
+  private byte[] encryptionIv;
+  private String encryptionIvString;
+  private byte[] encryptionKey;
+  private Uri encryptionKeyUri;
+  private HlsMasterPlaylist.HlsUrl expectedPlaylistUrl;
+  private final HlsExtractorFactory extractorFactory;
+  private IOException fatalError;
+  private boolean independentSegments;
+  private boolean isTimestampMaster;
+  private long liveEdgeInPeriodTimeUs;
+  private final DataSource mediaDataSource;
+  private final List<Format> muxedCaptionFormats;
+  private final HlsPlaylistTracker playlistTracker;
+  private byte[] scratchSpace;
+  private boolean seenExpectedPlaylistError;
+  private final TimestampAdjusterProvider timestampAdjusterProvider;
+  private final TrackGroup trackGroup;
+  private TrackSelection trackSelection;
+  private final HlsMasterPlaylist.HlsUrl[] variants;
+  
+  public HlsChunkSource(HlsExtractorFactory paramHlsExtractorFactory, HlsPlaylistTracker paramHlsPlaylistTracker, HlsMasterPlaylist.HlsUrl[] paramArrayOfHlsUrl, HlsDataSourceFactory paramHlsDataSourceFactory, @Nullable TransferListener paramTransferListener, TimestampAdjusterProvider paramTimestampAdjusterProvider, List<Format> paramList)
+  {
+    extractorFactory = paramHlsExtractorFactory;
+    playlistTracker = paramHlsPlaylistTracker;
+    variants = paramArrayOfHlsUrl;
+    timestampAdjusterProvider = paramTimestampAdjusterProvider;
+    muxedCaptionFormats = paramList;
+    liveEdgeInPeriodTimeUs = -9223372036854775807L;
+    paramHlsExtractorFactory = new Format[paramArrayOfHlsUrl.length];
+    paramHlsPlaylistTracker = new int[paramArrayOfHlsUrl.length];
+    int i = 0;
+    while (i < paramArrayOfHlsUrl.length)
+    {
+      paramHlsExtractorFactory[i] = format;
+      paramHlsPlaylistTracker[i] = i;
+      i += 1;
+    }
+    mediaDataSource = paramHlsDataSourceFactory.createDataSource(1);
+    if (paramTransferListener != null) {
+      mediaDataSource.addTransferListener(paramTransferListener);
+    }
+    encryptionDataSource = paramHlsDataSourceFactory.createDataSource(3);
+    trackGroup = new TrackGroup(paramHlsExtractorFactory);
+    trackSelection = new InitializationTrackSelection(trackGroup, paramHlsPlaylistTracker);
+  }
+  
+  private void clearEncryptionData()
+  {
+    encryptionKeyUri = null;
+    encryptionKey = null;
+    encryptionIvString = null;
+    encryptionIv = null;
+  }
+  
+  private long getChunkMediaSequence(@Nullable HlsMediaChunk paramHlsMediaChunk, boolean paramBoolean, HlsMediaPlaylist paramHlsMediaPlaylist, long paramLong1, long paramLong2)
+  {
+    if ((paramHlsMediaChunk != null) && (!paramBoolean)) {
+      return paramHlsMediaChunk.getNextChunkIndex();
+    }
+    long l2 = durationUs;
+    long l1 = paramLong2;
+    if (paramHlsMediaChunk != null) {
+      if (independentSegments) {
+        l1 = paramLong2;
+      } else {
+        l1 = startTimeUs;
+      }
+    }
+    if ((!hasEndTag) && (l1 >= l2 + paramLong1)) {
+      return mediaSequence + segments.size();
+    }
+    List localList = segments;
+    if ((playlistTracker.isLive()) && (paramHlsMediaChunk != null)) {
+      paramBoolean = false;
+    } else {
+      paramBoolean = true;
+    }
+    return Util.binarySearchFloor(localList, Long.valueOf(l1 - paramLong1), true, paramBoolean) + mediaSequence;
+  }
+  
+  private EncryptionKeyChunk newEncryptionKeyChunk(Uri paramUri, String paramString, int paramInt1, int paramInt2, Object paramObject)
+  {
+    paramUri = new DataSpec(paramUri, 0L, -1L, null, 1);
+    return new EncryptionKeyChunk(encryptionDataSource, paramUri, variants[paramInt1].format, paramInt2, paramObject, scratchSpace, paramString);
+  }
+  
+  private long resolveTimeToLiveEdgeUs(long paramLong)
+  {
+    long l2 = liveEdgeInPeriodTimeUs;
+    long l1 = -9223372036854775807L;
+    int i;
+    if (l2 != -9223372036854775807L) {
+      i = 1;
+    } else {
+      i = 0;
+    }
+    if (i != 0) {
+      l1 = liveEdgeInPeriodTimeUs - paramLong;
+    }
+    return l1;
+  }
+  
+  private void setEncryptionData(Uri paramUri, String paramString, byte[] paramArrayOfByte)
+  {
+    if (Util.toLowerInvariant(paramString).startsWith("0x")) {
+      localObject = paramString.substring(2);
+    } else {
+      localObject = paramString;
+    }
+    Object localObject = new BigInteger((String)localObject, 16).toByteArray();
+    byte[] arrayOfByte = new byte[16];
+    int i;
+    if (localObject.length > 16) {
+      i = localObject.length - 16;
+    } else {
+      i = 0;
+    }
+    System.arraycopy(localObject, i, arrayOfByte, arrayOfByte.length - localObject.length + i, localObject.length - i);
+    encryptionKeyUri = paramUri;
+    encryptionKey = paramArrayOfByte;
+    encryptionIvString = paramString;
+    encryptionIv = arrayOfByte;
+  }
+  
+  private void updateLiveEdgeTimeUs(HlsMediaPlaylist paramHlsMediaPlaylist)
+  {
+    long l;
+    if (hasEndTag) {
+      l = -9223372036854775807L;
+    } else {
+      l = paramHlsMediaPlaylist.getEndTimeUs() - playlistTracker.getInitialStartTimeUs();
+    }
+    liveEdgeInPeriodTimeUs = l;
+  }
+  
+  public MediaChunkIterator[] createMediaChunkIterators(@Nullable HlsMediaChunk paramHlsMediaChunk, long paramLong)
+  {
+    int i;
+    if (paramHlsMediaChunk == null) {
+      i = -1;
+    } else {
+      i = trackGroup.indexOf(trackFormat);
+    }
+    MediaChunkIterator[] arrayOfMediaChunkIterator = new MediaChunkIterator[trackSelection.length()];
+    int j = 0;
+    while (j < arrayOfMediaChunkIterator.length)
+    {
+      int k = trackSelection.getIndexInTrackGroup(j);
+      Object localObject = variants[k];
+      if (!playlistTracker.isSnapshotValid((HlsMasterPlaylist.HlsUrl)localObject))
+      {
+        arrayOfMediaChunkIterator[j] = MediaChunkIterator.EMPTY;
+      }
+      else
+      {
+        localObject = playlistTracker.getPlaylistSnapshot((HlsMasterPlaylist.HlsUrl)localObject, false);
+        long l1 = startTimeUs - playlistTracker.getInitialStartTimeUs();
+        boolean bool;
+        if (k != i) {
+          bool = true;
+        } else {
+          bool = false;
+        }
+        long l2 = getChunkMediaSequence(paramHlsMediaChunk, bool, (HlsMediaPlaylist)localObject, l1, paramLong);
+        if (l2 < mediaSequence) {
+          arrayOfMediaChunkIterator[j] = MediaChunkIterator.EMPTY;
+        } else {
+          arrayOfMediaChunkIterator[j] = new HlsMediaPlaylistSegmentIterator((HlsMediaPlaylist)localObject, l1, (int)(l2 - mediaSequence));
+        }
+      }
+      j += 1;
+    }
+    return arrayOfMediaChunkIterator;
+  }
+  
+  public void getNextChunk(long paramLong1, long paramLong2, List<HlsMediaChunk> paramList, HlsChunkHolder paramHlsChunkHolder)
+  {
+    HlsMediaChunk localHlsMediaChunk;
+    if (paramList.isEmpty()) {
+      localHlsMediaChunk = null;
+    } else {
+      localHlsMediaChunk = (HlsMediaChunk)paramList.get(paramList.size() - 1);
+    }
+    if (localHlsMediaChunk == null) {
+      i = -1;
+    } else {
+      i = trackGroup.indexOf(trackFormat);
+    }
+    long l2 = paramLong2 - paramLong1;
+    long l3 = resolveTimeToLiveEdgeUs(paramLong1);
+    long l1 = l2;
+    if (localHlsMediaChunk != null)
+    {
+      l1 = l2;
+      if (!independentSegments)
+      {
+        long l4 = localHlsMediaChunk.getDurationUs();
+        l2 = Math.max(0L, l2 - l4);
+        l1 = l2;
+        if (l3 != -9223372036854775807L)
+        {
+          l3 = Math.max(0L, l3 - l4);
+          l1 = l2;
+          l2 = l3;
+          break label151;
+        }
+      }
+    }
+    l2 = l3;
+    label151:
+    Object localObject1 = createMediaChunkIterators(localHlsMediaChunk, paramLong2);
+    trackSelection.updateSelectedTrack(paramLong1, l1, l2, paramList, (MediaChunkIterator[])localObject1);
+    int k = trackSelection.getSelectedIndexInTrackGroup();
+    int j = 0;
+    int m = 0;
+    int n;
+    if (i != k) {
+      n = 1;
+    } else {
+      n = 0;
+    }
+    paramList = variants[k];
+    if (!playlistTracker.isSnapshotValid(paramList))
+    {
+      playlist = paramList;
+      n = seenExpectedPlaylistError;
+      i = m;
+      if (expectedPlaylistUrl == paramList) {
+        i = 1;
+      }
+      seenExpectedPlaylistError = (n & i);
+      expectedPlaylistUrl = paramList;
+      return;
+    }
+    localObject1 = playlistTracker.getPlaylistSnapshot(paramList, true);
+    independentSegments = hasIndependentSegments;
+    updateLiveEdgeTimeUs((HlsMediaPlaylist)localObject1);
+    l1 = startTimeUs - playlistTracker.getInitialStartTimeUs();
+    paramLong1 = getChunkMediaSequence(localHlsMediaChunk, n, (HlsMediaPlaylist)localObject1, l1, paramLong2);
+    if (paramLong1 < mediaSequence)
+    {
+      if ((localHlsMediaChunk != null) && (n != 0))
+      {
+        paramList = variants[i];
+        localObject1 = playlistTracker.getPlaylistSnapshot(paramList, true);
+        paramLong2 = startTimeUs - playlistTracker.getInitialStartTimeUs();
+        paramLong1 = localHlsMediaChunk.getNextChunkIndex();
+      }
+      else
+      {
+        fatalError = new BehindLiveWindowException();
+      }
+    }
+    else
+    {
+      i = k;
+      paramLong2 = l1;
+    }
+    k = (int)(paramLong1 - mediaSequence);
+    if (k >= segments.size())
+    {
+      if (hasEndTag)
+      {
+        endOfStream = true;
+        return;
+      }
+      playlist = paramList;
+      int i1 = seenExpectedPlaylistError;
+      i = j;
+      if (expectedPlaylistUrl == paramList) {
+        i = 1;
+      }
+      seenExpectedPlaylistError = (i1 & i);
+      expectedPlaylistUrl = paramList;
+      return;
+    }
+    seenExpectedPlaylistError = false;
+    DataSpec localDataSpec = null;
+    expectedPlaylistUrl = null;
+    HlsMediaPlaylist.Segment localSegment = (HlsMediaPlaylist.Segment)segments.get(k);
+    if (fullSegmentEncryptionKeyUri != null)
+    {
+      localObject2 = UriUtil.resolveToUri(baseUri, fullSegmentEncryptionKeyUri);
+      if (!((Uri)localObject2).equals(encryptionKeyUri))
+      {
+        chunk = newEncryptionKeyChunk((Uri)localObject2, encryptionIV, i, trackSelection.getSelectionReason(), trackSelection.getSelectionData());
+        return;
+      }
+      if (!Util.areEqual(encryptionIV, encryptionIvString)) {
+        setEncryptionData((Uri)localObject2, encryptionIV, encryptionKey);
+      }
+    }
+    else
+    {
+      clearEncryptionData();
+    }
+    Object localObject2 = initializationSegment;
+    if (localObject2 != null) {
+      localDataSpec = new DataSpec(UriUtil.resolveToUri(baseUri, url), byterangeOffset, byterangeLength, null);
+    }
+    paramLong2 = relativeStartTimeUs + paramLong2;
+    int i = discontinuitySequence + relativeDiscontinuitySequence;
+    localObject2 = timestampAdjusterProvider.getAdjuster(i);
+    localObject1 = new DataSpec(UriUtil.resolveToUri(baseUri, url), byterangeOffset, byterangeLength, null);
+    chunk = new HlsMediaChunk(extractorFactory, mediaDataSource, (DataSpec)localObject1, localDataSpec, paramList, muxedCaptionFormats, trackSelection.getSelectionReason(), trackSelection.getSelectionData(), paramLong2, paramLong2 + durationUs, paramLong1, i, hasGapTag, isTimestampMaster, (TimestampAdjuster)localObject2, localHlsMediaChunk, drmInitData, encryptionKey, encryptionIv);
+  }
+  
+  public TrackGroup getTrackGroup()
+  {
+    return trackGroup;
+  }
+  
+  public TrackSelection getTrackSelection()
+  {
+    return trackSelection;
+  }
+  
+  public boolean maybeBlacklistTrack(Chunk paramChunk, long paramLong)
+  {
+    return trackSelection.blacklist(trackSelection.indexOf(trackGroup.indexOf(trackFormat)), paramLong);
+  }
+  
+  public void maybeThrowError()
+    throws IOException
+  {
+    if (fatalError == null)
+    {
+      if ((expectedPlaylistUrl != null) && (seenExpectedPlaylistError)) {
+        playlistTracker.maybeThrowPlaylistRefreshError(expectedPlaylistUrl);
+      }
+      return;
+    }
+    throw fatalError;
+  }
+  
+  public void onChunkLoadCompleted(Chunk paramChunk)
+  {
+    if ((paramChunk instanceof EncryptionKeyChunk))
+    {
+      paramChunk = (EncryptionKeyChunk)paramChunk;
+      scratchSpace = paramChunk.getDataHolder();
+      setEncryptionData(dataSpec.uri, iv, paramChunk.getResult());
+    }
+  }
+  
+  public boolean onPlaylistError(HlsMasterPlaylist.HlsUrl paramHlsUrl, long paramLong)
+  {
+    int i = trackGroup.indexOf(format);
+    boolean bool = true;
+    if (i == -1) {
+      return true;
+    }
+    int j = trackSelection.indexOf(i);
+    if (j == -1) {
+      return true;
+    }
+    int k = seenExpectedPlaylistError;
+    if (expectedPlaylistUrl == paramHlsUrl) {
+      i = 1;
+    } else {
+      i = 0;
+    }
+    seenExpectedPlaylistError = (i | k);
+    if (paramLong != -9223372036854775807L)
+    {
+      if (trackSelection.blacklist(j, paramLong)) {
+        return true;
+      }
+      bool = false;
+    }
+    return bool;
+  }
+  
+  public void reset()
+  {
+    fatalError = null;
+  }
+  
+  public void selectTracks(TrackSelection paramTrackSelection)
+  {
+    trackSelection = paramTrackSelection;
+  }
+  
+  public void setIsTimestampMaster(boolean paramBoolean)
+  {
+    isTimestampMaster = paramBoolean;
+  }
+  
+  private static final class EncryptionKeyChunk
+    extends DataChunk
+  {
+    public final String iv;
+    private byte[] result;
+    
+    public EncryptionKeyChunk(DataSource paramDataSource, DataSpec paramDataSpec, Format paramFormat, int paramInt, Object paramObject, byte[] paramArrayOfByte, String paramString)
+    {
+      super(paramDataSpec, 3, paramFormat, paramInt, paramObject, paramArrayOfByte);
+      iv = paramString;
+    }
+    
+    protected void consume(byte[] paramArrayOfByte, int paramInt)
+      throws IOException
+    {
+      result = Arrays.copyOf(paramArrayOfByte, paramInt);
+    }
+    
+    public byte[] getResult()
+    {
+      return result;
+    }
+  }
+  
+  public static final class HlsChunkHolder
+  {
+    public Chunk chunk;
+    public boolean endOfStream;
+    public HlsMasterPlaylist.HlsUrl playlist;
+    
+    public HlsChunkHolder()
+    {
+      clear();
+    }
+    
+    public void clear()
+    {
+      chunk = null;
+      endOfStream = false;
+      playlist = null;
+    }
+  }
+  
+  private static final class HlsMediaPlaylistSegmentIterator
+    extends BaseMediaChunkIterator
+  {
+    private final HlsMediaPlaylist playlist;
+    private final long startOfPlaylistInPeriodUs;
+    
+    public HlsMediaPlaylistSegmentIterator(HlsMediaPlaylist paramHlsMediaPlaylist, long paramLong, int paramInt)
+    {
+      super(segments.size() - 1);
+      playlist = paramHlsMediaPlaylist;
+      startOfPlaylistInPeriodUs = paramLong;
+    }
+    
+    public long getChunkEndTimeUs()
+    {
+      checkInBounds();
+      HlsMediaPlaylist.Segment localSegment = (HlsMediaPlaylist.Segment)playlist.segments.get((int)getCurrentIndex());
+      return startOfPlaylistInPeriodUs + relativeStartTimeUs + durationUs;
+    }
+    
+    public long getChunkStartTimeUs()
+    {
+      checkInBounds();
+      HlsMediaPlaylist.Segment localSegment = (HlsMediaPlaylist.Segment)playlist.segments.get((int)getCurrentIndex());
+      return startOfPlaylistInPeriodUs + relativeStartTimeUs;
+    }
+    
+    public DataSpec getDataSpec()
+    {
+      checkInBounds();
+      HlsMediaPlaylist.Segment localSegment = (HlsMediaPlaylist.Segment)playlist.segments.get((int)getCurrentIndex());
+      return new DataSpec(UriUtil.resolveToUri(playlist.baseUri, url), byterangeOffset, byterangeLength, null);
+    }
+  }
+  
+  private static final class InitializationTrackSelection
+    extends BaseTrackSelection
+  {
+    private int selectedIndex = indexOf(paramTrackGroup.getFormat(0));
+    
+    public InitializationTrackSelection(TrackGroup paramTrackGroup, int[] paramArrayOfInt)
+    {
+      super(paramArrayOfInt);
+    }
+    
+    public int getSelectedIndex()
+    {
+      return selectedIndex;
+    }
+    
+    public Object getSelectionData()
+    {
+      return null;
+    }
+    
+    public int getSelectionReason()
+    {
+      return 0;
+    }
+    
+    public void updateSelectedTrack(long paramLong1, long paramLong2, long paramLong3, List<? extends MediaChunk> paramList, MediaChunkIterator[] paramArrayOfMediaChunkIterator)
+    {
+      paramLong1 = SystemClock.elapsedRealtime();
+      if (!isBlacklisted(selectedIndex, paramLong1)) {
+        return;
+      }
+      int i = length - 1;
+      while (i >= 0)
+      {
+        if (!isBlacklisted(i, paramLong1))
+        {
+          selectedIndex = i;
+          return;
+        }
+        i -= 1;
+      }
+      throw new IllegalStateException();
+    }
+  }
+}

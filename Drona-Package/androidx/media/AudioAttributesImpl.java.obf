@@ -1,0 +1,26 @@
+package androidx.media;
+
+import android.os.Bundle;
+import androidx.annotation.NonNull;
+import androidx.versionedparcelable.VersionedParcelable;
+
+abstract interface AudioAttributesImpl
+  extends VersionedParcelable
+{
+  public abstract Object getAudioAttributes();
+  
+  public abstract int getContentType();
+  
+  public abstract int getFlags();
+  
+  public abstract int getLegacyStreamType();
+  
+  public abstract int getRawLegacyStreamType();
+  
+  public abstract int getUsage();
+  
+  public abstract int getVolumeControlStream();
+  
+  @NonNull
+  public abstract Bundle toBundle();
+}

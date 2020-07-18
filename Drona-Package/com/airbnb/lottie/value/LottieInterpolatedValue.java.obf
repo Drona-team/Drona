@@ -1,0 +1,32 @@
+package com.airbnb.lottie.value;
+
+import android.view.animation.Interpolator;
+import android.view.animation.LinearInterpolator;
+
+abstract class LottieInterpolatedValue<T>
+  extends LottieValueCallback<T>
+{
+  private final T endValue;
+  private final Interpolator interpolator;
+  private final T startValue;
+  
+  LottieInterpolatedValue(T paramT1, T paramT2)
+  {
+    this(paramT1, paramT2, new LinearInterpolator());
+  }
+  
+  LottieInterpolatedValue(T paramT1, T paramT2, Interpolator paramInterpolator)
+  {
+    startValue = paramT1;
+    endValue = paramT2;
+    interpolator = paramInterpolator;
+  }
+  
+  public T getValue(LottieFrameInfo<T> paramLottieFrameInfo)
+  {
+    float f = interpolator.getInterpolation(paramLottieFrameInfo.getOverallProgress());
+    return interpolateValue(startValue, endValue, f);
+  }
+  
+  abstract T interpolateValue(T paramT1, T paramT2, float paramFloat);
+}

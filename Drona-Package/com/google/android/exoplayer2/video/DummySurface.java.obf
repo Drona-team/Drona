@@ -1,0 +1,343 @@
+package com.google.android.exoplayer2.video;
+
+import android.annotation.TargetApi;
+import android.content.Context;
+import android.content.pm.PackageManager;
+import android.graphics.SurfaceTexture;
+import android.opengl.EGL14;
+import android.os.Handler;
+import android.os.Handler.Callback;
+import android.os.HandlerThread;
+import android.os.Message;
+import android.view.Surface;
+import androidx.annotation.Nullable;
+import com.google.android.exoplayer2.util.Assertions;
+import com.google.android.exoplayer2.util.EGLSurfaceTexture;
+import com.google.android.exoplayer2.util.Util;
+
+@TargetApi(17)
+public final class DummySurface
+  extends Surface
+{
+  private static final String EXTENSION_PROTECTED_CONTENT = "EGL_EXT_protected_content";
+  private static final String EXTENSION_SURFACELESS_CONTEXT = "EGL_KHR_surfaceless_context";
+  private static final String TAG = "DummySurface";
+  private static int secureMode;
+  private static boolean secureModeInitialized;
+  public final boolean secure;
+  private final DummySurfaceThread thread;
+  private boolean threadReleased;
+  
+  private DummySurface(DummySurfaceThread paramDummySurfaceThread, SurfaceTexture paramSurfaceTexture, boolean paramBoolean)
+  {
+    super(paramSurfaceTexture);
+    thread = paramDummySurfaceThread;
+    secure = paramBoolean;
+  }
+  
+  private static void assertApiLevel17OrHigher()
+  {
+    if (Util.SDK_INT >= 17) {
+      return;
+    }
+    throw new UnsupportedOperationException("Unsupported prior to API level 17");
+  }
+  
+  @TargetApi(24)
+  private static int getSecureModeV24(Context paramContext)
+  {
+    if ((Util.SDK_INT < 26) && (("samsung".equals(Util.MANUFACTURER)) || ("XT1650".equals(Util.MODEL)))) {
+      return 0;
+    }
+    if ((Util.SDK_INT < 26) && (!paramContext.getPackageManager().hasSystemFeature("android.hardware.vr.high_performance"))) {
+      return 0;
+    }
+    paramContext = EGL14.eglQueryString(EGL14.eglGetDisplay(0), 12373);
+    if (paramContext == null) {
+      return 0;
+    }
+    if (!paramContext.contains("EGL_EXT_protected_content")) {
+      return 0;
+    }
+    if (paramContext.contains("EGL_KHR_surfaceless_context")) {
+      return 1;
+    }
+    return 2;
+  }
+  
+  public static boolean isSecureSupported(Context paramContext)
+  {
+    try
+    {
+      boolean bool2 = secureModeInitialized;
+      boolean bool1 = true;
+      if (!bool2)
+      {
+        if (Util.SDK_INT < 24) {
+          i = 0;
+        } else {
+          i = getSecureModeV24(paramContext);
+        }
+        secureMode = i;
+        secureModeInitialized = true;
+      }
+      int i = secureMode;
+      if (i == 0) {
+        bool1 = false;
+      }
+      return bool1;
+    }
+    finally {}
+  }
+  
+  public static DummySurface newInstanceV17(Context paramContext, boolean paramBoolean)
+  {
+    assertApiLevel17OrHigher();
+    int i = 0;
+    boolean bool;
+    if ((paramBoolean) && (!isSecureSupported(paramContext))) {
+      bool = false;
+    } else {
+      bool = true;
+    }
+    Assertions.checkState(bool);
+    paramContext = new DummySurfaceThread();
+    if (paramBoolean) {
+      i = secureMode;
+    }
+    return paramContext.init(i);
+  }
+  
+  public void release()
+  {
+    super.release();
+    synchronized (thread)
+    {
+      if (!threadReleased)
+      {
+        thread.release();
+        threadReleased = true;
+      }
+      return;
+    }
+  }
+  
+  private static class DummySurfaceThread
+    extends HandlerThread
+    implements Handler.Callback
+  {
+    private static final int MSG_INIT = 1;
+    private static final int MSG_RELEASE = 2;
+    private EGLSurfaceTexture eglSurfaceTexture;
+    private Handler handler;
+    @Nullable
+    private Error initError;
+    @Nullable
+    private RuntimeException initException;
+    @Nullable
+    private DummySurface surface;
+    
+    public DummySurfaceThread()
+    {
+      super();
+    }
+    
+    private void initInternal(int paramInt)
+    {
+      Assertions.checkNotNull(eglSurfaceTexture);
+      eglSurfaceTexture.init(paramInt);
+      SurfaceTexture localSurfaceTexture = eglSurfaceTexture.getSurfaceTexture();
+      boolean bool;
+      if (paramInt != 0) {
+        bool = true;
+      } else {
+        bool = false;
+      }
+      surface = new DummySurface(this, localSurfaceTexture, bool, null);
+    }
+    
+    private void releaseInternal()
+    {
+      Assertions.checkNotNull(eglSurfaceTexture);
+      eglSurfaceTexture.release();
+    }
+    
+    /* Error */
+    public boolean handleMessage(Message paramMessage)
+    {
+      // Byte code:
+      //   0: aload_1
+      //   1: getfield 74	android/os/Message:what	I
+      //   4: tableswitch	default:+24->28, 1:+60->64, 2:+26->30
+      //   28: iconst_1
+      //   29: ireturn
+      //   30: aload_0
+      //   31: invokespecial 76	com/google/android/exoplayer2/video/DummySurface$DummySurfaceThread:releaseInternal	()V
+      //   34: aload_0
+      //   35: invokevirtual 80	com/google/android/exoplayer2/video/DummySurface$DummySurfaceThread:quit	()Z
+      //   38: pop
+      //   39: iconst_1
+      //   40: ireturn
+      //   41: astore_1
+      //   42: goto +15 -> 57
+      //   45: astore_1
+      //   46: ldc 82
+      //   48: ldc 84
+      //   50: aload_1
+      //   51: invokestatic 90	com/google/android/exoplayer2/util/Log:e	(Ljava/lang/String;Ljava/lang/String;Ljava/lang/Throwable;)V
+      //   54: goto -20 -> 34
+      //   57: aload_0
+      //   58: invokevirtual 80	com/google/android/exoplayer2/video/DummySurface$DummySurfaceThread:quit	()Z
+      //   61: pop
+      //   62: aload_1
+      //   63: athrow
+      //   64: aload_0
+      //   65: aload_1
+      //   66: getfield 93	android/os/Message:arg1	I
+      //   69: invokespecial 95	com/google/android/exoplayer2/video/DummySurface$DummySurfaceThread:initInternal	(I)V
+      //   72: aload_0
+      //   73: monitorenter
+      //   74: aload_0
+      //   75: invokevirtual 100	java/lang/Object:notify	()V
+      //   78: aload_0
+      //   79: monitorexit
+      //   80: iconst_1
+      //   81: ireturn
+      //   82: astore_1
+      //   83: aload_0
+      //   84: monitorexit
+      //   85: aload_1
+      //   86: athrow
+      //   87: astore_1
+      //   88: goto +61 -> 149
+      //   91: astore_1
+      //   92: ldc 82
+      //   94: ldc 102
+      //   96: aload_1
+      //   97: invokestatic 90	com/google/android/exoplayer2/util/Log:e	(Ljava/lang/String;Ljava/lang/String;Ljava/lang/Throwable;)V
+      //   100: aload_0
+      //   101: aload_1
+      //   102: putfield 104	com/google/android/exoplayer2/video/DummySurface$DummySurfaceThread:initError	Ljava/lang/Error;
+      //   105: aload_0
+      //   106: monitorenter
+      //   107: aload_0
+      //   108: invokevirtual 100	java/lang/Object:notify	()V
+      //   111: aload_0
+      //   112: monitorexit
+      //   113: iconst_1
+      //   114: ireturn
+      //   115: astore_1
+      //   116: aload_0
+      //   117: monitorexit
+      //   118: aload_1
+      //   119: athrow
+      //   120: astore_1
+      //   121: ldc 82
+      //   123: ldc 102
+      //   125: aload_1
+      //   126: invokestatic 90	com/google/android/exoplayer2/util/Log:e	(Ljava/lang/String;Ljava/lang/String;Ljava/lang/Throwable;)V
+      //   129: aload_0
+      //   130: aload_1
+      //   131: putfield 106	com/google/android/exoplayer2/video/DummySurface$DummySurfaceThread:initException	Ljava/lang/RuntimeException;
+      //   134: aload_0
+      //   135: monitorenter
+      //   136: aload_0
+      //   137: invokevirtual 100	java/lang/Object:notify	()V
+      //   140: aload_0
+      //   141: monitorexit
+      //   142: iconst_1
+      //   143: ireturn
+      //   144: astore_1
+      //   145: aload_0
+      //   146: monitorexit
+      //   147: aload_1
+      //   148: athrow
+      //   149: aload_0
+      //   150: monitorenter
+      //   151: aload_0
+      //   152: invokevirtual 100	java/lang/Object:notify	()V
+      //   155: aload_0
+      //   156: monitorexit
+      //   157: aload_1
+      //   158: athrow
+      //   159: astore_1
+      //   160: aload_0
+      //   161: monitorexit
+      //   162: aload_1
+      //   163: athrow
+      // Local variable table:
+      //   start	length	slot	name	signature
+      //   0	164	0	this	DummySurfaceThread
+      //   0	164	1	paramMessage	Message
+      // Exception table:
+      //   from	to	target	type
+      //   30	34	41	finally
+      //   46	54	41	finally
+      //   30	34	45	java/lang/Throwable
+      //   74	80	82	finally
+      //   83	85	82	finally
+      //   64	72	87	finally
+      //   92	105	87	finally
+      //   121	134	87	finally
+      //   64	72	91	java/lang/Error
+      //   107	113	115	finally
+      //   116	118	115	finally
+      //   64	72	120	java/lang/RuntimeException
+      //   136	142	144	finally
+      //   145	147	144	finally
+      //   151	157	159	finally
+      //   160	162	159	finally
+    }
+    
+    public DummySurface init(int paramInt)
+    {
+      start();
+      handler = new Handler(getLooper(), this);
+      eglSurfaceTexture = new EGLSurfaceTexture(handler);
+      for (;;)
+      {
+        try
+        {
+          Object localObject1 = handler;
+          int i = 0;
+          ((Handler)localObject1).obtainMessage(1, paramInt, 0).sendToTarget();
+          paramInt = i;
+          if ((surface == null) && (initException == null))
+          {
+            localObject1 = initError;
+            if (localObject1 != null) {
+              break;
+            }
+          }
+        }
+        finally {}
+        try
+        {
+          wait();
+        }
+        catch (InterruptedException localInterruptedException)
+        {
+          continue;
+        }
+        paramInt = 1;
+      }
+      if (paramInt != 0) {
+        Thread.currentThread().interrupt();
+      }
+      if (initException == null)
+      {
+        if (initError == null) {
+          return (DummySurface)Assertions.checkNotNull(surface);
+        }
+        throw initError;
+      }
+      throw initException;
+    }
+    
+    public void release()
+    {
+      Assertions.checkNotNull(handler);
+      handler.sendEmptyMessage(2);
+    }
+  }
+}

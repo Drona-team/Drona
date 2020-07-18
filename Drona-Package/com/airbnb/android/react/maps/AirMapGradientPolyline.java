@@ -1,0 +1,312 @@
+package com.airbnb.android.react.maps;
+
+import android.content.Context;
+import android.content.res.Resources;
+import android.graphics.Bitmap;
+import android.graphics.Bitmap.CompressFormat;
+import android.graphics.Bitmap.Config;
+import android.graphics.Canvas;
+import android.graphics.Color;
+import android.graphics.LinearGradient;
+import android.graphics.Matrix;
+import android.graphics.Paint;
+import android.graphics.Paint.Cap;
+import android.graphics.Paint.Join;
+import android.graphics.Paint.Style;
+import android.graphics.Shader;
+import android.graphics.Shader.TileMode;
+import android.util.DisplayMetrics;
+import android.util.Log;
+import com.google.android.gms.maps.GoogleMap;
+import com.google.android.gms.maps.model.LatLng;
+import com.google.android.gms.maps.model.Tile;
+import com.google.android.gms.maps.model.TileOverlay;
+import com.google.android.gms.maps.model.TileOverlayOptions;
+import com.google.android.gms.maps.model.TileProvider;
+import com.google.maps.android.SphericalUtil;
+import com.google.maps.android.geometry.Point;
+import com.google.maps.android.projection.SphericalMercatorProjection;
+import java.io.ByteArrayOutputStream;
+import java.io.OutputStream;
+import java.util.List;
+
+public class AirMapGradientPolyline
+  extends AirMapFeature
+{
+  private int[] colors;
+  protected final Context context;
+  private GoogleMap dimensions;
+  private List<LatLng> points;
+  private TileOverlay tileOverlay;
+  private TileOverlayOptions tileOverlayOptions;
+  private AirMapGradientPolylineProvider tileProvider;
+  private float width;
+  private float zIndex;
+  
+  public AirMapGradientPolyline(Context paramContext)
+  {
+    super(paramContext);
+    context = paramContext;
+  }
+  
+  private TileOverlayOptions createTileOverlayOptions()
+  {
+    TileOverlayOptions localTileOverlayOptions = new TileOverlayOptions();
+    localTileOverlayOptions.zIndex(zIndex);
+    tileProvider = new AirMapGradientPolylineProvider(context, points, colors, width);
+    localTileOverlayOptions.tileProvider(tileProvider);
+    return localTileOverlayOptions;
+  }
+  
+  public static int interpolateColor(int[] paramArrayOfInt, float paramFloat)
+  {
+    float f1 = paramArrayOfInt.length - 1;
+    int k = 0;
+    int m = 0;
+    int j = 0;
+    int i = 0;
+    while (k < paramArrayOfInt.length)
+    {
+      float f2 = Math.max(1.0F - Math.abs(paramFloat * f1 - k), 0.0F);
+      m += (int)(Color.red(paramArrayOfInt[k]) * f2);
+      j += (int)(Color.green(paramArrayOfInt[k]) * f2);
+      i += (int)(Color.blue(paramArrayOfInt[k]) * f2);
+      k += 1;
+    }
+    return Color.rgb(m, j, i);
+  }
+  
+  public void addToMap(GoogleMap paramGoogleMap)
+  {
+    Log.d("AirMapGradientPolyline", "ADDTOMAP");
+    dimensions = paramGoogleMap;
+    tileOverlay = paramGoogleMap.addTileOverlay(createTileOverlayOptions());
+  }
+  
+  public Object getFeature()
+  {
+    return tileOverlay;
+  }
+  
+  public void removeFromMap(GoogleMap paramGoogleMap)
+  {
+    tileOverlay.remove();
+  }
+  
+  public void setCoordinates(List paramList)
+  {
+    points = paramList;
+    if (tileOverlay != null) {
+      tileOverlay.remove();
+    }
+    if (dimensions != null) {
+      tileOverlay = dimensions.addTileOverlay(createTileOverlayOptions());
+    }
+  }
+  
+  public void setStrokeColors(int[] paramArrayOfInt)
+  {
+    colors = paramArrayOfInt;
+    if (tileOverlay != null) {
+      tileOverlay.remove();
+    }
+    if (dimensions != null) {
+      tileOverlay = dimensions.addTileOverlay(createTileOverlayOptions());
+    }
+  }
+  
+  public void setWidth(float paramFloat)
+  {
+    width = paramFloat;
+    if (tileOverlay != null) {
+      tileOverlay.remove();
+    }
+    if (dimensions != null) {
+      tileOverlay = dimensions.addTileOverlay(createTileOverlayOptions());
+    }
+  }
+  
+  public void setZIndex(float paramFloat)
+  {
+    zIndex = paramFloat;
+    if (tileOverlay != null) {
+      tileOverlay.setZIndex(paramFloat);
+    }
+  }
+  
+  public class AirMapGradientPolylineProvider
+    implements TileProvider
+  {
+    public static final int BASE_TILE_SIZE = 256;
+    protected final int[] colors;
+    protected final float density;
+    protected final List<LatLng> points;
+    protected Point[] projectedPtMids;
+    protected Point[] projectedPts;
+    protected final SphericalMercatorProjection projection;
+    protected final int tileDimension;
+    protected LatLng[] trailLatLngs;
+    protected final float width;
+    
+    public AirMapGradientPolylineProvider(Context paramContext, List paramList, int[] paramArrayOfInt, float paramFloat)
+    {
+      points = paramList;
+      colors = paramArrayOfInt;
+      width = paramFloat;
+      density = getResourcesgetDisplayMetricsdensity;
+      tileDimension = ((int)(density * 256.0F));
+      projection = new SphericalMercatorProjection(256.0D);
+      calculatePoints();
+    }
+    
+    public void calculatePoints()
+    {
+      trailLatLngs = new LatLng[points.size()];
+      projectedPts = new Point[points.size()];
+      int j = points.size();
+      int i = 0;
+      projectedPtMids = new Point[Math.max(j - 1, 0)];
+      while (i < points.size())
+      {
+        LatLng localLatLng = (LatLng)points.get(i);
+        trailLatLngs[i] = localLatLng;
+        projectedPts[i] = projection.toPoint(localLatLng);
+        if (i > 0)
+        {
+          List localList = points;
+          j = i - 1;
+          localLatLng = SphericalUtil.interpolate((LatLng)localList.get(j), localLatLng, 0.5D);
+          projectedPtMids[j] = projection.toPoint(localLatLng);
+        }
+        i += 1;
+      }
+    }
+    
+    public void drawLine(Canvas paramCanvas, Matrix paramMatrix, Paint paramPaint1, Paint paramPaint2, AirMapGradientPolyline.MutPoint paramMutPoint1, AirMapGradientPolyline.MutPoint paramMutPoint2, float paramFloat1, float paramFloat2)
+    {
+      if (paramFloat1 == paramFloat2)
+      {
+        drawLine(paramCanvas, paramPaint2, paramMutPoint1, paramMutPoint2, paramFloat1);
+        return;
+      }
+      paramMatrix.reset();
+      paramMatrix.preRotate((float)Math.toDegrees(Math.atan2(y - y, x - x)), (float)x, (float)y);
+      paramMatrix.preTranslate((float)x, (float)y);
+      float f = (float)Math.sqrt(Math.pow(x - x, 2.0D) + Math.pow(y - y, 2.0D));
+      paramMatrix.preScale(f, f);
+      paramFloat2 = 1.0F / (paramFloat2 - paramFloat1);
+      paramMatrix.preScale(paramFloat2, paramFloat2);
+      paramMatrix.preTranslate(-paramFloat1, 0.0F);
+      paramPaint1.getShader().setLocalMatrix(paramMatrix);
+      paramCanvas.drawLine((float)x, (float)y, (float)x, (float)y, paramPaint1);
+    }
+    
+    public void drawLine(Canvas paramCanvas, Paint paramPaint, AirMapGradientPolyline.MutPoint paramMutPoint1, AirMapGradientPolyline.MutPoint paramMutPoint2, float paramFloat)
+    {
+      paramPaint.setColor(AirMapGradientPolyline.interpolateColor(colors, paramFloat));
+      paramCanvas.drawLine((float)x, (float)y, (float)x, (float)y, paramPaint);
+    }
+    
+    public Tile getTile(int paramInt1, int paramInt2, int paramInt3)
+    {
+      Bitmap localBitmap = Bitmap.createBitmap(tileDimension, tileDimension, Bitmap.Config.ARGB_8888);
+      Object localObject = new Canvas(localBitmap);
+      Matrix localMatrix = new Matrix();
+      Paint localPaint1 = new Paint();
+      localPaint1.setStyle(Paint.Style.STROKE);
+      localPaint1.setStrokeWidth(width);
+      localPaint1.setStrokeCap(Paint.Cap.BUTT);
+      localPaint1.setStrokeJoin(Paint.Join.ROUND);
+      localPaint1.setFlags(1);
+      localPaint1.setShader(new LinearGradient(0.0F, 0.0F, 1.0F, 0.0F, colors, null, Shader.TileMode.CLAMP));
+      localPaint1.getShader().setLocalMatrix(localMatrix);
+      Paint localPaint2 = new Paint();
+      localPaint2.setStyle(Paint.Style.STROKE);
+      localPaint2.setStrokeWidth(width);
+      localPaint2.setStrokeCap(Paint.Cap.BUTT);
+      localPaint2.setStrokeJoin(Paint.Join.ROUND);
+      localPaint2.setFlags(1);
+      renderTrail((Canvas)localObject, localMatrix, localPaint1, localPaint2, (float)(Math.pow(2.0D, paramInt3) * density), paramInt1, paramInt2);
+      localObject = new ByteArrayOutputStream();
+      localBitmap.compress(Bitmap.CompressFormat.PNG, 100, (OutputStream)localObject);
+      return new Tile(tileDimension, tileDimension, ((ByteArrayOutputStream)localObject).toByteArray());
+    }
+    
+    public void renderTrail(Canvas paramCanvas, Matrix paramMatrix, Paint paramPaint1, Paint paramPaint2, float paramFloat, int paramInt1, int paramInt2)
+    {
+      AirMapGradientPolyline.MutPoint localMutPoint1 = new AirMapGradientPolyline.MutPoint();
+      AirMapGradientPolyline.MutPoint localMutPoint5 = new AirMapGradientPolyline.MutPoint();
+      AirMapGradientPolyline.MutPoint localMutPoint2 = new AirMapGradientPolyline.MutPoint();
+      AirMapGradientPolyline.MutPoint localMutPoint3 = new AirMapGradientPolyline.MutPoint();
+      AirMapGradientPolyline.MutPoint localMutPoint4 = new AirMapGradientPolyline.MutPoint();
+      if (points.size() == 1)
+      {
+        localMutPoint1.toMapPixels(projectedPts[0], paramFloat, paramInt1, paramInt2, tileDimension);
+        paramPaint2.setStyle(Paint.Style.FILL);
+        paramPaint2.setColor(AirMapGradientPolyline.interpolateColor(colors, 1.0F));
+        paramCanvas.drawCircle((float)x, (float)y, paramPaint2.getStrokeWidth() / 2.0F, paramPaint2);
+        paramPaint2.setStyle(Paint.Style.STROKE);
+        return;
+      }
+      if (points.size() == 2)
+      {
+        localMutPoint1.toMapPixels(projectedPts[0], paramFloat, paramInt1, paramInt2, tileDimension);
+        localMutPoint5.toMapPixels(projectedPts[1], paramFloat, paramInt1, paramInt2, tileDimension);
+        drawLine(paramCanvas, paramPaint2, localMutPoint1, localMutPoint5, 0.0F);
+        return;
+      }
+      int i = 2;
+      while (i < points.size())
+      {
+        Object localObject = projectedPts;
+        int j = i - 2;
+        localMutPoint1.toMapPixels(localObject[j], paramFloat, paramInt1, paramInt2, tileDimension);
+        localObject = projectedPts;
+        int k = i - 1;
+        localMutPoint5.toMapPixels(localObject[k], paramFloat, paramInt1, paramInt2, tileDimension);
+        localMutPoint2.toMapPixels(projectedPts[i], paramFloat, paramInt1, paramInt2, tileDimension);
+        localMutPoint3.toMapPixels(projectedPtMids[j], paramFloat, paramInt1, paramInt2, tileDimension);
+        localMutPoint4.toMapPixels(projectedPtMids[k], paramFloat, paramInt1, paramInt2, tileDimension);
+        float f2 = i;
+        float f1 = (f2 - 2.0F) / points.size();
+        f2 = (f2 - 1.0F) / points.size();
+        float f3 = (f1 + f2) / 2.0F;
+        Log.d("AirMapGradientPolyline", String.valueOf(f3));
+        paramPaint2.setStyle(Paint.Style.FILL);
+        paramPaint2.setColor(AirMapGradientPolyline.interpolateColor(colors, f3));
+        paramCanvas.drawCircle((float)x, (float)y, paramPaint2.getStrokeWidth() / 2.0F, paramPaint2);
+        paramPaint2.setStyle(Paint.Style.STROKE);
+        if (j == 0) {
+          localObject = localMutPoint1;
+        } else {
+          localObject = localMutPoint3;
+        }
+        drawLine(paramCanvas, paramMatrix, paramPaint1, paramPaint2, (AirMapGradientPolyline.MutPoint)localObject, localMutPoint5, f1, f3);
+        if (i == points.size() - 1) {
+          localObject = localMutPoint2;
+        } else {
+          localObject = localMutPoint4;
+        }
+        drawLine(paramCanvas, paramMatrix, paramPaint1, paramPaint2, localMutPoint5, (AirMapGradientPolyline.MutPoint)localObject, f3, f2);
+        i += 1;
+      }
+    }
+  }
+  
+  public static class MutPoint
+  {
+    public double x;
+    public double y;
+    
+    public MutPoint() {}
+    
+    public MutPoint toMapPixels(Point paramPoint, float paramFloat, int paramInt1, int paramInt2, int paramInt3)
+    {
+      double d1 = x;
+      double d2 = paramFloat;
+      x = (d1 * d2 - paramInt1 * paramInt3);
+      y = (y * d2 - paramInt2 * paramInt3);
+      return this;
+    }
+  }
+}

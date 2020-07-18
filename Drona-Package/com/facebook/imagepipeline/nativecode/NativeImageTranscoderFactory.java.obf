@@ -1,0 +1,23 @@
+package com.facebook.imagepipeline.nativecode;
+
+import com.facebook.imagepipeline.transcoder.ImageTranscoderFactory;
+import java.lang.reflect.Constructor;
+import java.lang.reflect.InvocationTargetException;
+
+public final class NativeImageTranscoderFactory
+{
+  private NativeImageTranscoderFactory() {}
+  
+  public static ImageTranscoderFactory getNativeImageTranscoderFactory(int paramInt, boolean paramBoolean)
+  {
+    try
+    {
+      ImageTranscoderFactory localImageTranscoderFactory = (ImageTranscoderFactory)Class.forName("com.facebook.imagepipeline.nativecode.NativeJpegTranscoderFactory").getConstructor(new Class[] { Integer.TYPE, Boolean.TYPE }).newInstance(new Object[] { Integer.valueOf(paramInt), Boolean.valueOf(paramBoolean) });
+      return localImageTranscoderFactory;
+    }
+    catch (NoSuchMethodException|SecurityException|InstantiationException|InvocationTargetException|IllegalAccessException|IllegalArgumentException|ClassNotFoundException localNoSuchMethodException)
+    {
+      throw new RuntimeException("Dependency ':native-imagetranscoder' is needed to use the default native image transcoder.", localNoSuchMethodException);
+    }
+  }
+}

@@ -1,0 +1,220 @@
+package com.bumptech.glide.load.model;
+
+import androidx.annotation.NonNull;
+import androidx.annotation.Nullable;
+import androidx.core.util.Pools.Pool;
+import java.util.ArrayList;
+import java.util.Collections;
+import java.util.HashMap;
+import java.util.Iterator;
+import java.util.List;
+import java.util.Map;
+
+public class ModelLoaderRegistry
+{
+  private final ModelLoaderCache cache = new ModelLoaderCache();
+  private final MultiModelLoaderFactory multiModelLoaderFactory;
+  
+  public ModelLoaderRegistry(@NonNull Pools.Pool<List<Throwable>> paramPool)
+  {
+    this(new MultiModelLoaderFactory(paramPool));
+  }
+  
+  private ModelLoaderRegistry(@NonNull MultiModelLoaderFactory paramMultiModelLoaderFactory)
+  {
+    multiModelLoaderFactory = paramMultiModelLoaderFactory;
+  }
+  
+  @NonNull
+  private static <A> Class<A> getClass(@NonNull A paramA)
+  {
+    return paramA.getClass();
+  }
+  
+  @NonNull
+  private <A> List<ModelLoader<A, ?>> getModelLoadersForClass(@NonNull Class<A> paramClass)
+  {
+    try
+    {
+      List localList2 = cache.get(paramClass);
+      List localList1 = localList2;
+      if (localList2 == null)
+      {
+        localList1 = Collections.unmodifiableList(multiModelLoaderFactory.build(paramClass));
+        cache.put(paramClass, localList1);
+      }
+      return localList1;
+    }
+    finally {}
+  }
+  
+  private <Model, Data> void tearDown(@NonNull List<ModelLoaderFactory<? extends Model, ? extends Data>> paramList)
+  {
+    paramList = paramList.iterator();
+    while (paramList.hasNext()) {
+      ((ModelLoaderFactory)paramList.next()).teardown();
+    }
+  }
+  
+  public <Model, Data> void append(@NonNull Class<Model> paramClass, @NonNull Class<Data> paramClass1, @NonNull ModelLoaderFactory<? extends Model, ? extends Data> paramModelLoaderFactory)
+  {
+    try
+    {
+      multiModelLoaderFactory.append(paramClass, paramClass1, paramModelLoaderFactory);
+      cache.clear();
+      return;
+    }
+    finally
+    {
+      paramClass = finally;
+      throw paramClass;
+    }
+  }
+  
+  public <Model, Data> ModelLoader<Model, Data> build(@NonNull Class<Model> paramClass, @NonNull Class<Data> paramClass1)
+  {
+    try
+    {
+      paramClass = multiModelLoaderFactory.build(paramClass, paramClass1);
+      return paramClass;
+    }
+    finally
+    {
+      paramClass = finally;
+      throw paramClass;
+    }
+  }
+  
+  @NonNull
+  public List<Class<?>> getDataClasses(@NonNull Class<?> paramClass)
+  {
+    try
+    {
+      paramClass = multiModelLoaderFactory.getDataClasses(paramClass);
+      return paramClass;
+    }
+    finally
+    {
+      paramClass = finally;
+      throw paramClass;
+    }
+  }
+  
+  @NonNull
+  public <A> List<ModelLoader<A, ?>> getModelLoaders(@NonNull A paramA)
+  {
+    List localList = getModelLoadersForClass(getClass(paramA));
+    int m = localList.size();
+    Object localObject1 = Collections.emptyList();
+    int k = 0;
+    int j;
+    for (int i = 1; k < m; i = j)
+    {
+      ModelLoader localModelLoader = (ModelLoader)localList.get(k);
+      Object localObject2 = localObject1;
+      j = i;
+      if (localModelLoader.handles(paramA))
+      {
+        j = i;
+        if (i != 0)
+        {
+          localObject1 = new ArrayList(m - k);
+          j = 0;
+        }
+        ((List)localObject1).add(localModelLoader);
+        localObject2 = localObject1;
+      }
+      k += 1;
+      localObject1 = localObject2;
+    }
+    return localObject1;
+  }
+  
+  public <Model, Data> void prepend(@NonNull Class<Model> paramClass, @NonNull Class<Data> paramClass1, @NonNull ModelLoaderFactory<? extends Model, ? extends Data> paramModelLoaderFactory)
+  {
+    try
+    {
+      multiModelLoaderFactory.prepend(paramClass, paramClass1, paramModelLoaderFactory);
+      cache.clear();
+      return;
+    }
+    finally
+    {
+      paramClass = finally;
+      throw paramClass;
+    }
+  }
+  
+  public <Model, Data> void remove(@NonNull Class<Model> paramClass, @NonNull Class<Data> paramClass1)
+  {
+    try
+    {
+      tearDown(multiModelLoaderFactory.remove(paramClass, paramClass1));
+      cache.clear();
+      return;
+    }
+    finally
+    {
+      paramClass = finally;
+      throw paramClass;
+    }
+  }
+  
+  public <Model, Data> void replace(@NonNull Class<Model> paramClass, @NonNull Class<Data> paramClass1, @NonNull ModelLoaderFactory<? extends Model, ? extends Data> paramModelLoaderFactory)
+  {
+    try
+    {
+      tearDown(multiModelLoaderFactory.replace(paramClass, paramClass1, paramModelLoaderFactory));
+      cache.clear();
+      return;
+    }
+    finally
+    {
+      paramClass = finally;
+      throw paramClass;
+    }
+  }
+  
+  private static class ModelLoaderCache
+  {
+    private final Map<Class<?>, Entry<?>> cachedModelLoaders = new HashMap();
+    
+    ModelLoaderCache() {}
+    
+    public void clear()
+    {
+      cachedModelLoaders.clear();
+    }
+    
+    @Nullable
+    public <Model> List<ModelLoader<Model, ?>> get(Class<Model> paramClass)
+    {
+      paramClass = (Entry)cachedModelLoaders.get(paramClass);
+      if (paramClass == null) {
+        return null;
+      }
+      return loaders;
+    }
+    
+    public <Model> void put(Class<Model> paramClass, List<ModelLoader<Model, ?>> paramList)
+    {
+      if ((Entry)cachedModelLoaders.put(paramClass, new Entry(paramList)) == null) {
+        return;
+      }
+      paramList = new StringBuilder();
+      paramList.append("Already cached loaders for model: ");
+      paramList.append(paramClass);
+      throw new IllegalStateException(paramList.toString());
+    }
+    
+    private static class Entry<Model>
+    {
+      final List<ModelLoader<Model, ?>> loaders;
+      
+      public Entry(List<ModelLoader<Model, ?>> paramList)
+      {
+        loaders = paramList;
+      }
+    }
+  }
+}

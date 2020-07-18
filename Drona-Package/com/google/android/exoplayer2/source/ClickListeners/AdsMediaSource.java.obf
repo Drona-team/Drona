@@ -1,0 +1,418 @@
+package com.google.android.exoplayer2.source.ads;
+
+import [J;
+import android.net.Uri;
+import android.os.Handler;
+import android.os.Looper;
+import android.view.ViewGroup;
+import androidx.annotation.Nullable;
+import com.google.android.exoplayer2.ExoPlayer;
+import com.google.android.exoplayer2.Timeline;
+import com.google.android.exoplayer2.Timeline.Period;
+import com.google.android.exoplayer2.source.CompositeMediaSource;
+import com.google.android.exoplayer2.source.DeferredMediaPeriod;
+import com.google.android.exoplayer2.source.DeferredMediaPeriod.PrepareErrorListener;
+import com.google.android.exoplayer2.source.ExtractorMediaSource.Factory;
+import com.google.android.exoplayer2.source.MediaPeriod;
+import com.google.android.exoplayer2.source.MediaSource;
+import com.google.android.exoplayer2.source.MediaSource.MediaPeriodId;
+import com.google.android.exoplayer2.source.MediaSourceEventListener.EventDispatcher;
+import com.google.android.exoplayer2.upstream.Allocator;
+import com.google.android.exoplayer2.upstream.DataSource.Factory;
+import com.google.android.exoplayer2.upstream.DataSpec;
+import com.google.android.exoplayer2.upstream.TransferListener;
+import com.google.android.exoplayer2.util.Assertions;
+import java.io.IOException;
+import java.lang.annotation.Annotation;
+import java.lang.annotation.Documented;
+import java.lang.annotation.Retention;
+import java.lang.annotation.RetentionPolicy;
+import java.util.ArrayList;
+import java.util.Arrays;
+import java.util.Collections;
+import java.util.HashMap;
+import java.util.List;
+import java.util.Map;
+
+public final class AdsMediaSource
+  extends CompositeMediaSource<MediaSource.MediaPeriodId>
+{
+  private static final MediaSource.MediaPeriodId DUMMY_CONTENT_MEDIA_PERIOD_ID = new MediaSource.MediaPeriodId(new Object());
+  private MediaSource[][] adGroupMediaSources;
+  private Timeline[][] adGroupTimelines;
+  private final MediaSourceFactory adMediaSourceFactory;
+  private AdPlaybackState adPlaybackState;
+  private final ViewGroup adUiViewGroup;
+  private final AdsLoader adsLoader;
+  private ComponentListener componentListener;
+  private Object contentManifest;
+  private final MediaSource contentMediaSource;
+  private Timeline contentTimeline;
+  private final Map<MediaSource, List<DeferredMediaPeriod>> deferredMediaPeriodByAdMediaSource;
+  @Nullable
+  private final Handler eventHandler;
+  @Nullable
+  private final EventListener eventListener;
+  private final Handler mainHandler;
+  private final Timeline.Period period;
+  
+  public AdsMediaSource(MediaSource paramMediaSource, MediaSourceFactory paramMediaSourceFactory, AdsLoader paramAdsLoader, ViewGroup paramViewGroup)
+  {
+    this(paramMediaSource, paramMediaSourceFactory, paramAdsLoader, paramViewGroup, null, null);
+  }
+  
+  @Deprecated
+  public AdsMediaSource(MediaSource paramMediaSource, MediaSourceFactory paramMediaSourceFactory, AdsLoader paramAdsLoader, ViewGroup paramViewGroup, @Nullable Handler paramHandler, @Nullable EventListener paramEventListener)
+  {
+    contentMediaSource = paramMediaSource;
+    adMediaSourceFactory = paramMediaSourceFactory;
+    adsLoader = paramAdsLoader;
+    adUiViewGroup = paramViewGroup;
+    eventHandler = paramHandler;
+    eventListener = paramEventListener;
+    mainHandler = new Handler(Looper.getMainLooper());
+    deferredMediaPeriodByAdMediaSource = new HashMap();
+    period = new Timeline.Period();
+    adGroupMediaSources = new MediaSource[0][];
+    adGroupTimelines = new Timeline[0][];
+    paramAdsLoader.setSupportedContentTypes(paramMediaSourceFactory.getSupportedTypes());
+  }
+  
+  public AdsMediaSource(MediaSource paramMediaSource, DataSource.Factory paramFactory, AdsLoader paramAdsLoader, ViewGroup paramViewGroup)
+  {
+    this(paramMediaSource, new ExtractorMediaSource.Factory(paramFactory), paramAdsLoader, paramViewGroup, null, null);
+  }
+  
+  @Deprecated
+  public AdsMediaSource(MediaSource paramMediaSource, DataSource.Factory paramFactory, AdsLoader paramAdsLoader, ViewGroup paramViewGroup, @Nullable Handler paramHandler, @Nullable EventListener paramEventListener)
+  {
+    this(paramMediaSource, new ExtractorMediaSource.Factory(paramFactory), paramAdsLoader, paramViewGroup, paramHandler, paramEventListener);
+  }
+  
+  private static long[][] getAdDurations(Timeline[][] paramArrayOfTimeline, Timeline.Period paramPeriod)
+  {
+    long[][] arrayOfLong = new long[paramArrayOfTimeline.length][];
+    int i = 0;
+    while (i < paramArrayOfTimeline.length)
+    {
+      arrayOfLong[i] = new long[paramArrayOfTimeline[i].length];
+      int j = 0;
+      while (j < paramArrayOfTimeline[i].length)
+      {
+        [J local[J = arrayOfLong[i];
+        long l;
+        if (paramArrayOfTimeline[i][j] == null) {
+          l = -9223372036854775807L;
+        } else {
+          l = paramArrayOfTimeline[i][j].getPeriod(0, paramPeriod).getDurationUs();
+        }
+        local[J[j] = l;
+        j += 1;
+      }
+      i += 1;
+    }
+    return arrayOfLong;
+  }
+  
+  private void maybeUpdateSourceInfo()
+  {
+    if ((adPlaybackState != null) && (contentTimeline != null))
+    {
+      adPlaybackState = adPlaybackState.withAdDurationsUs(getAdDurations(adGroupTimelines, period));
+      Object localObject;
+      if (adPlaybackState.adGroupCount == 0) {
+        localObject = contentTimeline;
+      } else {
+        localObject = new SinglePeriodAdTimeline(contentTimeline, adPlaybackState);
+      }
+      refreshSourceInfo((Timeline)localObject, contentManifest);
+    }
+  }
+  
+  private void onAdPlaybackState(AdPlaybackState paramAdPlaybackState)
+  {
+    if (adPlaybackState == null)
+    {
+      adGroupMediaSources = new MediaSource[adGroupCount][];
+      Arrays.fill(adGroupMediaSources, new MediaSource[0]);
+      adGroupTimelines = new Timeline[adGroupCount][];
+      Arrays.fill(adGroupTimelines, new Timeline[0]);
+    }
+    adPlaybackState = paramAdPlaybackState;
+    maybeUpdateSourceInfo();
+  }
+  
+  private void onAdSourceInfoRefreshed(MediaSource paramMediaSource, int paramInt1, int paramInt2, Timeline paramTimeline)
+  {
+    int j = paramTimeline.getPeriodCount();
+    int i = 0;
+    boolean bool = true;
+    if (j != 1) {
+      bool = false;
+    }
+    Assertions.checkArgument(bool);
+    adGroupTimelines[paramInt1][paramInt2] = paramTimeline;
+    paramMediaSource = (List)deferredMediaPeriodByAdMediaSource.remove(paramMediaSource);
+    if (paramMediaSource != null)
+    {
+      paramTimeline = paramTimeline.getUidOfPeriod(0);
+      paramInt1 = i;
+      while (paramInt1 < paramMediaSource.size())
+      {
+        DeferredMediaPeriod localDeferredMediaPeriod = (DeferredMediaPeriod)paramMediaSource.get(paramInt1);
+        localDeferredMediaPeriod.createPeriod(new MediaSource.MediaPeriodId(paramTimeline, id.windowSequenceNumber));
+        paramInt1 += 1;
+      }
+    }
+    maybeUpdateSourceInfo();
+  }
+  
+  private void onContentSourceInfoRefreshed(Timeline paramTimeline, Object paramObject)
+  {
+    contentTimeline = paramTimeline;
+    contentManifest = paramObject;
+    maybeUpdateSourceInfo();
+  }
+  
+  public MediaPeriod createPeriod(MediaSource.MediaPeriodId paramMediaPeriodId, Allocator paramAllocator)
+  {
+    if ((adPlaybackState.adGroupCount > 0) && (paramMediaPeriodId.isAd()))
+    {
+      int i = adGroupIndex;
+      int j = adIndexInAdGroup;
+      Object localObject = adPlaybackState.adGroups[i].uris[j];
+      if (adGroupMediaSources[i].length <= j)
+      {
+        localMediaSource = adMediaSourceFactory.createMediaSource((Uri)localObject);
+        if (j >= adGroupMediaSources[i].length)
+        {
+          int k = j + 1;
+          adGroupMediaSources[i] = ((MediaSource[])Arrays.copyOf(adGroupMediaSources[i], k));
+          adGroupTimelines[i] = ((Timeline[])Arrays.copyOf(adGroupTimelines[i], k));
+        }
+        adGroupMediaSources[i][j] = localMediaSource;
+        deferredMediaPeriodByAdMediaSource.put(localMediaSource, new ArrayList());
+        prepareChildSource(paramMediaPeriodId, localMediaSource);
+      }
+      MediaSource localMediaSource = adGroupMediaSources[i][j];
+      paramAllocator = new DeferredMediaPeriod(localMediaSource, paramMediaPeriodId, paramAllocator);
+      paramAllocator.setPrepareErrorListener(new AdPrepareErrorListener((Uri)localObject, i, j));
+      localObject = (List)deferredMediaPeriodByAdMediaSource.get(localMediaSource);
+      if (localObject == null)
+      {
+        paramAllocator.createPeriod(new MediaSource.MediaPeriodId(adGroupTimelines[i][j].getUidOfPeriod(0), windowSequenceNumber));
+        return paramAllocator;
+      }
+      ((List)localObject).add(paramAllocator);
+      return paramAllocator;
+    }
+    paramAllocator = new DeferredMediaPeriod(contentMediaSource, paramMediaPeriodId, paramAllocator);
+    paramAllocator.createPeriod(paramMediaPeriodId);
+    return paramAllocator;
+  }
+  
+  @Nullable
+  protected MediaSource.MediaPeriodId getMediaPeriodIdForChildMediaPeriodId(MediaSource.MediaPeriodId paramMediaPeriodId1, MediaSource.MediaPeriodId paramMediaPeriodId2)
+  {
+    if (paramMediaPeriodId1.isAd()) {
+      return paramMediaPeriodId1;
+    }
+    return paramMediaPeriodId2;
+  }
+  
+  protected void onChildSourceInfoRefreshed(MediaSource.MediaPeriodId paramMediaPeriodId, MediaSource paramMediaSource, Timeline paramTimeline, @Nullable Object paramObject)
+  {
+    if (paramMediaPeriodId.isAd())
+    {
+      onAdSourceInfoRefreshed(paramMediaSource, adGroupIndex, adIndexInAdGroup, paramTimeline);
+      return;
+    }
+    onContentSourceInfoRefreshed(paramTimeline, paramObject);
+  }
+  
+  public void prepareSourceInternal(ExoPlayer paramExoPlayer, boolean paramBoolean, @Nullable TransferListener paramTransferListener)
+  {
+    super.prepareSourceInternal(paramExoPlayer, paramBoolean, paramTransferListener);
+    Assertions.checkArgument(paramBoolean, "AdsMediaSource must be the top-level source used to prepare the player.");
+    paramTransferListener = new ComponentListener();
+    componentListener = paramTransferListener;
+    prepareChildSource(DUMMY_CONTENT_MEDIA_PERIOD_ID, contentMediaSource);
+    mainHandler.post(new -..Lambda.AdsMediaSource.I9x4oOVLBLy3lKTApMQfS3WwRWU(this, paramExoPlayer, paramTransferListener));
+  }
+  
+  public void releasePeriod(MediaPeriod paramMediaPeriod)
+  {
+    paramMediaPeriod = (DeferredMediaPeriod)paramMediaPeriod;
+    List localList = (List)deferredMediaPeriodByAdMediaSource.get(mediaSource);
+    if (localList != null) {
+      localList.remove(paramMediaPeriod);
+    }
+    paramMediaPeriod.releasePeriod();
+  }
+  
+  public void releaseSourceInternal()
+  {
+    super.releaseSourceInternal();
+    componentListener.release();
+    componentListener = null;
+    deferredMediaPeriodByAdMediaSource.clear();
+    contentTimeline = null;
+    contentManifest = null;
+    adPlaybackState = null;
+    adGroupMediaSources = new MediaSource[0][];
+    adGroupTimelines = new Timeline[0][];
+    Handler localHandler = mainHandler;
+    AdsLoader localAdsLoader = adsLoader;
+    localAdsLoader.getClass();
+    localHandler.post(new -..Lambda.2Zac3B-Whc_7swHmcnO1d7h-1Gc(localAdsLoader));
+  }
+  
+  public static final class AdLoadException
+    extends IOException
+  {
+    public static final int TYPE_AD = 0;
+    public static final int TYPE_AD_GROUP = 1;
+    public static final int TYPE_ALL_ADS = 2;
+    public static final int TYPE_UNEXPECTED = 3;
+    public final int type;
+    
+    private AdLoadException(int paramInt, Exception paramException)
+    {
+      super();
+      type = paramInt;
+    }
+    
+    public static AdLoadException createForAd(Exception paramException)
+    {
+      return new AdLoadException(0, paramException);
+    }
+    
+    public static AdLoadException createForAdGroup(Exception paramException, int paramInt)
+    {
+      StringBuilder localStringBuilder = new StringBuilder();
+      localStringBuilder.append("Failed to load ad group ");
+      localStringBuilder.append(paramInt);
+      return new AdLoadException(1, new IOException(localStringBuilder.toString(), paramException));
+    }
+    
+    public static AdLoadException createForAllAds(Exception paramException)
+    {
+      return new AdLoadException(2, paramException);
+    }
+    
+    public static AdLoadException createForUnexpected(RuntimeException paramRuntimeException)
+    {
+      return new AdLoadException(3, paramRuntimeException);
+    }
+    
+    public RuntimeException getRuntimeExceptionForUnexpected()
+    {
+      boolean bool;
+      if (type == 3) {
+        bool = true;
+      } else {
+        bool = false;
+      }
+      Assertions.checkState(bool);
+      return (RuntimeException)getCause();
+    }
+    
+    @Documented
+    @Retention(RetentionPolicy.SOURCE)
+    public static @interface Type {}
+  }
+  
+  private final class AdPrepareErrorListener
+    implements DeferredMediaPeriod.PrepareErrorListener
+  {
+    private final int adGroupIndex;
+    private final int adIndexInAdGroup;
+    private final Uri adUri;
+    
+    public AdPrepareErrorListener(Uri paramUri, int paramInt1, int paramInt2)
+    {
+      adUri = paramUri;
+      adGroupIndex = paramInt1;
+      adIndexInAdGroup = paramInt2;
+    }
+    
+    public void onPrepareError(MediaSource.MediaPeriodId paramMediaPeriodId, IOException paramIOException)
+    {
+      createEventDispatcher(paramMediaPeriodId).loadError(new DataSpec(adUri), adUri, Collections.emptyMap(), 6, -1L, 0L, 0L, AdsMediaSource.AdLoadException.createForAd(paramIOException), true);
+      mainHandler.post(new -..Lambda.AdsMediaSource.AdPrepareErrorListener.JESn0be9jt8rlP-1WMBP87BIkQ8(this, paramIOException));
+    }
+  }
+  
+  private final class ComponentListener
+    implements AdsLoader.EventListener
+  {
+    private final Handler playerHandler = new Handler();
+    private volatile boolean released;
+    
+    public ComponentListener() {}
+    
+    public void onAdClicked()
+    {
+      if (released) {
+        return;
+      }
+      if ((eventHandler != null) && (eventListener != null)) {
+        eventHandler.post(new -..Lambda.AdsMediaSource.ComponentListener.SnD4p_rOPhLD6a57sD64V0NLY4Y(this));
+      }
+    }
+    
+    public void onAdLoadError(AdsMediaSource.AdLoadException paramAdLoadException, DataSpec paramDataSpec)
+    {
+      if (released) {
+        return;
+      }
+      createEventDispatcher(null).loadError(paramDataSpec, uri, Collections.emptyMap(), 6, -1L, 0L, 0L, paramAdLoadException, true);
+      if ((eventHandler != null) && (eventListener != null)) {
+        eventHandler.post(new -..Lambda.AdsMediaSource.ComponentListener.M2_fNzk2CLGyu6z6f0MiAf67cQ0(this, paramAdLoadException));
+      }
+    }
+    
+    public void onAdPlaybackState(AdPlaybackState paramAdPlaybackState)
+    {
+      if (released) {
+        return;
+      }
+      playerHandler.post(new -..Lambda.AdsMediaSource.ComponentListener.EnOXLA4Xyh_hsc2De4jHB6dR5vU(this, paramAdPlaybackState));
+    }
+    
+    public void onAdTapped()
+    {
+      if (released) {
+        return;
+      }
+      if ((eventHandler != null) && (eventListener != null)) {
+        eventHandler.post(new -..Lambda.AdsMediaSource.ComponentListener.QxTysBDp7SRyHSbLluxskQokcoU(this));
+      }
+    }
+    
+    public void release()
+    {
+      released = true;
+      playerHandler.removeCallbacksAndMessages(null);
+    }
+  }
+  
+  @Deprecated
+  public static abstract interface EventListener
+  {
+    public abstract void onAdClicked();
+    
+    public abstract void onAdLoadError(IOException paramIOException);
+    
+    public abstract void onAdTapped();
+    
+    public abstract void onInternalAdLoadError(RuntimeException paramRuntimeException);
+  }
+  
+  public static abstract interface MediaSourceFactory
+  {
+    public abstract MediaSource createMediaSource(Uri paramUri);
+    
+    public abstract int[] getSupportedTypes();
+  }
+}

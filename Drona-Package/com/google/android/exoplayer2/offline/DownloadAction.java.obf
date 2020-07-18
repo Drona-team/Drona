@@ -1,0 +1,242 @@
+package com.google.android.exoplayer2.offline;
+
+import android.net.Uri;
+import androidx.annotation.Nullable;
+import com.google.android.exoplayer2.util.Assertions;
+import com.google.android.exoplayer2.util.Util;
+import java.io.ByteArrayOutputStream;
+import java.io.DataInputStream;
+import java.io.DataOutputStream;
+import java.io.IOException;
+import java.io.InputStream;
+import java.io.OutputStream;
+import java.lang.reflect.Field;
+import java.util.Arrays;
+import java.util.Collections;
+import java.util.List;
+
+public abstract class DownloadAction
+{
+  @Nullable
+  private static Deserializer[] defaultDeserializers;
+  public final byte[] data;
+  public final boolean isRemoveAction;
+  public final String type;
+  public final Uri uri;
+  public final int version;
+  
+  protected DownloadAction(String paramString, int paramInt, Uri paramUri, boolean paramBoolean, @Nullable byte[] paramArrayOfByte)
+  {
+    type = paramString;
+    version = paramInt;
+    uri = paramUri;
+    isRemoveAction = paramBoolean;
+    if (paramArrayOfByte == null) {
+      paramArrayOfByte = Util.EMPTY_BYTE_ARRAY;
+    }
+    data = paramArrayOfByte;
+  }
+  
+  public static DownloadAction deserializeFromStream(Deserializer[] paramArrayOfDeserializer, InputStream paramInputStream)
+    throws IOException
+  {
+    DataInputStream localDataInputStream = new DataInputStream(paramInputStream);
+    paramInputStream = localDataInputStream.readUTF();
+    int j = localDataInputStream.readInt();
+    int k = paramArrayOfDeserializer.length;
+    int i = 0;
+    while (i < k)
+    {
+      Deserializer localDeserializer = paramArrayOfDeserializer[i];
+      if ((paramInputStream.equals(type)) && (version >= j)) {
+        return localDeserializer.readFromStream(j, localDataInputStream);
+      }
+      i += 1;
+    }
+    paramArrayOfDeserializer = new StringBuilder();
+    paramArrayOfDeserializer.append("No deserializer found for:");
+    paramArrayOfDeserializer.append(paramInputStream);
+    paramArrayOfDeserializer.append(", ");
+    paramArrayOfDeserializer.append(j);
+    throw new DownloadException(paramArrayOfDeserializer.toString());
+  }
+  
+  public static Deserializer[] getDefaultDeserializers()
+  {
+    for (;;)
+    {
+      Deserializer[] arrayOfDeserializer;
+      Class localClass;
+      try
+      {
+        if (defaultDeserializers != null)
+        {
+          arrayOfDeserializer = defaultDeserializers;
+          return arrayOfDeserializer;
+        }
+        arrayOfDeserializer = new Deserializer[4];
+        arrayOfDeserializer[0] = ProgressiveDownloadAction.DESERIALIZER;
+      }
+      finally {}
+      try
+      {
+        localClass = Class.forName("com.google.android.exoplayer2.source.dash.offline.DashDownloadAction");
+        i = 2;
+      }
+      catch (Exception localException1)
+      {
+        continue;
+      }
+      try
+      {
+        arrayOfDeserializer[1] = getDeserializer(localClass);
+      }
+      catch (Exception localException2) {}
+    }
+    i = 1;
+    for (;;)
+    {
+      int j;
+      try
+      {
+        localClass = Class.forName("com.google.android.exoplayer2.source.hls.offline.HlsDownloadAction");
+        j = i + 1;
+      }
+      catch (Exception localException3)
+      {
+        continue;
+      }
+      try
+      {
+        arrayOfDeserializer[i] = getDeserializer(localClass);
+        i = j;
+      }
+      catch (Exception localException4)
+      {
+        i = j;
+        continue;
+      }
+      try
+      {
+        localClass = Class.forName("com.google.android.exoplayer2.source.smoothstreaming.offline.SsDownloadAction");
+        j = i + 1;
+      }
+      catch (Exception localException5)
+      {
+        continue;
+      }
+      try
+      {
+        arrayOfDeserializer[i] = getDeserializer(localClass);
+        i = j;
+      }
+      catch (Exception localException6)
+      {
+        i = j;
+      }
+    }
+    defaultDeserializers = (Deserializer[])Arrays.copyOf((Object[])Assertions.checkNotNull(arrayOfDeserializer), i);
+    arrayOfDeserializer = defaultDeserializers;
+    return arrayOfDeserializer;
+  }
+  
+  private static Deserializer getDeserializer(Class<?> paramClass)
+    throws NoSuchFieldException, IllegalAccessException
+  {
+    return (Deserializer)Assertions.checkNotNull(paramClass.getDeclaredField("DESERIALIZER").get(null));
+  }
+  
+  public static void serializeToStream(DownloadAction paramDownloadAction, OutputStream paramOutputStream)
+    throws IOException
+  {
+    paramOutputStream = new DataOutputStream(paramOutputStream);
+    paramOutputStream.writeUTF(type);
+    paramOutputStream.writeInt(version);
+    paramDownloadAction.writeToStream(paramOutputStream);
+    paramOutputStream.flush();
+  }
+  
+  public abstract Downloader createDownloader(DownloaderConstructorHelper paramDownloaderConstructorHelper);
+  
+  public boolean equals(@Nullable Object paramObject)
+  {
+    boolean bool2 = false;
+    if (paramObject != null)
+    {
+      if (getClass() != paramObject.getClass()) {
+        return false;
+      }
+      paramObject = (DownloadAction)paramObject;
+      boolean bool1 = bool2;
+      if (type.equals(type))
+      {
+        bool1 = bool2;
+        if (version == version)
+        {
+          bool1 = bool2;
+          if (uri.equals(uri))
+          {
+            bool1 = bool2;
+            if (isRemoveAction == isRemoveAction)
+            {
+              bool1 = bool2;
+              if (Arrays.equals(data, data)) {
+                bool1 = true;
+              }
+            }
+          }
+        }
+      }
+      return bool1;
+    }
+    return false;
+  }
+  
+  public List<StreamKey> getKeys()
+  {
+    return Collections.emptyList();
+  }
+  
+  public int hashCode()
+  {
+    throw new Runtime("d2j fail translate: java.lang.RuntimeException: can not merge I and Z\n\tat com.googlecode.dex2jar.ir.TypeClass.merge(TypeClass.java:100)\n\tat com.googlecode.dex2jar.ir.ts.TypeTransformer$TypeRef.updateTypeClass(TypeTransformer.java:174)\n\tat com.googlecode.dex2jar.ir.ts.TypeTransformer$TypeAnalyze.provideAs(TypeTransformer.java:780)\n\tat com.googlecode.dex2jar.ir.ts.TypeTransformer$TypeAnalyze.e1expr(TypeTransformer.java:496)\n\tat com.googlecode.dex2jar.ir.ts.TypeTransformer$TypeAnalyze.exExpr(TypeTransformer.java:713)\n\tat com.googlecode.dex2jar.ir.ts.TypeTransformer$TypeAnalyze.exExpr(TypeTransformer.java:703)\n\tat com.googlecode.dex2jar.ir.ts.TypeTransformer$TypeAnalyze.e2expr(TypeTransformer.java:632)\n\tat com.googlecode.dex2jar.ir.ts.TypeTransformer$TypeAnalyze.exExpr(TypeTransformer.java:716)\n\tat com.googlecode.dex2jar.ir.ts.TypeTransformer$TypeAnalyze.exExpr(TypeTransformer.java:703)\n\tat com.googlecode.dex2jar.ir.ts.TypeTransformer$TypeAnalyze.e2expr(TypeTransformer.java:629)\n\tat com.googlecode.dex2jar.ir.ts.TypeTransformer$TypeAnalyze.exExpr(TypeTransformer.java:716)\n\tat com.googlecode.dex2jar.ir.ts.TypeTransformer$TypeAnalyze.exExpr(TypeTransformer.java:703)\n\tat com.googlecode.dex2jar.ir.ts.TypeTransformer$TypeAnalyze.e2expr(TypeTransformer.java:629)\n\tat com.googlecode.dex2jar.ir.ts.TypeTransformer$TypeAnalyze.exExpr(TypeTransformer.java:716)\n\tat com.googlecode.dex2jar.ir.ts.TypeTransformer$TypeAnalyze.exExpr(TypeTransformer.java:703)\n\tat com.googlecode.dex2jar.ir.ts.TypeTransformer$TypeAnalyze.s1stmt(TypeTransformer.java:810)\n\tat com.googlecode.dex2jar.ir.ts.TypeTransformer$TypeAnalyze.sxStmt(TypeTransformer.java:840)\n\tat com.googlecode.dex2jar.ir.ts.TypeTransformer$TypeAnalyze.analyze(TypeTransformer.java:206)\n\tat com.googlecode.dex2jar.ir.ts.TypeTransformer.transform(TypeTransformer.java:44)\n\tat com.googlecode.d2j.dex.Dex2jar$2.optimize(Dex2jar.java:162)\n\tat com.googlecode.d2j.dex.Dex2Asm.convertCode(Dex2Asm.java:414)\n\tat com.googlecode.d2j.dex.ExDex2Asm.convertCode(ExDex2Asm.java:42)\n\tat com.googlecode.d2j.dex.Dex2jar$2.convertCode(Dex2jar.java:128)\n\tat com.googlecode.d2j.dex.Dex2Asm.convertMethod(Dex2Asm.java:509)\n\tat com.googlecode.d2j.dex.Dex2Asm.convertClass(Dex2Asm.java:406)\n\tat com.googlecode.d2j.dex.Dex2Asm.convertDex(Dex2Asm.java:422)\n\tat com.googlecode.d2j.dex.Dex2jar.doTranslate(Dex2jar.java:172)\n\tat com.googlecode.d2j.dex.Dex2jar.to(Dex2jar.java:272)\n\tat com.googlecode.dex2jar.tools.Dex2jarCmd.doCommandLine(Dex2jarCmd.java:108)\n\tat com.googlecode.dex2jar.tools.BaseCmd.doMain(BaseCmd.java:288)\n\tat com.googlecode.dex2jar.tools.Dex2jarCmd.main(Dex2jarCmd.java:32)\n");
+  }
+  
+  public boolean isSameMedia(DownloadAction paramDownloadAction)
+  {
+    return uri.equals(uri);
+  }
+  
+  public final byte[] toByteArray()
+  {
+    ByteArrayOutputStream localByteArrayOutputStream = new ByteArrayOutputStream();
+    try
+    {
+      serializeToStream(this, localByteArrayOutputStream);
+      return localByteArrayOutputStream.toByteArray();
+    }
+    catch (IOException localIOException)
+    {
+      for (;;) {}
+    }
+    throw new IllegalStateException();
+  }
+  
+  protected abstract void writeToStream(DataOutputStream paramDataOutputStream)
+    throws IOException;
+  
+  public static abstract class Deserializer
+  {
+    public final String type;
+    public final int version;
+    
+    public Deserializer(String paramString, int paramInt)
+    {
+      type = paramString;
+      version = paramInt;
+    }
+    
+    public abstract DownloadAction readFromStream(int paramInt, DataInputStream paramDataInputStream)
+      throws IOException;
+  }
+}

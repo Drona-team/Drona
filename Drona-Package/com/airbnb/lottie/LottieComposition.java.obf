@@ -1,0 +1,333 @@
+package com.airbnb.lottie;
+
+import android.content.Context;
+import android.content.res.Resources;
+import android.graphics.Rect;
+import androidx.annotation.Nullable;
+import androidx.annotation.RawRes;
+import androidx.annotation.RestrictTo;
+import androidx.annotation.WorkerThread;
+import androidx.collection.LongSparseArray;
+import androidx.collection.SparseArrayCompat;
+import com.airbnb.lottie.model.Font;
+import com.airbnb.lottie.model.FontCharacter;
+import com.airbnb.lottie.model.Marker;
+import com.airbnb.lottie.model.layer.Layer;
+import com.airbnb.lottie.parser.moshi.JsonReader;
+import com.airbnb.lottie.utils.Logger;
+import java.io.IOException;
+import java.io.InputStream;
+import java.util.ArrayList;
+import java.util.Arrays;
+import java.util.HashSet;
+import java.util.Iterator;
+import java.util.List;
+import java.util.Map;
+import org.json.JSONObject;
+
+public class LottieComposition
+{
+  private Rect bounds;
+  private SparseArrayCompat<FontCharacter> characters;
+  private float endFrame;
+  private Map<String, Font> fonts;
+  private float frameRate;
+  private boolean hasDashPattern;
+  private Map<String, LottieImageAsset> images;
+  private LongSparseArray<Layer> layerMap;
+  private List<Layer> layers;
+  private List<Marker> markers;
+  private int maskAndMatteCount = 0;
+  private final PerformanceTracker performanceTracker = new PerformanceTracker();
+  private Map<String, List<Layer>> precomps;
+  private float startFrame;
+  private final HashSet<String> warnings = new HashSet();
+  
+  public LottieComposition() {}
+  
+  @RestrictTo({androidx.annotation.RestrictTo.Scope.LIBRARY})
+  public void addWarning(String paramString)
+  {
+    Logger.warning(paramString);
+    warnings.add(paramString);
+  }
+  
+  public Rect getBounds()
+  {
+    return bounds;
+  }
+  
+  public SparseArrayCompat<FontCharacter> getCharacters()
+  {
+    return characters;
+  }
+  
+  public float getDuration()
+  {
+    return (float)(getDurationFrames() / frameRate * 1000.0F);
+  }
+  
+  public float getDurationFrames()
+  {
+    return endFrame - startFrame;
+  }
+  
+  @RestrictTo({androidx.annotation.RestrictTo.Scope.LIBRARY})
+  public float getEndFrame()
+  {
+    return endFrame;
+  }
+  
+  public Map<String, Font> getFonts()
+  {
+    return fonts;
+  }
+  
+  public float getFrameRate()
+  {
+    return frameRate;
+  }
+  
+  public Map<String, LottieImageAsset> getImages()
+  {
+    return images;
+  }
+  
+  public List<Layer> getLayers()
+  {
+    return layers;
+  }
+  
+  @Nullable
+  public Marker getMarker(String paramString)
+  {
+    markers.size();
+    int i = 0;
+    while (i < markers.size())
+    {
+      Marker localMarker = (Marker)markers.get(i);
+      if (localMarker.matchesName(paramString)) {
+        return localMarker;
+      }
+      i += 1;
+    }
+    return null;
+  }
+  
+  public List<Marker> getMarkers()
+  {
+    return markers;
+  }
+  
+  @RestrictTo({androidx.annotation.RestrictTo.Scope.LIBRARY})
+  public int getMaskAndMatteCount()
+  {
+    return maskAndMatteCount;
+  }
+  
+  public PerformanceTracker getPerformanceTracker()
+  {
+    return performanceTracker;
+  }
+  
+  @Nullable
+  @RestrictTo({androidx.annotation.RestrictTo.Scope.LIBRARY})
+  public List<Layer> getPrecomps(String paramString)
+  {
+    return (List)precomps.get(paramString);
+  }
+  
+  @RestrictTo({androidx.annotation.RestrictTo.Scope.LIBRARY})
+  public float getStartFrame()
+  {
+    return startFrame;
+  }
+  
+  public ArrayList<String> getWarnings()
+  {
+    return new ArrayList(Arrays.asList(warnings.toArray(new String[warnings.size()])));
+  }
+  
+  @RestrictTo({androidx.annotation.RestrictTo.Scope.LIBRARY})
+  public boolean hasDashPattern()
+  {
+    return hasDashPattern;
+  }
+  
+  public boolean hasImages()
+  {
+    return images.isEmpty() ^ true;
+  }
+  
+  @RestrictTo({androidx.annotation.RestrictTo.Scope.LIBRARY})
+  public void incrementMatteOrMaskCount(int paramInt)
+  {
+    maskAndMatteCount += paramInt;
+  }
+  
+  @RestrictTo({androidx.annotation.RestrictTo.Scope.LIBRARY})
+  public void init(Rect paramRect, float paramFloat1, float paramFloat2, float paramFloat3, List<Layer> paramList, LongSparseArray<Layer> paramLongSparseArray, Map<String, List<Layer>> paramMap, Map<String, LottieImageAsset> paramMap1, SparseArrayCompat<FontCharacter> paramSparseArrayCompat, Map<String, Font> paramMap2, List<Marker> paramList1)
+  {
+    bounds = paramRect;
+    startFrame = paramFloat1;
+    endFrame = paramFloat2;
+    frameRate = paramFloat3;
+    layers = paramList;
+    layerMap = paramLongSparseArray;
+    precomps = paramMap;
+    images = paramMap1;
+    characters = paramSparseArrayCompat;
+    fonts = paramMap2;
+    markers = paramList1;
+  }
+  
+  @RestrictTo({androidx.annotation.RestrictTo.Scope.LIBRARY})
+  public Layer layerModelForId(long paramLong)
+  {
+    return (Layer)layerMap.get(paramLong);
+  }
+  
+  @RestrictTo({androidx.annotation.RestrictTo.Scope.LIBRARY})
+  public void setHasDashPattern(boolean paramBoolean)
+  {
+    hasDashPattern = paramBoolean;
+  }
+  
+  public void setPerformanceTrackingEnabled(boolean paramBoolean)
+  {
+    performanceTracker.setEnabled(paramBoolean);
+  }
+  
+  public String toString()
+  {
+    StringBuilder localStringBuilder = new StringBuilder("LottieComposition:\n");
+    Iterator localIterator = layers.iterator();
+    while (localIterator.hasNext()) {
+      localStringBuilder.append(((Layer)localIterator.next()).toString("\t"));
+    }
+    return localStringBuilder.toString();
+  }
+  
+  @Deprecated
+  public static class Factory
+  {
+    private Factory() {}
+    
+    @Deprecated
+    public static Cancellable fromAssetFileName(Context paramContext, String paramString, OnCompositionLoadedListener paramOnCompositionLoadedListener)
+    {
+      paramOnCompositionLoadedListener = new ListenerAdapter(paramOnCompositionLoadedListener, null);
+      LottieCompositionFactory.fromAsset(paramContext, paramString).addListener(paramOnCompositionLoadedListener);
+      return paramOnCompositionLoadedListener;
+    }
+    
+    @Deprecated
+    @Nullable
+    @WorkerThread
+    public static LottieComposition fromFileSync(Context paramContext, String paramString)
+    {
+      return (LottieComposition)LottieCompositionFactory.fromAssetSync(paramContext, paramString).getValue();
+    }
+    
+    @Deprecated
+    public static Cancellable fromInputStream(InputStream paramInputStream, OnCompositionLoadedListener paramOnCompositionLoadedListener)
+    {
+      paramOnCompositionLoadedListener = new ListenerAdapter(paramOnCompositionLoadedListener, null);
+      LottieCompositionFactory.fromJsonInputStream(paramInputStream, null).addListener(paramOnCompositionLoadedListener);
+      return paramOnCompositionLoadedListener;
+    }
+    
+    @Deprecated
+    @Nullable
+    @WorkerThread
+    public static LottieComposition fromInputStreamSync(InputStream paramInputStream)
+    {
+      return (LottieComposition)LottieCompositionFactory.fromJsonInputStreamSync(paramInputStream, null).getValue();
+    }
+    
+    @Deprecated
+    @Nullable
+    @WorkerThread
+    public static LottieComposition fromInputStreamSync(InputStream paramInputStream, boolean paramBoolean)
+    {
+      if (paramBoolean) {
+        Logger.warning("Lottie now auto-closes input stream!");
+      }
+      return (LottieComposition)LottieCompositionFactory.fromJsonInputStreamSync(paramInputStream, null).getValue();
+    }
+    
+    @Deprecated
+    public static Cancellable fromJsonReader(JsonReader paramJsonReader, OnCompositionLoadedListener paramOnCompositionLoadedListener)
+    {
+      paramOnCompositionLoadedListener = new ListenerAdapter(paramOnCompositionLoadedListener, null);
+      LottieCompositionFactory.fromJsonReader(paramJsonReader, null).addListener(paramOnCompositionLoadedListener);
+      return paramOnCompositionLoadedListener;
+    }
+    
+    @Deprecated
+    public static Cancellable fromJsonString(String paramString, OnCompositionLoadedListener paramOnCompositionLoadedListener)
+    {
+      paramOnCompositionLoadedListener = new ListenerAdapter(paramOnCompositionLoadedListener, null);
+      LottieCompositionFactory.fromJsonString(paramString, null).addListener(paramOnCompositionLoadedListener);
+      return paramOnCompositionLoadedListener;
+    }
+    
+    @Deprecated
+    @Nullable
+    @WorkerThread
+    public static LottieComposition fromJsonSync(Resources paramResources, JSONObject paramJSONObject)
+    {
+      return (LottieComposition)LottieCompositionFactory.fromJsonSync(paramJSONObject, null).getValue();
+    }
+    
+    @Deprecated
+    @Nullable
+    @WorkerThread
+    public static LottieComposition fromJsonSync(JsonReader paramJsonReader)
+      throws IOException
+    {
+      return (LottieComposition)LottieCompositionFactory.fromJsonReaderSync(paramJsonReader, null).getValue();
+    }
+    
+    @Deprecated
+    @Nullable
+    @WorkerThread
+    public static LottieComposition fromJsonSync(String paramString)
+    {
+      return (LottieComposition)LottieCompositionFactory.fromJsonStringSync(paramString, null).getValue();
+    }
+    
+    @Deprecated
+    public static Cancellable fromRawFile(Context paramContext, @RawRes int paramInt, OnCompositionLoadedListener paramOnCompositionLoadedListener)
+    {
+      paramOnCompositionLoadedListener = new ListenerAdapter(paramOnCompositionLoadedListener, null);
+      LottieCompositionFactory.fromRawRes(paramContext, paramInt).addListener(paramOnCompositionLoadedListener);
+      return paramOnCompositionLoadedListener;
+    }
+    
+    private static final class ListenerAdapter
+      implements LottieListener<LottieComposition>, Cancellable
+    {
+      private boolean cancelled = false;
+      private final OnCompositionLoadedListener listener;
+      
+      private ListenerAdapter(OnCompositionLoadedListener paramOnCompositionLoadedListener)
+      {
+        listener = paramOnCompositionLoadedListener;
+      }
+      
+      public void cancel()
+      {
+        cancelled = true;
+      }
+      
+      public void onResult(LottieComposition paramLottieComposition)
+      {
+        if (cancelled) {
+          return;
+        }
+        listener.onCompositionLoaded(paramLottieComposition);
+      }
+    }
+  }
+}

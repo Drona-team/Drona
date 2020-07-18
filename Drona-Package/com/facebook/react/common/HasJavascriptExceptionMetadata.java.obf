@@ -1,0 +1,9 @@
+package com.facebook.react.common;
+
+import javax.annotation.Nullable;
+
+public abstract interface HasJavascriptExceptionMetadata
+{
+  @Nullable
+  public abstract String getExtraDataAsJson();
+}

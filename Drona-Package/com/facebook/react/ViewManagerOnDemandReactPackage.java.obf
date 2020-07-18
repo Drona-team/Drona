@@ -1,0 +1,15 @@
+package com.facebook.react;
+
+import androidx.annotation.Nullable;
+import com.facebook.react.bridge.ReactApplicationContext;
+import com.facebook.react.uimanager.ViewManager;
+import java.util.List;
+
+public abstract interface ViewManagerOnDemandReactPackage
+{
+  @Nullable
+  public abstract ViewManager createViewManager(ReactApplicationContext paramReactApplicationContext, String paramString);
+  
+  @Nullable
+  public abstract List<String> getViewManagerNames(ReactApplicationContext paramReactApplicationContext);
+}

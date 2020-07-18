@@ -1,0 +1,16 @@
+package com.facebook.react;
+
+import androidx.annotation.NonNull;
+import com.facebook.react.bridge.NativeModule;
+import com.facebook.react.bridge.ReactApplicationContext;
+import com.facebook.react.uimanager.ViewManager;
+import java.util.List;
+
+public abstract interface ReactPackage
+{
+  @NonNull
+  public abstract List<NativeModule> createNativeModules(@NonNull ReactApplicationContext paramReactApplicationContext);
+  
+  @NonNull
+  public abstract List<ViewManager> createViewManagers(@NonNull ReactApplicationContext paramReactApplicationContext);
+}

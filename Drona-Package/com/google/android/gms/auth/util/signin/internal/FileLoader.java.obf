@@ -1,0 +1,57 @@
+package com.google.android.gms.auth.api.signin.internal;
+
+import android.content.Context;
+import android.util.Log;
+import androidx.loader.content.AsyncTaskLoader;
+import com.google.android.gms.common.api.GoogleApiClient;
+import com.google.android.gms.common.api.internal.SignInConnectionListener;
+import java.util.Iterator;
+import java.util.Set;
+import java.util.concurrent.Semaphore;
+import java.util.concurrent.TimeUnit;
+
+public final class zze
+  extends AsyncTaskLoader<Void>
+  implements SignInConnectionListener
+{
+  private Semaphore zzbg = new Semaphore(0);
+  private Set<GoogleApiClient> zzbh;
+  
+  public zze(Context paramContext, Set<GoogleApiClient> paramSet)
+  {
+    super(paramContext);
+    zzbh = paramSet;
+  }
+  
+  private final Void zzf()
+  {
+    Iterator localIterator = zzbh.iterator();
+    int i = 0;
+    while (localIterator.hasNext()) {
+      if (((GoogleApiClient)localIterator.next()).maybeSignIn(this)) {
+        i += 1;
+      }
+    }
+    try
+    {
+      zzbg.tryAcquire(i, 5L, TimeUnit.SECONDS);
+    }
+    catch (InterruptedException localInterruptedException)
+    {
+      Log.i("GACSignInLoader", "Unexpected InterruptedException", localInterruptedException);
+      Thread.currentThread().interrupt();
+    }
+    return null;
+  }
+  
+  public final void onComplete()
+  {
+    zzbg.release();
+  }
+  
+  protected final void onStartLoading()
+  {
+    zzbg.drainPermits();
+    forceLoad();
+  }
+}

@@ -1,0 +1,60 @@
+package com.google.android.gms.common.api.internal;
+
+import android.os.RemoteException;
+import androidx.annotation.Nullable;
+import com.google.android.gms.common.Feature;
+import com.google.android.gms.common.annotation.KeepForSdk;
+import com.google.android.gms.common.api.Api.AnyClient;
+import com.google.android.gms.tasks.TaskCompletionSource;
+
+@KeepForSdk
+public abstract class RegisterListenerMethod<A extends Api.AnyClient, L>
+{
+  private final ListenerHolder<L> zaju;
+  private final Feature[] zajv;
+  private final boolean zajw;
+  
+  @KeepForSdk
+  protected RegisterListenerMethod(ListenerHolder<L> paramListenerHolder)
+  {
+    zaju = paramListenerHolder;
+    zajv = null;
+    zajw = false;
+  }
+  
+  @KeepForSdk
+  protected RegisterListenerMethod(ListenerHolder<L> paramListenerHolder, Feature[] paramArrayOfFeature, boolean paramBoolean)
+  {
+    zaju = paramListenerHolder;
+    zajv = paramArrayOfFeature;
+    zajw = paramBoolean;
+  }
+  
+  @KeepForSdk
+  public void clearListener()
+  {
+    zaju.clear();
+  }
+  
+  @KeepForSdk
+  public ListenerHolder.ListenerKey<L> getListenerKey()
+  {
+    return zaju.getListenerKey();
+  }
+  
+  @Nullable
+  @KeepForSdk
+  public Feature[] getRequiredFeatures()
+  {
+    return zajv;
+  }
+  
+  @KeepForSdk
+  protected abstract void registerListener(A paramA, TaskCompletionSource<Void> paramTaskCompletionSource)
+    throws RemoteException;
+  
+  public final boolean shouldAutoResolveMissingFeatures()
+  {
+    return zajw;
+  }
+}

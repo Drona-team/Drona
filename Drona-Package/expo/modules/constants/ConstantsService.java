@@ -1,0 +1,167 @@
+package expo.modules.constants;
+
+import android.content.Context;
+import android.content.SharedPreferences;
+import android.content.SharedPreferences.Editor;
+import android.content.pm.PackageInfo;
+import android.content.pm.PackageManager;
+import android.content.pm.PackageManager.NameNotFoundException;
+import android.content.res.Resources;
+import android.os.Build;
+import android.os.Build.VERSION;
+import android.util.DisplayMetrics;
+import android.util.Log;
+import com.facebook.device.yearclass.YearClass;
+import java.util.ArrayList;
+import java.util.Collections;
+import java.util.HashMap;
+import java.util.List;
+import java.util.Map;
+import java.util.UUID;
+import org.unimodules.core.interfaces.InternalModule;
+import org.unimodules.interfaces.constants.ConstantsInterface;
+
+public class ConstantsService
+  implements InternalModule, ConstantsInterface
+{
+  private static final String LOGTAG = "ConstantsService";
+  private static final String PREFERENCES_FILE_NAME = "host.exp.exponent.SharedPreferences";
+  private static final String UUID_KEY = "uuid";
+  protected Context mContext;
+  private String mSessionId = UUID.randomUUID().toString();
+  protected int mStatusBarHeight = 0;
+  private SharedPreferences sharedPref;
+  
+  public ConstantsService(Context paramContext)
+  {
+    mContext = paramContext;
+    sharedPref = mContext.getSharedPreferences("host.exp.exponent.SharedPreferences", 0);
+    int i = paramContext.getResources().getIdentifier("status_bar_height", "dimen", "android");
+    if (i > 0) {
+      mStatusBarHeight = convertPixelsToDp(paramContext.getResources().getDimensionPixelSize(i), paramContext);
+    }
+  }
+  
+  private static int convertPixelsToDp(float paramFloat, Context paramContext)
+  {
+    return (int)(paramFloat / (getResourcesgetDisplayMetricsdensityDpi / 160.0F));
+  }
+  
+  private static long getLongVersionCode(PackageInfo paramPackageInfo)
+  {
+    if (Build.VERSION.SDK_INT >= 28) {
+      return paramPackageInfo.getLongVersionCode();
+    }
+    return versionCode;
+  }
+  
+  private static boolean isRunningOnGenymotion()
+  {
+    return Build.FINGERPRINT.contains("vbox");
+  }
+  
+  private static boolean isRunningOnStockEmulator()
+  {
+    return Build.FINGERPRINT.contains("generic");
+  }
+  
+  public String getAppId()
+  {
+    return mContext.getPackageName();
+  }
+  
+  public String getAppOwnership()
+  {
+    return "guest";
+  }
+  
+  public Map getConstants()
+  {
+    HashMap localHashMap1 = new HashMap();
+    localHashMap1.put("sessionId", mSessionId);
+    localHashMap1.put("statusBarHeight", Integer.valueOf(getStatusBarHeight()));
+    localHashMap1.put("deviceYearClass", Integer.valueOf(getDeviceYearClass()));
+    localHashMap1.put("deviceName", getDeviceName());
+    localHashMap1.put("isDevice", Boolean.valueOf(getIsDevice()));
+    localHashMap1.put("systemFonts", getSystemFonts());
+    localHashMap1.put("systemVersion", getSystemVersion());
+    localHashMap1.put("installationId", getOrCreateInstallationId());
+    Object localObject1 = mContext.getPackageManager();
+    Object localObject2 = mContext;
+    try
+    {
+      localObject1 = ((PackageManager)localObject1).getPackageInfo(((Context)localObject2).getPackageName(), 0);
+      localObject2 = versionName;
+      localHashMap1.put("nativeAppVersion", localObject2);
+      long l = getLongVersionCode((PackageInfo)localObject1);
+      int i = (int)l;
+      localHashMap1.put("nativeBuildVersion", Integer.toString(i));
+    }
+    catch (PackageManager.NameNotFoundException localNameNotFoundException)
+    {
+      Log.e(LOGTAG, "Exception: ", localNameNotFoundException);
+    }
+    HashMap localHashMap2 = new HashMap();
+    localHashMap2.put("android", new HashMap());
+    localHashMap1.put("platform", localHashMap2);
+    return localHashMap1;
+  }
+  
+  public String getDeviceName()
+  {
+    return Build.MODEL;
+  }
+  
+  public int getDeviceYearClass()
+  {
+    return YearClass.get(mContext);
+  }
+  
+  public List getExportedInterfaces()
+  {
+    return Collections.singletonList(ConstantsInterface.class);
+  }
+  
+  public boolean getIsDevice()
+  {
+    return (!isRunningOnGenymotion()) && (!isRunningOnStockEmulator());
+  }
+  
+  public String getOrCreateInstallationId()
+  {
+    String str2 = sharedPref.getString("uuid", null);
+    String str1 = str2;
+    if (str2 == null)
+    {
+      str1 = UUID.randomUUID().toString();
+      sharedPref.edit().putString("uuid", str1).apply();
+    }
+    return str1;
+  }
+  
+  public int getStatusBarHeight()
+  {
+    return mStatusBarHeight;
+  }
+  
+  public List getSystemFonts()
+  {
+    ArrayList localArrayList = new ArrayList();
+    localArrayList.add("normal");
+    localArrayList.add("notoserif");
+    localArrayList.add("sans-serif");
+    localArrayList.add("sans-serif-light");
+    localArrayList.add("sans-serif-thin");
+    localArrayList.add("sans-serif-condensed");
+    localArrayList.add("sans-serif-medium");
+    localArrayList.add("serif");
+    localArrayList.add("Roboto");
+    localArrayList.add("monospace");
+    return localArrayList;
+  }
+  
+  public String getSystemVersion()
+  {
+    return Build.VERSION.RELEASE;
+  }
+}

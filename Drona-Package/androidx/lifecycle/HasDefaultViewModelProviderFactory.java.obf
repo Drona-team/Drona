@@ -1,0 +1,9 @@
+package androidx.lifecycle;
+
+import androidx.annotation.NonNull;
+
+public abstract interface HasDefaultViewModelProviderFactory
+{
+  @NonNull
+  public abstract ViewModelProvider.Factory getDefaultViewModelProviderFactory();
+}

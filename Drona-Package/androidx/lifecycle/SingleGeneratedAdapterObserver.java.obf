@@ -1,0 +1,20 @@
+package androidx.lifecycle;
+
+import androidx.annotation.NonNull;
+
+class SingleGeneratedAdapterObserver
+  implements LifecycleEventObserver
+{
+  private final GeneratedAdapter mGeneratedAdapter;
+  
+  SingleGeneratedAdapterObserver(GeneratedAdapter paramGeneratedAdapter)
+  {
+    mGeneratedAdapter = paramGeneratedAdapter;
+  }
+  
+  public void onStateChanged(@NonNull LifecycleOwner paramLifecycleOwner, @NonNull Lifecycle.Event paramEvent)
+  {
+    mGeneratedAdapter.callMethods(paramLifecycleOwner, paramEvent, false, null);
+    mGeneratedAdapter.callMethods(paramLifecycleOwner, paramEvent, true, null);
+  }
+}

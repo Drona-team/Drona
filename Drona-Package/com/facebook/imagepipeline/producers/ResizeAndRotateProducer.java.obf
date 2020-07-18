@@ -1,0 +1,457 @@
+package com.facebook.imagepipeline.producers;
+
+import com.facebook.common.internal.ImmutableList;
+import com.facebook.common.internal.ImmutableMap;
+import com.facebook.common.internal.Preconditions;
+import com.facebook.common.internal.VisibleForTesting;
+import com.facebook.common.memory.PooledByteBufferFactory;
+import com.facebook.common.util.TriState;
+import com.facebook.imageformat.DefaultImageFormats;
+import com.facebook.imageformat.ImageFormat;
+import com.facebook.imagepipeline.common.ResizeOptions;
+import com.facebook.imagepipeline.common.RotationOptions;
+import com.facebook.imagepipeline.image.EncodedImage;
+import com.facebook.imagepipeline.request.ImageRequest;
+import com.facebook.imagepipeline.transcoder.ImageTranscodeResult;
+import com.facebook.imagepipeline.transcoder.ImageTranscoder;
+import com.facebook.imagepipeline.transcoder.ImageTranscoderFactory;
+import com.facebook.imagepipeline.transcoder.JpegTranscoderUtils;
+import java.util.HashMap;
+import java.util.Map;
+import java.util.concurrent.Executor;
+import javax.annotation.Nullable;
+
+public class ResizeAndRotateProducer
+  implements Producer<EncodedImage>
+{
+  private static final String INPUT_IMAGE_FORMAT = "Image format";
+  @VisibleForTesting
+  static final int MIN_TRANSFORM_INTERVAL_MS = 100;
+  private static final String ORIGINAL_SIZE_KEY = "Original size";
+  private static final String PRODUCER_NAME = "ResizeAndRotateProducer";
+  private static final String REQUESTED_SIZE_KEY = "Requested size";
+  private static final String TRANSCODER_ID = "Transcoder id";
+  private static final String TRANSCODING_RESULT = "Transcoding result";
+  private final Executor mExecutor;
+  private final ImageTranscoderFactory mImageTranscoderFactory;
+  private final Producer<EncodedImage> mInputProducer;
+  private final boolean mIsResizingEnabled;
+  private final PooledByteBufferFactory mPooledByteBufferFactory;
+  
+  public ResizeAndRotateProducer(Executor paramExecutor, PooledByteBufferFactory paramPooledByteBufferFactory, Producer<EncodedImage> paramProducer, boolean paramBoolean, ImageTranscoderFactory paramImageTranscoderFactory)
+  {
+    mExecutor = ((Executor)Preconditions.checkNotNull(paramExecutor));
+    mPooledByteBufferFactory = ((PooledByteBufferFactory)Preconditions.checkNotNull(paramPooledByteBufferFactory));
+    mInputProducer = ((Producer)Preconditions.checkNotNull(paramProducer));
+    mImageTranscoderFactory = ((ImageTranscoderFactory)Preconditions.checkNotNull(paramImageTranscoderFactory));
+    mIsResizingEnabled = paramBoolean;
+  }
+  
+  private static boolean shouldRotate(RotationOptions paramRotationOptions, EncodedImage paramEncodedImage)
+  {
+    return (!paramRotationOptions.canDeferUntilRendered()) && ((JpegTranscoderUtils.getRotationAngle(paramRotationOptions, paramEncodedImage) != 0) || (shouldRotateUsingExifOrientation(paramRotationOptions, paramEncodedImage)));
+  }
+  
+  private static boolean shouldRotateUsingExifOrientation(RotationOptions paramRotationOptions, EncodedImage paramEncodedImage)
+  {
+    if ((paramRotationOptions.rotationEnabled()) && (!paramRotationOptions.canDeferUntilRendered())) {
+      return JpegTranscoderUtils.INVERTED_EXIF_ORIENTATIONS.contains(Integer.valueOf(paramEncodedImage.getExifOrientation()));
+    }
+    paramEncodedImage.setExifOrientation(0);
+    return false;
+  }
+  
+  private static TriState shouldTransform(ImageRequest paramImageRequest, EncodedImage paramEncodedImage, ImageTranscoder paramImageTranscoder)
+  {
+    if ((paramEncodedImage != null) && (paramEncodedImage.getImageFormat() != ImageFormat.UNKNOWN))
+    {
+      if (!paramImageTranscoder.canTranscode(paramEncodedImage.getImageFormat())) {
+        return TriState.NO;
+      }
+      boolean bool;
+      if ((!shouldRotate(paramImageRequest.getRotationOptions(), paramEncodedImage)) && (!paramImageTranscoder.canResize(paramEncodedImage, paramImageRequest.getRotationOptions(), paramImageRequest.getResizeOptions()))) {
+        bool = false;
+      } else {
+        bool = true;
+      }
+      return TriState.valueOf(bool);
+    }
+    return TriState.UNSET;
+  }
+  
+  public void produceResults(Consumer<EncodedImage> paramConsumer, ProducerContext paramProducerContext)
+  {
+    mInputProducer.produceResults(new TransformingConsumer(paramConsumer, paramProducerContext, mIsResizingEnabled, mImageTranscoderFactory), paramProducerContext);
+  }
+  
+  private class TransformingConsumer
+    extends DelegatingConsumer<EncodedImage, EncodedImage>
+  {
+    private final ImageTranscoderFactory mImageTranscoderFactory;
+    private boolean mIsCancelled = false;
+    private final boolean mIsResizingEnabled;
+    private final JobScheduler mJobScheduler;
+    private final ProducerContext mProducerContext;
+    
+    TransformingConsumer(final ProducerContext paramProducerContext, boolean paramBoolean, ImageTranscoderFactory paramImageTranscoderFactory)
+    {
+      super();
+      mProducerContext = paramBoolean;
+      paramBoolean = mProducerContext.getImageRequest().getResizingAllowedOverride();
+      if (paramBoolean != null) {
+        paramImageTranscoderFactory = paramBoolean.booleanValue();
+      }
+      mIsResizingEnabled = paramImageTranscoderFactory;
+      Object localObject;
+      mImageTranscoderFactory = localObject;
+      paramBoolean = new JobScheduler.JobRunnable()
+      {
+        public void run(EncodedImage paramAnonymousEncodedImage, int paramAnonymousInt)
+        {
+          ResizeAndRotateProducer.TransformingConsumer.this.doTransform(paramAnonymousEncodedImage, paramAnonymousInt, (ImageTranscoder)Preconditions.checkNotNull(mImageTranscoderFactory.createImageTranscoder(paramAnonymousEncodedImage.getImageFormat(), mIsResizingEnabled)));
+        }
+      };
+      mJobScheduler = new JobScheduler(mExecutor, paramBoolean, 100);
+      mProducerContext.addCallbacks(new BaseProducerContextCallbacks()
+      {
+        public void onCancellationRequested()
+        {
+          mJobScheduler.clearJob();
+          ResizeAndRotateProducer.TransformingConsumer.access$602(ResizeAndRotateProducer.TransformingConsumer.this, true);
+          paramProducerContext.onCancellation();
+        }
+        
+        public void onIsIntermediateResultExpectedChanged()
+        {
+          if (mProducerContext.isIntermediateResultExpected()) {
+            mJobScheduler.scheduleJob();
+          }
+        }
+      });
+    }
+    
+    /* Error */
+    private void doTransform(EncodedImage paramEncodedImage, int paramInt, ImageTranscoder paramImageTranscoder)
+    {
+      // Byte code:
+      //   0: aload_0
+      //   1: getfield 34	com/facebook/imagepipeline/producers/ResizeAndRotateProducer$TransformingConsumer:mProducerContext	Lcom/facebook/imagepipeline/producers/ProducerContext;
+      //   4: invokeinterface 102 1 0
+      //   9: aload_0
+      //   10: getfield 34	com/facebook/imagepipeline/producers/ResizeAndRotateProducer$TransformingConsumer:mProducerContext	Lcom/facebook/imagepipeline/producers/ProducerContext;
+      //   13: invokeinterface 106 1 0
+      //   18: ldc 108
+      //   20: invokeinterface 114 3 0
+      //   25: aload_0
+      //   26: getfield 34	com/facebook/imagepipeline/producers/ResizeAndRotateProducer$TransformingConsumer:mProducerContext	Lcom/facebook/imagepipeline/producers/ProducerContext;
+      //   29: invokeinterface 40 1 0
+      //   34: astore 10
+      //   36: aload_0
+      //   37: getfield 27	com/facebook/imagepipeline/producers/ResizeAndRotateProducer$TransformingConsumer:this$0	Lcom/facebook/imagepipeline/producers/ResizeAndRotateProducer;
+      //   40: invokestatic 118	com/facebook/imagepipeline/producers/ResizeAndRotateProducer:access$800	(Lcom/facebook/imagepipeline/producers/ResizeAndRotateProducer;)Lcom/facebook/common/memory/PooledByteBufferFactory;
+      //   43: invokeinterface 124 1 0
+      //   48: astore 8
+      //   50: aconst_null
+      //   51: astore 7
+      //   53: aload_3
+      //   54: aload_1
+      //   55: aload 8
+      //   57: aload 10
+      //   59: invokevirtual 128	com/facebook/imagepipeline/request/ImageRequest:getRotationOptions	()Lcom/facebook/imagepipeline/common/RotationOptions;
+      //   62: aload 10
+      //   64: invokevirtual 132	com/facebook/imagepipeline/request/ImageRequest:getResizeOptions	()Lcom/facebook/imagepipeline/common/ResizeOptions;
+      //   67: aconst_null
+      //   68: bipush 85
+      //   70: invokestatic 138	java/lang/Integer:valueOf	(I)Ljava/lang/Integer;
+      //   73: invokeinterface 144 7 0
+      //   78: astore 9
+      //   80: aload 9
+      //   82: invokevirtual 150	com/facebook/imagepipeline/transcoder/ImageTranscodeResult:getTranscodeStatus	()I
+      //   85: iconst_2
+      //   86: if_icmpeq +194 -> 280
+      //   89: aload_0
+      //   90: aload_1
+      //   91: aload 10
+      //   93: invokevirtual 132	com/facebook/imagepipeline/request/ImageRequest:getResizeOptions	()Lcom/facebook/imagepipeline/common/ResizeOptions;
+      //   96: aload 9
+      //   98: aload_3
+      //   99: invokeinterface 153 1 0
+      //   104: invokespecial 157	com/facebook/imagepipeline/producers/ResizeAndRotateProducer$TransformingConsumer:getExtraMap	(Lcom/facebook/imagepipeline/image/EncodedImage;Lcom/facebook/imagepipeline/common/ResizeOptions;Lcom/facebook/imagepipeline/transcoder/ImageTranscodeResult;Ljava/lang/String;)Ljava/util/Map;
+      //   107: astore_1
+      //   108: iload_2
+      //   109: istore 4
+      //   111: aload 8
+      //   113: invokevirtual 163	com/facebook/common/memory/PooledByteBufferOutputStream:toByteBuffer	()Lcom/facebook/common/memory/PooledByteBuffer;
+      //   116: invokestatic 169	com/facebook/common/references/CloseableReference:of	(Ljava/io/Closeable;)Lcom/facebook/common/references/CloseableReference;
+      //   119: astore_3
+      //   120: iload_2
+      //   121: istore 5
+      //   123: new 171	com/facebook/imagepipeline/image/EncodedImage
+      //   126: dup
+      //   127: aload_3
+      //   128: invokespecial 174	com/facebook/imagepipeline/image/EncodedImage:<init>	(Lcom/facebook/common/references/CloseableReference;)V
+      //   131: astore 7
+      //   133: iload_2
+      //   134: istore 5
+      //   136: aload 7
+      //   138: getstatic 180	com/facebook/imageformat/DefaultImageFormats:JPEG	Lcom/facebook/imageformat/ImageFormat;
+      //   141: invokevirtual 184	com/facebook/imagepipeline/image/EncodedImage:setImageFormat	(Lcom/facebook/imageformat/ImageFormat;)V
+      //   144: iload_2
+      //   145: istore 6
+      //   147: aload 7
+      //   149: invokevirtual 188	com/facebook/imagepipeline/image/EncodedImage:parseMetaData	()V
+      //   152: iload_2
+      //   153: istore 6
+      //   155: aload_0
+      //   156: getfield 34	com/facebook/imagepipeline/producers/ResizeAndRotateProducer$TransformingConsumer:mProducerContext	Lcom/facebook/imagepipeline/producers/ProducerContext;
+      //   159: invokeinterface 102 1 0
+      //   164: aload_0
+      //   165: getfield 34	com/facebook/imagepipeline/producers/ResizeAndRotateProducer$TransformingConsumer:mProducerContext	Lcom/facebook/imagepipeline/producers/ProducerContext;
+      //   168: invokeinterface 106 1 0
+      //   173: ldc 108
+      //   175: aload_1
+      //   176: invokeinterface 192 4 0
+      //   181: iload_2
+      //   182: istore 4
+      //   184: iload_2
+      //   185: istore 6
+      //   187: aload 9
+      //   189: invokevirtual 150	com/facebook/imagepipeline/transcoder/ImageTranscodeResult:getTranscodeStatus	()I
+      //   192: iconst_1
+      //   193: if_icmpeq +9 -> 202
+      //   196: iload_2
+      //   197: bipush 16
+      //   199: ior
+      //   200: istore 4
+      //   202: iload 4
+      //   204: istore 6
+      //   206: aload_0
+      //   207: invokevirtual 196	com/facebook/imagepipeline/producers/ResizeAndRotateProducer$TransformingConsumer:getConsumer	()Lcom/facebook/imagepipeline/producers/Consumer;
+      //   210: aload 7
+      //   212: iload 4
+      //   214: invokeinterface 202 3 0
+      //   219: iload 4
+      //   221: istore 5
+      //   223: aload 7
+      //   225: invokestatic 206	com/facebook/imagepipeline/image/EncodedImage:closeSafely	(Lcom/facebook/imagepipeline/image/EncodedImage;)V
+      //   228: aload_3
+      //   229: invokestatic 208	com/facebook/common/references/CloseableReference:closeSafely	(Lcom/facebook/common/references/CloseableReference;)V
+      //   232: aload 8
+      //   234: invokevirtual 211	com/facebook/common/memory/PooledByteBufferOutputStream:close	()V
+      //   237: return
+      //   238: astore 9
+      //   240: iload 6
+      //   242: istore 5
+      //   244: aload 7
+      //   246: invokestatic 206	com/facebook/imagepipeline/image/EncodedImage:closeSafely	(Lcom/facebook/imagepipeline/image/EncodedImage;)V
+      //   249: iload 6
+      //   251: istore 5
+      //   253: aload 9
+      //   255: athrow
+      //   256: astore 7
+      //   258: iload 5
+      //   260: istore 4
+      //   262: aload_3
+      //   263: invokestatic 208	com/facebook/common/references/CloseableReference:closeSafely	(Lcom/facebook/common/references/CloseableReference;)V
+      //   266: iload 5
+      //   268: istore 4
+      //   270: aload 7
+      //   272: athrow
+      //   273: astore_3
+      //   274: iload 4
+      //   276: istore_2
+      //   277: goto +21 -> 298
+      //   280: new 213	java/lang/RuntimeException
+      //   283: dup
+      //   284: ldc -41
+      //   286: invokespecial 218	java/lang/RuntimeException:<init>	(Ljava/lang/String;)V
+      //   289: athrow
+      //   290: astore_1
+      //   291: goto +57 -> 348
+      //   294: astore_3
+      //   295: aload 7
+      //   297: astore_1
+      //   298: aload_0
+      //   299: getfield 34	com/facebook/imagepipeline/producers/ResizeAndRotateProducer$TransformingConsumer:mProducerContext	Lcom/facebook/imagepipeline/producers/ProducerContext;
+      //   302: invokeinterface 102 1 0
+      //   307: aload_0
+      //   308: getfield 34	com/facebook/imagepipeline/producers/ResizeAndRotateProducer$TransformingConsumer:mProducerContext	Lcom/facebook/imagepipeline/producers/ProducerContext;
+      //   311: invokeinterface 106 1 0
+      //   316: ldc 108
+      //   318: aload_3
+      //   319: aload_1
+      //   320: invokeinterface 222 5 0
+      //   325: iload_2
+      //   326: invokestatic 226	com/facebook/imagepipeline/producers/ResizeAndRotateProducer$TransformingConsumer:isLast	(I)Z
+      //   329: ifeq +13 -> 342
+      //   332: aload_0
+      //   333: invokevirtual 196	com/facebook/imagepipeline/producers/ResizeAndRotateProducer$TransformingConsumer:getConsumer	()Lcom/facebook/imagepipeline/producers/Consumer;
+      //   336: aload_3
+      //   337: invokeinterface 230 2 0
+      //   342: aload 8
+      //   344: invokevirtual 211	com/facebook/common/memory/PooledByteBufferOutputStream:close	()V
+      //   347: return
+      //   348: aload 8
+      //   350: invokevirtual 211	com/facebook/common/memory/PooledByteBufferOutputStream:close	()V
+      //   353: aload_1
+      //   354: athrow
+      // Local variable table:
+      //   start	length	slot	name	signature
+      //   0	355	0	this	TransformingConsumer
+      //   0	355	1	paramEncodedImage	EncodedImage
+      //   0	355	2	paramInt	int
+      //   0	355	3	paramImageTranscoder	ImageTranscoder
+      //   109	166	4	i	int
+      //   121	146	5	j	int
+      //   145	105	6	k	int
+      //   51	194	7	localEncodedImage	EncodedImage
+      //   256	40	7	localObject1	Object
+      //   48	301	8	localPooledByteBufferOutputStream	com.facebook.common.memory.PooledByteBufferOutputStream
+      //   78	110	9	localImageTranscodeResult	ImageTranscodeResult
+      //   238	16	9	localObject2	Object
+      //   34	58	10	localImageRequest	ImageRequest
+      // Exception table:
+      //   from	to	target	type
+      //   147	152	238	finally
+      //   155	181	238	finally
+      //   187	196	238	finally
+      //   206	219	238	finally
+      //   123	133	256	finally
+      //   136	144	256	finally
+      //   223	228	256	finally
+      //   244	249	256	finally
+      //   253	256	256	finally
+      //   111	120	273	java/lang/Exception
+      //   228	232	273	java/lang/Exception
+      //   262	266	273	java/lang/Exception
+      //   270	273	273	java/lang/Exception
+      //   53	108	290	finally
+      //   111	120	290	finally
+      //   228	232	290	finally
+      //   262	266	290	finally
+      //   270	273	290	finally
+      //   280	290	290	finally
+      //   298	342	290	finally
+      //   53	108	294	java/lang/Exception
+      //   280	290	294	java/lang/Exception
+    }
+    
+    private void forwardNewResult(EncodedImage paramEncodedImage, int paramInt, ImageFormat paramImageFormat)
+    {
+      if ((paramImageFormat != DefaultImageFormats.JPEG) && (paramImageFormat != DefaultImageFormats.HEIF)) {
+        paramEncodedImage = getNewResultForImagesWithoutExifData(paramEncodedImage);
+      } else {
+        paramEncodedImage = getNewResultsForJpegOrHeif(paramEncodedImage);
+      }
+      getConsumer().onNewResult(paramEncodedImage, paramInt);
+    }
+    
+    @Nullable
+    private EncodedImage getCloneWithRotationApplied(EncodedImage paramEncodedImage, int paramInt)
+    {
+      EncodedImage localEncodedImage = EncodedImage.cloneOrNull(paramEncodedImage);
+      paramEncodedImage.close();
+      if (localEncodedImage != null) {
+        localEncodedImage.setRotationAngle(paramInt);
+      }
+      return localEncodedImage;
+    }
+    
+    @Nullable
+    private Map<String, String> getExtraMap(EncodedImage paramEncodedImage, @Nullable ResizeOptions paramResizeOptions, @Nullable ImageTranscodeResult paramImageTranscodeResult, @Nullable String paramString)
+    {
+      if (!mProducerContext.getListener().requiresExtraMap(mProducerContext.getId())) {
+        return null;
+      }
+      Object localObject1 = new StringBuilder();
+      ((StringBuilder)localObject1).append(paramEncodedImage.getWidth());
+      ((StringBuilder)localObject1).append("x");
+      ((StringBuilder)localObject1).append(paramEncodedImage.getHeight());
+      localObject1 = ((StringBuilder)localObject1).toString();
+      if (paramResizeOptions != null)
+      {
+        localObject2 = new StringBuilder();
+        ((StringBuilder)localObject2).append(width);
+        ((StringBuilder)localObject2).append("x");
+        ((StringBuilder)localObject2).append(height);
+        paramResizeOptions = ((StringBuilder)localObject2).toString();
+      }
+      else
+      {
+        paramResizeOptions = "Unspecified";
+      }
+      Object localObject2 = new HashMap();
+      ((Map)localObject2).put("Image format", String.valueOf(paramEncodedImage.getImageFormat()));
+      ((Map)localObject2).put("Original size", localObject1);
+      ((Map)localObject2).put("Requested size", paramResizeOptions);
+      ((Map)localObject2).put("queueTime", String.valueOf(mJobScheduler.getQueuedTime()));
+      ((Map)localObject2).put("Transcoder id", paramString);
+      ((Map)localObject2).put("Transcoding result", String.valueOf(paramImageTranscodeResult));
+      return ImmutableMap.copyOf((Map)localObject2);
+    }
+    
+    @Nullable
+    private EncodedImage getNewResultForImagesWithoutExifData(EncodedImage paramEncodedImage)
+    {
+      RotationOptions localRotationOptions = mProducerContext.getImageRequest().getRotationOptions();
+      EncodedImage localEncodedImage = paramEncodedImage;
+      if (!localRotationOptions.useImageMetadata())
+      {
+        localEncodedImage = paramEncodedImage;
+        if (localRotationOptions.rotationEnabled()) {
+          localEncodedImage = getCloneWithRotationApplied(paramEncodedImage, localRotationOptions.getForcedAngle());
+        }
+      }
+      return localEncodedImage;
+    }
+    
+    @Nullable
+    private EncodedImage getNewResultsForJpegOrHeif(EncodedImage paramEncodedImage)
+    {
+      EncodedImage localEncodedImage = paramEncodedImage;
+      if (!mProducerContext.getImageRequest().getRotationOptions().canDeferUntilRendered())
+      {
+        localEncodedImage = paramEncodedImage;
+        if (paramEncodedImage.getRotationAngle() != 0)
+        {
+          localEncodedImage = paramEncodedImage;
+          if (paramEncodedImage.getRotationAngle() != -1) {
+            localEncodedImage = getCloneWithRotationApplied(paramEncodedImage, 0);
+          }
+        }
+      }
+      return localEncodedImage;
+    }
+    
+    protected void onNewResultImpl(@Nullable EncodedImage paramEncodedImage, int paramInt)
+    {
+      if (mIsCancelled) {
+        return;
+      }
+      boolean bool = isLast(paramInt);
+      if (paramEncodedImage == null)
+      {
+        if (bool) {
+          getConsumer().onNewResult(null, 1);
+        }
+        return;
+      }
+      ImageFormat localImageFormat = paramEncodedImage.getImageFormat();
+      TriState localTriState = ResizeAndRotateProducer.shouldTransform(mProducerContext.getImageRequest(), paramEncodedImage, (ImageTranscoder)Preconditions.checkNotNull(mImageTranscoderFactory.createImageTranscoder(localImageFormat, mIsResizingEnabled)));
+      if ((!bool) && (localTriState == TriState.UNSET)) {
+        return;
+      }
+      if (localTriState != TriState.YES)
+      {
+        forwardNewResult(paramEncodedImage, paramInt, localImageFormat);
+        return;
+      }
+      if (!mJobScheduler.updateJob(paramEncodedImage, paramInt)) {
+        return;
+      }
+      if ((bool) || (mProducerContext.isIntermediateResultExpected())) {
+        mJobScheduler.scheduleJob();
+      }
+    }
+  }
+}

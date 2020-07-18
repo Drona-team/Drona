@@ -1,0 +1,55 @@
+package androidx.fragment.app;
+
+import android.annotation.SuppressLint;
+import android.os.Parcel;
+import android.os.Parcelable;
+import android.os.Parcelable.Creator;
+import java.util.ArrayList;
+
+@SuppressLint({"BanParcelableUsage"})
+final class FragmentManagerState
+  implements Parcelable
+{
+  public static final Parcelable.Creator<FragmentManagerState> CREATOR = new Parcelable.Creator()
+  {
+    public FragmentManagerState createFromParcel(Parcel paramAnonymousParcel)
+    {
+      return new FragmentManagerState(paramAnonymousParcel);
+    }
+    
+    public FragmentManagerState[] newArray(int paramAnonymousInt)
+    {
+      return new FragmentManagerState[paramAnonymousInt];
+    }
+  };
+  ArrayList<FragmentState> mActive;
+  ArrayList<String> mAdded;
+  BackStackState[] mBackStack;
+  int mBackStackIndex;
+  String mPrimaryNavActiveWho = null;
+  
+  public FragmentManagerState() {}
+  
+  public FragmentManagerState(Parcel paramParcel)
+  {
+    mActive = paramParcel.createTypedArrayList(FragmentState.CREATOR);
+    mAdded = paramParcel.createStringArrayList();
+    mBackStack = ((BackStackState[])paramParcel.createTypedArray(BackStackState.CREATOR));
+    mBackStackIndex = paramParcel.readInt();
+    mPrimaryNavActiveWho = paramParcel.readString();
+  }
+  
+  public int describeContents()
+  {
+    return 0;
+  }
+  
+  public void writeToParcel(Parcel paramParcel, int paramInt)
+  {
+    paramParcel.writeTypedList(mActive);
+    paramParcel.writeStringList(mAdded);
+    paramParcel.writeTypedArray(mBackStack, paramInt);
+    paramParcel.writeInt(mBackStackIndex);
+    paramParcel.writeString(mPrimaryNavActiveWho);
+  }
+}

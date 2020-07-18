@@ -1,0 +1,202 @@
+package com.facebook.imagepipeline.producers;
+
+import com.facebook.cache.common.CacheKey;
+import com.facebook.common.internal.ImmutableMap;
+import com.facebook.common.memory.PooledByteBuffer;
+import com.facebook.common.references.CloseableReference;
+import com.facebook.imageformat.ImageFormat;
+import com.facebook.imagepipeline.cache.CacheKeyFactory;
+import com.facebook.imagepipeline.cache.MemoryCache;
+import com.facebook.imagepipeline.image.EncodedImage;
+import com.facebook.imagepipeline.request.ImageRequest;
+import com.facebook.imagepipeline.request.ImageRequest.RequestLevel;
+import com.facebook.imagepipeline.systrace.FrescoSystrace;
+
+public class EncodedMemoryCacheProducer
+  implements Producer<EncodedImage>
+{
+  public static final String EXTRA_CACHED_VALUE_FOUND = "cached_value_found";
+  public static final String PRODUCER_NAME = "EncodedMemoryCacheProducer";
+  private final CacheKeyFactory mCacheKeyFactory;
+  private final Producer<EncodedImage> mInputProducer;
+  private final MemoryCache<CacheKey, PooledByteBuffer> mMemoryCache;
+  
+  public EncodedMemoryCacheProducer(MemoryCache<CacheKey, PooledByteBuffer> paramMemoryCache, CacheKeyFactory paramCacheKeyFactory, Producer<EncodedImage> paramProducer)
+  {
+    mMemoryCache = paramMemoryCache;
+    mCacheKeyFactory = paramCacheKeyFactory;
+    mInputProducer = paramProducer;
+  }
+  
+  public void produceResults(Consumer<EncodedImage> paramConsumer, ProducerContext paramProducerContext)
+  {
+    for (;;)
+    {
+      try
+      {
+        if (FrescoSystrace.isTracing()) {
+          FrescoSystrace.beginSection("EncodedMemoryCacheProducer#produceResults");
+        }
+        str = paramProducerContext.getId();
+        localProducerListener = paramProducerContext.getListener();
+        localProducerListener.onProducerStart(str, "EncodedMemoryCacheProducer");
+        localObject = paramProducerContext.getImageRequest();
+        localCacheKey = mCacheKeyFactory.getEncodedCacheKey((ImageRequest)localObject, paramProducerContext.getCallerContext());
+        localCloseableReference = mMemoryCache.get(localCacheKey);
+        localEncodedImage = null;
+        localObject = null;
+        if (localCloseableReference == null) {}
+      }
+      finally
+      {
+        String str;
+        ProducerListener localProducerListener;
+        Object localObject;
+        CacheKey localCacheKey;
+        CloseableReference localCloseableReference;
+        EncodedImage localEncodedImage;
+        boolean bool;
+        if (FrescoSystrace.isTracing()) {
+          FrescoSystrace.endSection();
+        }
+      }
+      try
+      {
+        localEncodedImage = new EncodedImage(localCloseableReference);
+        paramProducerContext = (ProducerContext)localObject;
+        try
+        {
+          if (localProducerListener.requiresExtraMap(str)) {
+            paramProducerContext = ImmutableMap.of("cached_value_found", "true");
+          }
+          localProducerListener.onProducerFinishWithSuccess(str, "EncodedMemoryCacheProducer", paramProducerContext);
+          localProducerListener.onUltimateProducerReached(str, "EncodedMemoryCacheProducer", true);
+          paramConsumer.onProgressUpdate(1.0F);
+          paramConsumer.onNewResult(localEncodedImage, 1);
+          EncodedImage.closeSafely(localEncodedImage);
+          CloseableReference.closeSafely(localCloseableReference);
+          if (FrescoSystrace.isTracing()) {
+            FrescoSystrace.endSection();
+          }
+          return;
+        }
+        finally
+        {
+          EncodedImage.closeSafely(localEncodedImage);
+        }
+        if (paramProducerContext.getLowestPermittedRequestLevel().getValue() < ImageRequest.RequestLevel.ENCODED_MEMORY_CACHE.getValue()) {
+          continue;
+        }
+        if (!localProducerListener.requiresExtraMap(str)) {
+          break label391;
+        }
+        paramProducerContext = ImmutableMap.of("cached_value_found", "false");
+      }
+      finally
+      {
+        continue;
+        label391:
+        paramProducerContext = null;
+      }
+    }
+    localProducerListener.onProducerFinishWithSuccess(str, "EncodedMemoryCacheProducer", paramProducerContext);
+    localProducerListener.onUltimateProducerReached(str, "EncodedMemoryCacheProducer", false);
+    paramConsumer.onNewResult(null, 1);
+    CloseableReference.closeSafely(localCloseableReference);
+    if (FrescoSystrace.isTracing()) {
+      FrescoSystrace.endSection();
+    }
+    return;
+    bool = paramProducerContext.getImageRequest().isMemoryCacheEnabled();
+    localObject = new EncodedMemoryCacheConsumer(paramConsumer, mMemoryCache, localCacheKey, bool);
+    paramConsumer = localEncodedImage;
+    if (localProducerListener.requiresExtraMap(str)) {
+      paramConsumer = ImmutableMap.of("cached_value_found", "false");
+    }
+    localProducerListener.onProducerFinishWithSuccess(str, "EncodedMemoryCacheProducer", paramConsumer);
+    mInputProducer.produceResults((Consumer)localObject, paramProducerContext);
+    CloseableReference.closeSafely(localCloseableReference);
+    if (FrescoSystrace.isTracing()) {
+      FrescoSystrace.endSection();
+    }
+    return;
+    CloseableReference.closeSafely(localCloseableReference);
+    throw paramConsumer;
+  }
+  
+  private static class EncodedMemoryCacheConsumer
+    extends DelegatingConsumer<EncodedImage, EncodedImage>
+  {
+    private final boolean mIsMemoryCacheEnabled;
+    private final MemoryCache<CacheKey, PooledByteBuffer> mMemoryCache;
+    private final CacheKey mRequestedCacheKey;
+    
+    public EncodedMemoryCacheConsumer(Consumer<EncodedImage> paramConsumer, MemoryCache<CacheKey, PooledByteBuffer> paramMemoryCache, CacheKey paramCacheKey, boolean paramBoolean)
+    {
+      super();
+      mMemoryCache = paramMemoryCache;
+      mRequestedCacheKey = paramCacheKey;
+      mIsMemoryCacheEnabled = paramBoolean;
+    }
+    
+    public void onNewResultImpl(EncodedImage paramEncodedImage, int paramInt)
+    {
+      try
+      {
+        if (FrescoSystrace.isTracing()) {
+          FrescoSystrace.beginSection("EncodedMemoryCacheProducer#onNewResultImpl");
+        }
+        if ((!isNotLast(paramInt)) && (paramEncodedImage != null) && (!statusHasAnyFlag(paramInt, 10)) && (paramEncodedImage.getImageFormat() != ImageFormat.UNKNOWN))
+        {
+          Object localObject = paramEncodedImage.getByteBufferRef();
+          if (localObject != null)
+          {
+            CloseableReference localCloseableReference = null;
+            try
+            {
+              if (mIsMemoryCacheEnabled) {
+                localCloseableReference = mMemoryCache.cache(mRequestedCacheKey, (CloseableReference)localObject);
+              }
+              CloseableReference.closeSafely((CloseableReference)localObject);
+              if (localCloseableReference != null) {
+                try
+                {
+                  localObject = new EncodedImage(localCloseableReference);
+                  ((EncodedImage)localObject).copyMetaDataFrom(paramEncodedImage);
+                  CloseableReference.closeSafely(localCloseableReference);
+                  try
+                  {
+                    getConsumer().onProgressUpdate(1.0F);
+                    getConsumer().onNewResult(localObject, paramInt);
+                    EncodedImage.closeSafely((EncodedImage)localObject);
+                    return;
+                  }
+                  finally
+                  {
+                    EncodedImage.closeSafely((EncodedImage)localObject);
+                  }
+                  paramEncodedImage = finally;
+                }
+                finally
+                {
+                  CloseableReference.closeSafely(localCloseableReference);
+                }
+              }
+              getConsumer().onNewResult(paramEncodedImage, paramInt);
+            }
+            finally {}
+          }
+          return;
+        }
+        getConsumer().onNewResult(paramEncodedImage, paramInt);
+        return;
+      }
+      finally
+      {
+        if (FrescoSystrace.isTracing()) {
+          FrescoSystrace.endSection();
+        }
+      }
+    }
+  }
+}

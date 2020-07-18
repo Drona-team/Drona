@@ -1,0 +1,19 @@
+package com.facebook.react.fabric;
+
+import com.facebook.proguard.annotations.DoNotStrip;
+
+@DoNotStrip
+public abstract interface ReactNativeConfig
+{
+  @DoNotStrip
+  public abstract boolean getBool(String paramString);
+  
+  @DoNotStrip
+  public abstract double getDouble(String paramString);
+  
+  @DoNotStrip
+  public abstract int getInt64(String paramString);
+  
+  @DoNotStrip
+  public abstract String getString(String paramString);
+}

@@ -1,0 +1,6 @@
+package com.google.android.gms.iid;
+
+public abstract interface zzaj<T>
+{
+  public abstract T get();
+}

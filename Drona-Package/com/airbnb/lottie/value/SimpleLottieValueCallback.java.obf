@@ -1,0 +1,6 @@
+package com.airbnb.lottie.value;
+
+public abstract interface SimpleLottieValueCallback<T>
+{
+  public abstract T getValue(LottieFrameInfo<T> paramLottieFrameInfo);
+}

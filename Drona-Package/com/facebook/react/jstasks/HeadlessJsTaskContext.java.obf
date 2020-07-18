@@ -1,0 +1,217 @@
+package com.facebook.react.jstasks;
+
+import android.os.Handler;
+import android.util.SparseArray;
+import com.facebook.infer.annotation.Assertions;
+import com.facebook.react.bridge.ReactContext;
+import com.facebook.react.bridge.UiThreadUtil;
+import com.facebook.react.common.LifecycleState;
+import com.facebook.react.modules.appregistry.AppRegistry;
+import java.lang.ref.WeakReference;
+import java.util.Iterator;
+import java.util.Map;
+import java.util.Set;
+import java.util.WeakHashMap;
+import java.util.concurrent.ConcurrentHashMap;
+import java.util.concurrent.CopyOnWriteArraySet;
+import java.util.concurrent.atomic.AtomicInteger;
+
+public class HeadlessJsTaskContext
+{
+  private static final WeakHashMap<ReactContext, HeadlessJsTaskContext> INSTANCES = new WeakHashMap();
+  private final Map<Integer, HeadlessJsTaskConfig> mActiveTaskConfigs = new ConcurrentHashMap();
+  private final Set<Integer> mActiveTasks = new CopyOnWriteArraySet();
+  private final Handler mHandler = new Handler();
+  private final Set<HeadlessJsTaskEventListener> mHeadlessJsTaskEventListeners = new CopyOnWriteArraySet();
+  private final AtomicInteger mLastTaskId = new AtomicInteger(0);
+  private final WeakReference<ReactContext> mReactContext;
+  private final SparseArray<Runnable> mTaskTimeouts = new SparseArray();
+  
+  private HeadlessJsTaskContext(ReactContext paramReactContext)
+  {
+    mReactContext = new WeakReference(paramReactContext);
+  }
+  
+  public static HeadlessJsTaskContext getInstance(ReactContext paramReactContext)
+  {
+    HeadlessJsTaskContext localHeadlessJsTaskContext2 = (HeadlessJsTaskContext)INSTANCES.get(paramReactContext);
+    HeadlessJsTaskContext localHeadlessJsTaskContext1 = localHeadlessJsTaskContext2;
+    if (localHeadlessJsTaskContext2 == null)
+    {
+      localHeadlessJsTaskContext1 = new HeadlessJsTaskContext(paramReactContext);
+      INSTANCES.put(paramReactContext, localHeadlessJsTaskContext1);
+    }
+    return localHeadlessJsTaskContext1;
+  }
+  
+  private void removeTimeout(int paramInt)
+  {
+    Runnable localRunnable = (Runnable)mTaskTimeouts.get(paramInt);
+    if (localRunnable != null)
+    {
+      mHandler.removeCallbacks(localRunnable);
+      mTaskTimeouts.remove(paramInt);
+    }
+  }
+  
+  private void scheduleTaskTimeout(final int paramInt, long paramLong)
+  {
+    Runnable local3 = new Runnable()
+    {
+      public void run()
+      {
+        finishTask(paramInt);
+      }
+    };
+    mTaskTimeouts.append(paramInt, local3);
+    mHandler.postDelayed(local3, paramLong);
+  }
+  
+  private void startTask(HeadlessJsTaskConfig paramHeadlessJsTaskConfig, int paramInt)
+  {
+    try
+    {
+      UiThreadUtil.assertOnUiThread();
+      Object localObject = (ReactContext)Assertions.assertNotNull(mReactContext.get(), "Tried to start a task on a react context that has already been destroyed");
+      if ((((ReactContext)localObject).getLifecycleState() == LifecycleState.RESUMED) && (!paramHeadlessJsTaskConfig.isAllowedInForeground()))
+      {
+        localObject = new StringBuilder();
+        ((StringBuilder)localObject).append("Tried to start task ");
+        ((StringBuilder)localObject).append(paramHeadlessJsTaskConfig.getTaskKey());
+        ((StringBuilder)localObject).append(" while in foreground, but this is not allowed.");
+        throw new IllegalStateException(((StringBuilder)localObject).toString());
+      }
+      mActiveTasks.add(Integer.valueOf(paramInt));
+      mActiveTaskConfigs.put(Integer.valueOf(paramInt), new HeadlessJsTaskConfig(paramHeadlessJsTaskConfig));
+      ((AppRegistry)((ReactContext)localObject).getJSModule(AppRegistry.class)).startHeadlessTask(paramInt, paramHeadlessJsTaskConfig.getTaskKey(), paramHeadlessJsTaskConfig.getData());
+      if (paramHeadlessJsTaskConfig.getTimeout() > 0L) {
+        scheduleTaskTimeout(paramInt, paramHeadlessJsTaskConfig.getTimeout());
+      }
+      paramHeadlessJsTaskConfig = mHeadlessJsTaskEventListeners.iterator();
+      while (paramHeadlessJsTaskConfig.hasNext()) {
+        ((HeadlessJsTaskEventListener)paramHeadlessJsTaskConfig.next()).onHeadlessJsTaskStart(paramInt);
+      }
+      return;
+    }
+    finally {}
+  }
+  
+  public void addTaskEventListener(HeadlessJsTaskEventListener paramHeadlessJsTaskEventListener)
+  {
+    mHeadlessJsTaskEventListeners.add(paramHeadlessJsTaskEventListener);
+  }
+  
+  public void finishTask(final int paramInt)
+  {
+    for (;;)
+    {
+      try
+      {
+        bool = mActiveTasks.remove(Integer.valueOf(paramInt));
+        StringBuilder localStringBuilder = new StringBuilder();
+        localStringBuilder.append("Tried to finish non-existent task with id ");
+        localStringBuilder.append(paramInt);
+        localStringBuilder.append(".");
+        Assertions.assertCondition(bool, localStringBuilder.toString());
+        if (mActiveTaskConfigs.remove(Integer.valueOf(paramInt)) != null)
+        {
+          bool = true;
+          localStringBuilder = new StringBuilder();
+          localStringBuilder.append("Tried to remove non-existent task config with id ");
+          localStringBuilder.append(paramInt);
+          localStringBuilder.append(".");
+          Assertions.assertCondition(bool, localStringBuilder.toString());
+          removeTimeout(paramInt);
+          UiThreadUtil.runOnUiThread(new Runnable()
+          {
+            public void run()
+            {
+              Iterator localIterator = mHeadlessJsTaskEventListeners.iterator();
+              while (localIterator.hasNext()) {
+                ((HeadlessJsTaskEventListener)localIterator.next()).onHeadlessJsTaskFinish(paramInt);
+              }
+            }
+          });
+          return;
+        }
+      }
+      finally {}
+      boolean bool = false;
+    }
+  }
+  
+  public boolean hasActiveTasks()
+  {
+    return mActiveTasks.size() > 0;
+  }
+  
+  public boolean isTaskRunning(int paramInt)
+  {
+    try
+    {
+      boolean bool = mActiveTasks.contains(Integer.valueOf(paramInt));
+      return bool;
+    }
+    finally
+    {
+      localObject = finally;
+      throw localObject;
+    }
+  }
+  
+  public void removeTaskEventListener(HeadlessJsTaskEventListener paramHeadlessJsTaskEventListener)
+  {
+    mHeadlessJsTaskEventListeners.remove(paramHeadlessJsTaskEventListener);
+  }
+  
+  public boolean retryTask(final int paramInt)
+  {
+    for (;;)
+    {
+      try
+      {
+        HeadlessJsTaskConfig localHeadlessJsTaskConfig = (HeadlessJsTaskConfig)mActiveTaskConfigs.get(Integer.valueOf(paramInt));
+        if (localHeadlessJsTaskConfig != null)
+        {
+          bool = true;
+          Object localObject2 = new StringBuilder();
+          ((StringBuilder)localObject2).append("Tried to retrieve non-existent task config with id ");
+          ((StringBuilder)localObject2).append(paramInt);
+          ((StringBuilder)localObject2).append(".");
+          Assertions.assertCondition(bool, ((StringBuilder)localObject2).toString());
+          localObject2 = localHeadlessJsTaskConfig.getRetryPolicy();
+          bool = ((HeadlessJsTaskRetryPolicy)localObject2).canRetry();
+          if (!bool) {
+            return false;
+          }
+          removeTimeout(paramInt);
+          UiThreadUtil.runOnUiThread(new Runnable()
+          {
+            public void run()
+            {
+              HeadlessJsTaskContext.this.startTask(val$taskConfig, paramInt);
+            }
+          }, ((HeadlessJsTaskRetryPolicy)localObject2).getDelay());
+          return true;
+        }
+      }
+      finally {}
+      boolean bool = false;
+    }
+  }
+  
+  public int startTask(HeadlessJsTaskConfig paramHeadlessJsTaskConfig)
+  {
+    try
+    {
+      int i = mLastTaskId.incrementAndGet();
+      startTask(paramHeadlessJsTaskConfig, i);
+      return i;
+    }
+    finally
+    {
+      paramHeadlessJsTaskConfig = finally;
+      throw paramHeadlessJsTaskConfig;
+    }
+  }
+}

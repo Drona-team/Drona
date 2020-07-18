@@ -1,0 +1,103 @@
+package com.facebook.imagepipeline.filter;
+
+import android.os.Build.VERSION;
+
+public abstract class RenderScriptBlurFilter
+{
+  public static final int BLUR_MAX_RADIUS = 25;
+  
+  public RenderScriptBlurFilter() {}
+  
+  /* Error */
+  @androidx.annotation.RequiresApi(17)
+  public static void blurBitmap(android.graphics.Bitmap paramBitmap1, android.graphics.Bitmap paramBitmap2, android.content.Context paramContext, int paramInt)
+  {
+    // Byte code:
+    //   0: aload_0
+    //   1: invokestatic 23	com/facebook/common/internal/Preconditions:checkNotNull	(Ljava/lang/Object;)Ljava/lang/Object;
+    //   4: pop
+    //   5: aload_1
+    //   6: invokestatic 23	com/facebook/common/internal/Preconditions:checkNotNull	(Ljava/lang/Object;)Ljava/lang/Object;
+    //   9: pop
+    //   10: aload_2
+    //   11: invokestatic 23	com/facebook/common/internal/Preconditions:checkNotNull	(Ljava/lang/Object;)Ljava/lang/Object;
+    //   14: pop
+    //   15: iload_3
+    //   16: ifle +15 -> 31
+    //   19: iload_3
+    //   20: bipush 25
+    //   22: if_icmpgt +9 -> 31
+    //   25: iconst_1
+    //   26: istore 4
+    //   28: goto +6 -> 34
+    //   31: iconst_0
+    //   32: istore 4
+    //   34: iload 4
+    //   36: invokestatic 27	com/facebook/common/internal/Preconditions:checkArgument	(Z)V
+    //   39: aload_2
+    //   40: invokestatic 33	android/renderscript/RenderScript:create	(Landroid/content/Context;)Landroid/renderscript/RenderScript;
+    //   43: astore_2
+    //   44: aload_2
+    //   45: aload_2
+    //   46: invokestatic 39	android/renderscript/Element:U8_4	(Landroid/renderscript/RenderScript;)Landroid/renderscript/Element;
+    //   49: invokestatic 44	android/renderscript/ScriptIntrinsicBlur:create	(Landroid/renderscript/RenderScript;Landroid/renderscript/Element;)Landroid/renderscript/ScriptIntrinsicBlur;
+    //   52: astore 5
+    //   54: aload_2
+    //   55: aload_1
+    //   56: invokestatic 50	android/renderscript/Allocation:createFromBitmap	(Landroid/renderscript/RenderScript;Landroid/graphics/Bitmap;)Landroid/renderscript/Allocation;
+    //   59: astore_1
+    //   60: aload_2
+    //   61: aload_0
+    //   62: invokestatic 50	android/renderscript/Allocation:createFromBitmap	(Landroid/renderscript/RenderScript;Landroid/graphics/Bitmap;)Landroid/renderscript/Allocation;
+    //   65: astore 6
+    //   67: aload 5
+    //   69: iload_3
+    //   70: i2f
+    //   71: invokevirtual 54	android/renderscript/ScriptIntrinsicBlur:setRadius	(F)V
+    //   74: aload 5
+    //   76: aload_1
+    //   77: invokevirtual 58	android/renderscript/ScriptIntrinsicBlur:setInput	(Landroid/renderscript/Allocation;)V
+    //   80: aload 5
+    //   82: aload 6
+    //   84: invokevirtual 61	android/renderscript/ScriptIntrinsicBlur:forEach	(Landroid/renderscript/Allocation;)V
+    //   87: aload 6
+    //   89: aload_0
+    //   90: invokevirtual 65	android/renderscript/Allocation:copyTo	(Landroid/graphics/Bitmap;)V
+    //   93: aload_2
+    //   94: ifnull +7 -> 101
+    //   97: aload_2
+    //   98: invokevirtual 68	android/renderscript/RenderScript:destroy	()V
+    //   101: return
+    //   102: astore_0
+    //   103: aload_2
+    //   104: astore_1
+    //   105: goto +6 -> 111
+    //   108: astore_0
+    //   109: aconst_null
+    //   110: astore_1
+    //   111: aload_1
+    //   112: ifnull +7 -> 119
+    //   115: aload_1
+    //   116: invokevirtual 68	android/renderscript/RenderScript:destroy	()V
+    //   119: aload_0
+    //   120: athrow
+    // Local variable table:
+    //   start	length	slot	name	signature
+    //   0	121	0	paramBitmap1	android.graphics.Bitmap
+    //   0	121	1	paramBitmap2	android.graphics.Bitmap
+    //   0	121	2	paramContext	android.content.Context
+    //   0	121	3	paramInt	int
+    //   26	9	4	bool	boolean
+    //   52	29	5	localScriptIntrinsicBlur	android.renderscript.ScriptIntrinsicBlur
+    //   65	23	6	localAllocation	android.renderscript.Allocation
+    // Exception table:
+    //   from	to	target	type
+    //   44	93	102	finally
+    //   39	44	108	finally
+  }
+  
+  public static boolean canUseRenderScript()
+  {
+    return Build.VERSION.SDK_INT >= 17;
+  }
+}

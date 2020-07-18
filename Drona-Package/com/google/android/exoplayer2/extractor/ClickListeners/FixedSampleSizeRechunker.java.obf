@@ -1,0 +1,78 @@
+package com.google.android.exoplayer2.extractor.mp4;
+
+import com.google.android.exoplayer2.util.Util;
+
+final class FixedSampleSizeRechunker
+{
+  private static final int MAX_SAMPLE_SIZE = 8192;
+  
+  private FixedSampleSizeRechunker() {}
+  
+  public static Results rechunk(int paramInt, long[] paramArrayOfLong, int[] paramArrayOfInt, long paramLong)
+  {
+    int[] arrayOfInt1 = paramArrayOfInt;
+    int i1 = 8192 / paramInt;
+    int m = arrayOfInt1.length;
+    int k = 0;
+    int i = 0;
+    int j = 0;
+    while (i < m)
+    {
+      j += Util.ceilDivide(arrayOfInt1[i], i1);
+      i += 1;
+    }
+    long[] arrayOfLong1 = new long[j];
+    int[] arrayOfInt2 = new int[j];
+    long[] arrayOfLong2 = new long[j];
+    int[] arrayOfInt3 = new int[j];
+    m = 0;
+    j = 0;
+    int n = 0;
+    i = k;
+    k = m;
+    for (;;)
+    {
+      arrayOfInt1 = paramArrayOfInt;
+      if (i >= arrayOfInt1.length) {
+        break;
+      }
+      m = arrayOfInt1[i];
+      long l = paramArrayOfLong[i];
+      while (m > 0)
+      {
+        int i2 = Math.min(i1, m);
+        arrayOfLong1[j] = l;
+        arrayOfInt2[j] = (paramInt * i2);
+        n = Math.max(n, arrayOfInt2[j]);
+        arrayOfLong2[j] = (k * paramLong);
+        arrayOfInt3[j] = 1;
+        l += arrayOfInt2[j];
+        k += i2;
+        m -= i2;
+        j += 1;
+      }
+      i += 1;
+    }
+    return new Results(arrayOfLong1, arrayOfInt2, n, arrayOfLong2, arrayOfInt3, paramLong * k, null);
+  }
+  
+  public static final class Results
+  {
+    public final long duration;
+    public final int[] flags;
+    public final int maximumSize;
+    public final long[] offsets;
+    public final int[] sizes;
+    public final long[] timestamps;
+    
+    private Results(long[] paramArrayOfLong1, int[] paramArrayOfInt1, int paramInt, long[] paramArrayOfLong2, int[] paramArrayOfInt2, long paramLong)
+    {
+      offsets = paramArrayOfLong1;
+      sizes = paramArrayOfInt1;
+      maximumSize = paramInt;
+      timestamps = paramArrayOfLong2;
+      flags = paramArrayOfInt2;
+      duration = paramLong;
+    }
+  }
+}

@@ -1,0 +1,412 @@
+package ai.api.services;
+
+import ai.api.AIServiceException;
+import ai.api.PartialResultsListener;
+import ai.api.RequestExtras;
+import ai.api.android.AIConfiguration;
+import ai.api.android.AIDataService;
+import ai.api.android.AIService;
+import ai.api.model.AIContext;
+import ai.api.model.AIError;
+import ai.api.model.AIRequest;
+import ai.api.model.AIResponse;
+import ai.api.util.RecognizerChecker;
+import ai.api.util.VersionConfig;
+import android.annotation.TargetApi;
+import android.content.ComponentName;
+import android.content.Context;
+import android.content.Intent;
+import android.os.AsyncTask;
+import android.os.Build.VERSION;
+import android.os.Bundle;
+import android.os.Handler;
+import android.speech.RecognitionListener;
+import android.speech.SpeechRecognizer;
+import android.util.Log;
+import androidx.annotation.NonNull;
+import androidx.annotation.Nullable;
+import java.util.ArrayList;
+import java.util.HashMap;
+import java.util.List;
+import java.util.Map;
+
+public class GoogleRecognitionServiceImpl
+  extends AIService
+{
+  private static final long STOP_DELAY = 1000L;
+  private static final String TAG = "ai.api.services.GoogleRecognitionServiceImpl";
+  private final Map<Integer, String> errorMessages = new HashMap();
+  private final Handler handler = new Handler();
+  private PartialResultsListener partialResultsListener;
+  private volatile boolean recognitionActive = false;
+  private RequestExtras requestExtras;
+  private SpeechRecognizer speechRecognizer;
+  private final Object speechRecognizerLock = new Object();
+  private Runnable stopRunnable;
+  private final VersionConfig versionConfig;
+  private volatile boolean wasReadyForSpeech;
+  
+  public GoogleRecognitionServiceImpl(Context paramContext, AIConfiguration paramAIConfiguration)
+  {
+    super(paramAIConfiguration, paramContext);
+    errorMessages.put(Integer.valueOf(1), "Network operation timed out.");
+    errorMessages.put(Integer.valueOf(2), "Other network related errors.");
+    errorMessages.put(Integer.valueOf(3), "Audio recording error.");
+    errorMessages.put(Integer.valueOf(4), "Server sends error status.");
+    errorMessages.put(Integer.valueOf(5), "Other client side errors.");
+    errorMessages.put(Integer.valueOf(6), "No speech input.");
+    errorMessages.put(Integer.valueOf(7), "No recognition result matched.");
+    errorMessages.put(Integer.valueOf(8), "RecognitionService busy.");
+    errorMessages.put(Integer.valueOf(9), "Insufficient permissions.");
+    if (RecognizerChecker.findGoogleRecognizer(paramContext) == null) {
+      Log.w(TAG, "Google Recognizer application not found on device. Quality of the recognition may be low. Please check if Google Search application installed and enabled.");
+    }
+    versionConfig = VersionConfig.init(paramContext);
+    if (versionConfig.isAutoStopRecognizer()) {
+      stopRunnable = new Runnable()
+      {
+        public void run()
+        {
+          stopListening();
+        }
+      };
+    }
+  }
+  
+  private Intent createRecognitionIntent()
+  {
+    Intent localIntent = new Intent("android.speech.action.RECOGNIZE_SPEECH");
+    localIntent.putExtra("android.speech.extra.LANGUAGE_MODEL", "free_form");
+    String str = config.getLanguage().replace('-', '_');
+    localIntent.putExtra("android.speech.extra.LANGUAGE", str);
+    localIntent.putExtra("android.speech.extra.LANGUAGE_PREFERENCE", str);
+    localIntent.putExtra("android.speech.extra.PARTIAL_RESULTS", true);
+    localIntent.putExtra("calling_package", context.getPackageName());
+    localIntent.putExtra("android.speech.extra.EXTRA_ADDITIONAL_LANGUAGES", new String[] { str });
+    return localIntent;
+  }
+  
+  private void restartRecognition()
+  {
+    updateStopRunnable(0);
+    recognitionActive = false;
+    try
+    {
+      synchronized (speechRecognizerLock)
+      {
+        if (speechRecognizer == null) {
+          break label65;
+        }
+        speechRecognizer.cancel();
+        Intent localIntent = createRecognitionIntent();
+        wasReadyForSpeech = false;
+        speechRecognizer.startListening(localIntent);
+        recognitionActive = true;
+      }
+    }
+    catch (Exception localException)
+    {
+      label65:
+      for (;;) {}
+    }
+    stopListening();
+    return;
+    throw localObject2;
+  }
+  
+  private void sendRequest(@NonNull AIRequest paramAIRequest, @Nullable final RequestExtras paramRequestExtras)
+  {
+    if (paramAIRequest != null)
+    {
+      new AsyncTask()
+      {
+        private AIError aiError;
+        
+        protected AIResponse doInBackground(AIRequest... paramAnonymousVarArgs)
+        {
+          paramAnonymousVarArgs = paramAnonymousVarArgs[0];
+          try
+          {
+            paramAnonymousVarArgs = aiDataService.request(paramAnonymousVarArgs, paramRequestExtras);
+            return paramAnonymousVarArgs;
+          }
+          catch (AIServiceException paramAnonymousVarArgs)
+          {
+            aiError = new AIError(paramAnonymousVarArgs);
+          }
+          return null;
+        }
+        
+        protected void onPostExecute(AIResponse paramAnonymousAIResponse)
+        {
+          if (paramAnonymousAIResponse != null)
+          {
+            onResult(paramAnonymousAIResponse);
+            return;
+          }
+          onError(aiError);
+        }
+      }.execute(new AIRequest[] { paramAIRequest });
+      return;
+    }
+    throw new IllegalArgumentException("aiRequest must be not null");
+  }
+  
+  private void stopInternal()
+  {
+    updateStopRunnable(0);
+    if (versionConfig.isDestroyRecognizer()) {
+      clearRecognizer();
+    }
+    recognitionActive = false;
+  }
+  
+  private void updateStopRunnable(int paramInt)
+  {
+    if (stopRunnable != null)
+    {
+      if (paramInt == 0)
+      {
+        handler.removeCallbacks(stopRunnable);
+        return;
+      }
+      if (paramInt == 1)
+      {
+        handler.removeCallbacks(stopRunnable);
+        handler.postDelayed(stopRunnable, 1000L);
+      }
+    }
+  }
+  
+  public void cancel()
+  {
+    synchronized (speechRecognizerLock)
+    {
+      if (recognitionActive)
+      {
+        recognitionActive = false;
+        if (speechRecognizer != null) {
+          speechRecognizer.cancel();
+        }
+        onListeningCancelled();
+      }
+      return;
+    }
+  }
+  
+  protected void clearRecognizer()
+  {
+    Log.d(TAG, "clearRecognizer");
+    if (speechRecognizer != null) {
+      synchronized (speechRecognizerLock)
+      {
+        if (speechRecognizer != null)
+        {
+          speechRecognizer.destroy();
+          speechRecognizer = null;
+        }
+        return;
+      }
+    }
+  }
+  
+  protected void initializeRecognizer()
+  {
+    if (speechRecognizer != null) {
+      return;
+    }
+    synchronized (speechRecognizerLock)
+    {
+      if (speechRecognizer != null)
+      {
+        speechRecognizer.destroy();
+        speechRecognizer = null;
+      }
+      ComponentName localComponentName = RecognizerChecker.findGoogleRecognizer(context);
+      speechRecognizer = SpeechRecognizer.createSpeechRecognizer(context, localComponentName);
+      speechRecognizer.setRecognitionListener(new InternalRecognitionListener(null));
+      return;
+    }
+  }
+  
+  protected void onPartialResults(List<String> paramList)
+  {
+    if (partialResultsListener != null) {
+      partialResultsListener.onPartialResults(paramList);
+    }
+  }
+  
+  public void pause()
+  {
+    clearRecognizer();
+  }
+  
+  public void resume() {}
+  
+  public void setPartialResultsListener(PartialResultsListener paramPartialResultsListener)
+  {
+    partialResultsListener = paramPartialResultsListener;
+  }
+  
+  public void startListening()
+  {
+    startListening(new RequestExtras());
+  }
+  
+  public void startListening(RequestExtras paramRequestExtras)
+  {
+    if (!recognitionActive) {
+      synchronized (speechRecognizerLock)
+      {
+        requestExtras = paramRequestExtras;
+        if (!checkPermissions())
+        {
+          onError(new AIError("RECORD_AUDIO permission is denied. Please request permission from user."));
+          return;
+        }
+        initializeRecognizer();
+        recognitionActive = true;
+        paramRequestExtras = createRecognitionIntent();
+      }
+    }
+    try
+    {
+      wasReadyForSpeech = false;
+      speechRecognizer.startListening(paramRequestExtras);
+      return;
+      paramRequestExtras = finally;
+      throw paramRequestExtras;
+      Log.w(TAG, "Trying to start recognition while another recognition active");
+      if (!wasReadyForSpeech) {
+        cancel();
+      }
+      return;
+    }
+    catch (SecurityException paramRequestExtras)
+    {
+      for (;;) {}
+    }
+  }
+  
+  public void startListening(List<AIContext> paramList)
+  {
+    startListening(new RequestExtras(paramList, null));
+  }
+  
+  public void stopListening()
+  {
+    synchronized (speechRecognizerLock)
+    {
+      if (speechRecognizer != null) {
+        speechRecognizer.stopListening();
+      }
+      return;
+    }
+  }
+  
+  private class InternalRecognitionListener
+    implements RecognitionListener
+  {
+    private InternalRecognitionListener() {}
+    
+    public void onBeginningOfSpeech() {}
+    
+    public void onBufferReceived(byte[] paramArrayOfByte) {}
+    
+    public void onEndOfSpeech()
+    {
+      if (recognitionActive) {
+        onListeningFinished();
+      }
+    }
+    
+    public void onError(int paramInt)
+    {
+      if ((paramInt == 7) && (!wasReadyForSpeech))
+      {
+        Log.d(GoogleRecognitionServiceImpl.TAG, "SpeechRecognizer.ERROR_NO_MATCH, restartRecognition()");
+        GoogleRecognitionServiceImpl.this.restartRecognition();
+        return;
+      }
+      if (recognitionActive)
+      {
+        Object localObject;
+        if (errorMessages.containsKey(Integer.valueOf(paramInt)))
+        {
+          localObject = (String)errorMessages.get(Integer.valueOf(paramInt));
+          StringBuilder localStringBuilder = new StringBuilder();
+          localStringBuilder.append("Speech recognition engine error: ");
+          localStringBuilder.append((String)localObject);
+          localObject = new AIError(localStringBuilder.toString());
+        }
+        else
+        {
+          localObject = new StringBuilder();
+          ((StringBuilder)localObject).append("Speech recognition engine error: ");
+          ((StringBuilder)localObject).append(paramInt);
+          localObject = new AIError(((StringBuilder)localObject).toString());
+        }
+        onError((AIError)localObject);
+      }
+      GoogleRecognitionServiceImpl.this.stopInternal();
+    }
+    
+    public void onEvent(int paramInt, Bundle paramBundle) {}
+    
+    public void onPartialResults(Bundle paramBundle)
+    {
+      if (recognitionActive)
+      {
+        GoogleRecognitionServiceImpl.this.updateStopRunnable(1);
+        paramBundle = paramBundle.getStringArrayList("results_recognition");
+        if ((paramBundle != null) && (!paramBundle.isEmpty())) {
+          onPartialResults(paramBundle);
+        }
+      }
+    }
+    
+    public void onReadyForSpeech(Bundle paramBundle)
+    {
+      if (recognitionActive) {
+        onListeningStarted();
+      }
+      GoogleRecognitionServiceImpl.access$602(GoogleRecognitionServiceImpl.this, true);
+    }
+    
+    @TargetApi(14)
+    public void onResults(Bundle paramBundle)
+    {
+      if (recognitionActive)
+      {
+        ArrayList localArrayList = paramBundle.getStringArrayList("results_recognition");
+        float[] arrayOfFloat = null;
+        if (Build.VERSION.SDK_INT >= 14) {
+          arrayOfFloat = paramBundle.getFloatArray("confidence_scores");
+        }
+        if ((localArrayList != null) && (!localArrayList.isEmpty()))
+        {
+          paramBundle = new AIRequest();
+          if (arrayOfFloat != null) {
+            paramBundle.setQuery((String[])localArrayList.toArray(new String[localArrayList.size()]), arrayOfFloat);
+          } else {
+            paramBundle.setQuery((String)localArrayList.get(0));
+          }
+          onPartialResults(localArrayList);
+          GoogleRecognitionServiceImpl.this.sendRequest(paramBundle, requestExtras);
+        }
+        else
+        {
+          onResult(new AIResponse());
+        }
+      }
+      GoogleRecognitionServiceImpl.this.stopInternal();
+    }
+    
+    public void onRmsChanged(float paramFloat)
+    {
+      if (recognitionActive) {
+        onAudioLevelChanged(paramFloat);
+      }
+    }
+  }
+}

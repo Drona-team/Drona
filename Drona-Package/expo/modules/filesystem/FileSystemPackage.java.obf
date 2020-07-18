@@ -1,0 +1,24 @@
+package expo.modules.filesystem;
+
+import android.content.Context;
+import java.util.Collections;
+import java.util.List;
+import org.unimodules.core.BasePackage;
+import org.unimodules.core.ExportedModule;
+import org.unimodules.core.interfaces.InternalModule;
+
+public class FileSystemPackage
+  extends BasePackage
+{
+  public FileSystemPackage() {}
+  
+  public List<ExportedModule> createExportedModules(Context paramContext)
+  {
+    return Collections.singletonList(new FileSystemModule(paramContext));
+  }
+  
+  public List<InternalModule> createInternalModules(Context paramContext)
+  {
+    return Collections.singletonList(new FilePermissionModule());
+  }
+}

@@ -1,0 +1,88 @@
+package com.airbnb.lottie.model.layer;
+
+import android.graphics.Bitmap;
+import android.graphics.Canvas;
+import android.graphics.ColorFilter;
+import android.graphics.Matrix;
+import android.graphics.Paint;
+import android.graphics.Rect;
+import android.graphics.RectF;
+import androidx.annotation.NonNull;
+import androidx.annotation.Nullable;
+import com.airbnb.lottie.LottieDrawable;
+import com.airbnb.lottie.LottieProperty;
+import com.airbnb.lottie.animation.LPaint;
+import com.airbnb.lottie.animation.keyframe.BaseKeyframeAnimation;
+import com.airbnb.lottie.animation.keyframe.ValueCallbackKeyframeAnimation;
+import com.airbnb.lottie.utils.Utils;
+import com.airbnb.lottie.value.LottieValueCallback;
+
+public class ImageLayer
+  extends BaseLayer
+{
+  @Nullable
+  private BaseKeyframeAnimation<ColorFilter, ColorFilter> colorFilterAnimation;
+  private final Rect dst = new Rect();
+  private final Paint paint = new LPaint(3);
+  private final Rect src = new Rect();
+  
+  ImageLayer(LottieDrawable paramLottieDrawable, Layer paramLayer)
+  {
+    super(paramLottieDrawable, paramLayer);
+  }
+  
+  @Nullable
+  private Bitmap getBitmap()
+  {
+    String str = layerModel.getRefId();
+    return lottieDrawable.getImageAsset(str);
+  }
+  
+  public <T> void addValueCallback(T paramT, @Nullable LottieValueCallback<T> paramLottieValueCallback)
+  {
+    super.addValueCallback(paramT, paramLottieValueCallback);
+    if (paramT == LottieProperty.COLOR_FILTER)
+    {
+      if (paramLottieValueCallback == null)
+      {
+        colorFilterAnimation = null;
+        return;
+      }
+      colorFilterAnimation = new ValueCallbackKeyframeAnimation(paramLottieValueCallback);
+    }
+  }
+  
+  public void drawLayer(@NonNull Canvas paramCanvas, Matrix paramMatrix, int paramInt)
+  {
+    Bitmap localBitmap = getBitmap();
+    if (localBitmap != null)
+    {
+      if (localBitmap.isRecycled()) {
+        return;
+      }
+      float f = Utils.dpScale();
+      paint.setAlpha(paramInt);
+      if (colorFilterAnimation != null) {
+        paint.setColorFilter((ColorFilter)colorFilterAnimation.getValue());
+      }
+      paramCanvas.save();
+      paramCanvas.concat(paramMatrix);
+      src.set(0, 0, localBitmap.getWidth(), localBitmap.getHeight());
+      dst.set(0, 0, (int)(localBitmap.getWidth() * f), (int)(localBitmap.getHeight() * f));
+      paramCanvas.drawBitmap(localBitmap, src, dst, paint);
+      paramCanvas.restore();
+      return;
+    }
+  }
+  
+  public void getBounds(RectF paramRectF, Matrix paramMatrix, boolean paramBoolean)
+  {
+    super.getBounds(paramRectF, paramMatrix, paramBoolean);
+    paramMatrix = getBitmap();
+    if (paramMatrix != null)
+    {
+      paramRectF.set(0.0F, 0.0F, paramMatrix.getWidth() * Utils.dpScale(), paramMatrix.getHeight() * Utils.dpScale());
+      boundsMatrix.mapRect(paramRectF);
+    }
+  }
+}

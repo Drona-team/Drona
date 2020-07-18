@@ -1,0 +1,183 @@
+package expo.modules.barcodescanner.scanners;
+
+import android.content.Context;
+import android.graphics.Bitmap;
+import com.google.zxing.BarcodeFormat;
+import com.google.zxing.DecodeHintType;
+import com.google.zxing.LuminanceSource;
+import com.google.zxing.MultiFormatReader;
+import com.google.zxing.PlanarYUVLuminanceSource;
+import com.google.zxing.RGBLuminanceSource;
+import java.util.Collections;
+import java.util.EnumMap;
+import java.util.EnumSet;
+import java.util.HashMap;
+import java.util.Iterator;
+import java.util.List;
+import java.util.Map;
+import org.unimodules.interfaces.barcodescanner.BarCodeScannerResult;
+import org.unimodules.interfaces.barcodescanner.BarCodeScannerSettings;
+
+public class ZxingBarCodeScanner
+  extends ExpoBarCodeScanner
+{
+  private static final Map<BarcodeFormat, Integer> GMV_FROM_ZXING = Collections.unmodifiableMap(new HashMap() {});
+  private static final Map<Integer, String> VALID_BARCODE_TYPES = Collections.unmodifiableMap(new HashMap() {});
+  private final MultiFormatReader mMultiFormatReader = new MultiFormatReader();
+  
+  public ZxingBarCodeScanner(Context paramContext)
+  {
+    super(paramContext);
+  }
+  
+  private LuminanceSource generateSourceFromImageData(byte[] paramArrayOfByte, int paramInt1, int paramInt2)
+  {
+    return new PlanarYUVLuminanceSource(paramArrayOfByte, paramInt1, paramInt2, 0, 0, paramInt1, paramInt2, false);
+  }
+  
+  /* Error */
+  private BarCodeScannerResult scan(LuminanceSource paramLuminanceSource)
+  {
+    // Byte code:
+    //   0: new 55	com/google/zxing/BinaryBitmap
+    //   3: dup
+    //   4: new 57	com/google/zxing/common/HybridBinarizer
+    //   7: dup
+    //   8: aload_1
+    //   9: invokespecial 60	com/google/zxing/common/HybridBinarizer:<init>	(Lcom/google/zxing/LuminanceSource;)V
+    //   12: invokespecial 63	com/google/zxing/BinaryBitmap:<init>	(Lcom/google/zxing/Binarizer;)V
+    //   15: astore_1
+    //   16: aload_0
+    //   17: getfield 40	expo/modules/barcodescanner/scanners/ZxingBarCodeScanner:mMultiFormatReader	Lcom/google/zxing/MultiFormatReader;
+    //   20: aload_1
+    //   21: invokevirtual 67	com/google/zxing/MultiFormatReader:decodeWithState	(Lcom/google/zxing/BinaryBitmap;)Lcom/google/zxing/Result;
+    //   24: astore_2
+    //   25: goto +21 -> 46
+    //   28: astore_2
+    //   29: goto +6 -> 35
+    //   32: astore_2
+    //   33: aconst_null
+    //   34: astore_1
+    //   35: aload_2
+    //   36: invokevirtual 70	java/lang/Throwable:printStackTrace	()V
+    //   39: goto +5 -> 44
+    //   42: aconst_null
+    //   43: astore_1
+    //   44: aconst_null
+    //   45: astore_2
+    //   46: aload_1
+    //   47: ifnull +56 -> 103
+    //   50: aload_2
+    //   51: ifnonnull +5 -> 56
+    //   54: aconst_null
+    //   55: areturn
+    //   56: new 72	java/util/ArrayList
+    //   59: dup
+    //   60: invokespecial 73	java/util/ArrayList:<init>	()V
+    //   63: astore_3
+    //   64: new 75	org/unimodules/interfaces/barcodescanner/BarCodeScannerResult
+    //   67: dup
+    //   68: getstatic 31	expo/modules/barcodescanner/scanners/ZxingBarCodeScanner:GMV_FROM_ZXING	Ljava/util/Map;
+    //   71: aload_2
+    //   72: invokevirtual 81	com/google/zxing/Result:getBarcodeFormat	()Lcom/google/zxing/BarcodeFormat;
+    //   75: invokeinterface 87 2 0
+    //   80: checkcast 89	java/lang/Integer
+    //   83: invokevirtual 93	java/lang/Integer:intValue	()I
+    //   86: aload_2
+    //   87: invokevirtual 97	com/google/zxing/Result:getText	()Ljava/lang/String;
+    //   90: aload_3
+    //   91: aload_1
+    //   92: invokevirtual 100	com/google/zxing/BinaryBitmap:getHeight	()I
+    //   95: aload_1
+    //   96: invokevirtual 103	com/google/zxing/BinaryBitmap:getWidth	()I
+    //   99: invokespecial 106	org/unimodules/interfaces/barcodescanner/BarCodeScannerResult:<init>	(ILjava/lang/String;Ljava/util/List;II)V
+    //   102: areturn
+    //   103: aconst_null
+    //   104: areturn
+    //   105: astore_1
+    //   106: goto -64 -> 42
+    //   109: astore_2
+    //   110: goto -66 -> 44
+    // Local variable table:
+    //   start	length	slot	name	signature
+    //   0	113	0	this	ZxingBarCodeScanner
+    //   0	113	1	paramLuminanceSource	LuminanceSource
+    //   24	1	2	localResult	com.google.zxing.Result
+    //   28	1	2	localThrowable1	Throwable
+    //   32	4	2	localThrowable2	Throwable
+    //   45	42	2	localObject	Object
+    //   109	1	2	localNotFoundException	com.google.zxing.NotFoundException
+    //   63	28	3	localArrayList	java.util.ArrayList
+    // Exception table:
+    //   from	to	target	type
+    //   16	25	28	java/lang/Throwable
+    //   0	16	32	java/lang/Throwable
+    //   0	16	105	com/google/zxing/NotFoundException
+    //   16	25	109	com/google/zxing/NotFoundException
+  }
+  
+  public boolean isAvailable()
+  {
+    return true;
+  }
+  
+  public BarCodeScannerResult scan(byte[] paramArrayOfByte, int paramInt1, int paramInt2, int paramInt3)
+  {
+    byte[] arrayOfByte = paramArrayOfByte;
+    int j = paramInt1;
+    int i = paramInt2;
+    if (paramInt3 == 0)
+    {
+      arrayOfByte = new byte[paramArrayOfByte.length];
+      paramInt3 = 0;
+      while (paramInt3 < paramInt2)
+      {
+        i = 0;
+        while (i < paramInt1)
+        {
+          arrayOfByte[(i * paramInt2 + paramInt2 - paramInt3 - 1)] = paramArrayOfByte[(paramInt3 * paramInt1 + i)];
+          i += 1;
+        }
+        paramInt3 += 1;
+      }
+      paramInt1 += paramInt2;
+      i = paramInt1 - paramInt2;
+      j = paramInt1 - i;
+    }
+    return scan(generateSourceFromImageData(arrayOfByte, j, i));
+  }
+  
+  public List<BarCodeScannerResult> scanMultiple(Bitmap paramBitmap)
+  {
+    int[] arrayOfInt = new int[paramBitmap.getWidth() * paramBitmap.getHeight()];
+    paramBitmap.getPixels(arrayOfInt, 0, paramBitmap.getWidth(), 0, 0, paramBitmap.getWidth(), paramBitmap.getHeight());
+    paramBitmap = scan(new RGBLuminanceSource(paramBitmap.getWidth(), paramBitmap.getHeight(), arrayOfInt));
+    if (paramBitmap == null) {
+      return Collections.emptyList();
+    }
+    return Collections.singletonList(paramBitmap);
+  }
+  
+  public void setSettings(BarCodeScannerSettings paramBarCodeScannerSettings)
+  {
+    if (areNewAndOldBarCodeTypesEqual(parseBarCodeTypesFromSettings(paramBarCodeScannerSettings))) {
+      return;
+    }
+    paramBarCodeScannerSettings = new EnumMap(DecodeHintType.class);
+    EnumSet localEnumSet = EnumSet.noneOf(BarcodeFormat.class);
+    if (mBarCodeTypes != null)
+    {
+      Iterator localIterator = mBarCodeTypes.iterator();
+      while (localIterator.hasNext())
+      {
+        int i = ((Integer)localIterator.next()).intValue();
+        String str = (String)VALID_BARCODE_TYPES.get(Integer.valueOf(i));
+        if (str != null) {
+          localEnumSet.add(BarcodeFormat.valueOf(str));
+        }
+      }
+    }
+    paramBarCodeScannerSettings.put(DecodeHintType.POSSIBLE_FORMATS, localEnumSet);
+    mMultiFormatReader.setHints(paramBarCodeScannerSettings);
+  }
+}

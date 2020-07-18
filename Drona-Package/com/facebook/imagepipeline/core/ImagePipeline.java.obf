@@ -1,0 +1,659 @@
+package com.facebook.imagepipeline.core;
+
+import android.net.Uri;
+import bolts.Continuation;
+import bolts.Task;
+import com.facebook.cache.common.CacheKey;
+import com.facebook.callercontext.CallerContextVerifier;
+import com.facebook.common.internal.Objects;
+import com.facebook.common.internal.Objects.ToStringHelper;
+import com.facebook.common.internal.Preconditions;
+import com.facebook.common.internal.Predicate;
+import com.facebook.common.internal.Supplier;
+import com.facebook.common.memory.PooledByteBuffer;
+import com.facebook.common.references.CloseableReference;
+import com.facebook.datasource.DataSource;
+import com.facebook.datasource.DataSources;
+import com.facebook.datasource.SimpleDataSource;
+import com.facebook.imagepipeline.cache.BufferedDiskCache;
+import com.facebook.imagepipeline.cache.CacheKeyFactory;
+import com.facebook.imagepipeline.cache.MemoryCache;
+import com.facebook.imagepipeline.common.Priority;
+import com.facebook.imagepipeline.datasource.ProducerToDataSourceAdapter;
+import com.facebook.imagepipeline.image.CloseableImage;
+import com.facebook.imagepipeline.image.QualityInfo;
+import com.facebook.imagepipeline.listener.ForwardingRequestListener;
+import com.facebook.imagepipeline.listener.RequestListener;
+import com.facebook.imagepipeline.producers.Producer;
+import com.facebook.imagepipeline.producers.SettableProducerContext;
+import com.facebook.imagepipeline.producers.ThreadHandoffProducerQueue;
+import com.facebook.imagepipeline.request.ImageRequest;
+import com.facebook.imagepipeline.request.ImageRequest.CacheChoice;
+import com.facebook.imagepipeline.request.ImageRequest.RequestLevel;
+import com.facebook.imagepipeline.request.ImageRequestBuilder;
+import com.facebook.imagepipeline.systrace.FrescoSystrace;
+import java.util.Set;
+import java.util.concurrent.CancellationException;
+import java.util.concurrent.atomic.AtomicLong;
+import javax.annotation.Nullable;
+import javax.annotation.concurrent.ThreadSafe;
+
+@ThreadSafe
+public class ImagePipeline
+{
+  private static final CancellationException PREFETCH_EXCEPTION = new CancellationException("Prefetching is not enabled");
+  private final MemoryCache<CacheKey, CloseableImage> mBitmapMemoryCache;
+  private final CacheKeyFactory mCacheKeyFactory;
+  @Nullable
+  private final CallerContextVerifier mCallerContextVerifier;
+  private final MemoryCache<CacheKey, PooledByteBuffer> mEncodedMemoryCache;
+  private AtomicLong mIdCounter = new AtomicLong();
+  private final Supplier<Boolean> mIsPrefetchEnabledSupplier;
+  private final Supplier<Boolean> mLazyDataSource;
+  private final BufferedDiskCache mMainBufferedDiskCache;
+  private final ProducerSequenceFactory mProducerSequenceFactory;
+  private final RequestListener mRequestListener;
+  private final BufferedDiskCache mSmallImageBufferedDiskCache;
+  private final Supplier<Boolean> mSuppressBitmapPrefetchingSupplier;
+  private final ThreadHandoffProducerQueue mThreadHandoffProducerQueue;
+  
+  public ImagePipeline(ProducerSequenceFactory paramProducerSequenceFactory, Set<RequestListener> paramSet, Supplier<Boolean> paramSupplier1, MemoryCache<CacheKey, CloseableImage> paramMemoryCache, MemoryCache<CacheKey, PooledByteBuffer> paramMemoryCache1, BufferedDiskCache paramBufferedDiskCache1, BufferedDiskCache paramBufferedDiskCache2, CacheKeyFactory paramCacheKeyFactory, ThreadHandoffProducerQueue paramThreadHandoffProducerQueue, Supplier<Boolean> paramSupplier2, Supplier<Boolean> paramSupplier3, @Nullable CallerContextVerifier paramCallerContextVerifier)
+  {
+    mProducerSequenceFactory = paramProducerSequenceFactory;
+    mRequestListener = new ForwardingRequestListener(paramSet);
+    mIsPrefetchEnabledSupplier = paramSupplier1;
+    mBitmapMemoryCache = paramMemoryCache;
+    mEncodedMemoryCache = paramMemoryCache1;
+    mMainBufferedDiskCache = paramBufferedDiskCache1;
+    mSmallImageBufferedDiskCache = paramBufferedDiskCache2;
+    mCacheKeyFactory = paramCacheKeyFactory;
+    mThreadHandoffProducerQueue = paramThreadHandoffProducerQueue;
+    mSuppressBitmapPrefetchingSupplier = paramSupplier2;
+    mLazyDataSource = paramSupplier3;
+    mCallerContextVerifier = paramCallerContextVerifier;
+  }
+  
+  private Predicate<CacheKey> predicateForUri(final Uri paramUri)
+  {
+    new Predicate()
+    {
+      public boolean apply(CacheKey paramAnonymousCacheKey)
+      {
+        return paramAnonymousCacheKey.containsUri(paramUri);
+      }
+    };
+  }
+  
+  /* Error */
+  private <T> DataSource<CloseableReference<T>> submitFetchRequest(Producer<CloseableReference<T>> paramProducer, ImageRequest paramImageRequest, ImageRequest.RequestLevel paramRequestLevel, Object paramObject, @Nullable RequestListener paramRequestListener)
+  {
+    // Byte code:
+    //   0: invokestatic 120	com/facebook/imagepipeline/systrace/FrescoSystrace:isTracing	()Z
+    //   3: ifeq +8 -> 11
+    //   6: ldc 122
+    //   8: invokestatic 125	com/facebook/imagepipeline/systrace/FrescoSystrace:beginSection	(Ljava/lang/String;)V
+    //   11: aload_0
+    //   12: aload_2
+    //   13: aload 5
+    //   15: invokevirtual 129	com/facebook/imagepipeline/core/ImagePipeline:getRequestListenerForRequest	(Lcom/facebook/imagepipeline/request/ImageRequest;Lcom/facebook/imagepipeline/listener/RequestListener;)Lcom/facebook/imagepipeline/listener/RequestListener;
+    //   18: astore 5
+    //   20: aload_0
+    //   21: getfield 99	com/facebook/imagepipeline/core/ImagePipeline:mCallerContextVerifier	Lcom/facebook/callercontext/CallerContextVerifier;
+    //   24: ifnull +14 -> 38
+    //   27: aload_0
+    //   28: getfield 99	com/facebook/imagepipeline/core/ImagePipeline:mCallerContextVerifier	Lcom/facebook/callercontext/CallerContextVerifier;
+    //   31: aload 4
+    //   33: invokeinterface 135 2 0
+    //   38: aload_2
+    //   39: invokevirtual 141	com/facebook/imagepipeline/request/ImageRequest:getLowestPermittedRequestLevel	()Lcom/facebook/imagepipeline/request/ImageRequest$RequestLevel;
+    //   42: aload_3
+    //   43: invokestatic 147	com/facebook/imagepipeline/request/ImageRequest$RequestLevel:getMax	(Lcom/facebook/imagepipeline/request/ImageRequest$RequestLevel;Lcom/facebook/imagepipeline/request/ImageRequest$RequestLevel;)Lcom/facebook/imagepipeline/request/ImageRequest$RequestLevel;
+    //   46: astore_3
+    //   47: aload_0
+    //   48: invokevirtual 151	com/facebook/imagepipeline/core/ImagePipeline:generateUniqueFutureId	()Ljava/lang/String;
+    //   51: astore 7
+    //   53: aload_2
+    //   54: invokevirtual 154	com/facebook/imagepipeline/request/ImageRequest:getProgressiveRenderingEnabled	()Z
+    //   57: ifne +94 -> 151
+    //   60: aload_2
+    //   61: invokevirtual 158	com/facebook/imagepipeline/request/ImageRequest:getSourceUri	()Landroid/net/Uri;
+    //   64: invokestatic 164	com/facebook/common/util/UriUtil:isNetworkUri	(Landroid/net/Uri;)Z
+    //   67: ifne +78 -> 145
+    //   70: goto +81 -> 151
+    //   73: aload_1
+    //   74: new 166	com/facebook/imagepipeline/producers/SettableProducerContext
+    //   77: dup
+    //   78: aload_2
+    //   79: aload 7
+    //   81: aload 5
+    //   83: aload 4
+    //   85: aload_3
+    //   86: iconst_0
+    //   87: iload 6
+    //   89: aload_2
+    //   90: invokevirtual 170	com/facebook/imagepipeline/request/ImageRequest:getPriority	()Lcom/facebook/imagepipeline/common/Priority;
+    //   93: invokespecial 173	com/facebook/imagepipeline/producers/SettableProducerContext:<init>	(Lcom/facebook/imagepipeline/request/ImageRequest;Ljava/lang/String;Lcom/facebook/imagepipeline/producers/ProducerListener;Ljava/lang/Object;Lcom/facebook/imagepipeline/request/ImageRequest$RequestLevel;ZZLcom/facebook/imagepipeline/common/Priority;)V
+    //   96: aload 5
+    //   98: invokestatic 179	com/facebook/imagepipeline/datasource/CloseableProducerToDataSourceAdapter:create	(Lcom/facebook/imagepipeline/producers/Producer;Lcom/facebook/imagepipeline/producers/SettableProducerContext;Lcom/facebook/imagepipeline/listener/RequestListener;)Lcom/facebook/datasource/DataSource;
+    //   101: astore_1
+    //   102: invokestatic 120	com/facebook/imagepipeline/systrace/FrescoSystrace:isTracing	()Z
+    //   105: ifeq +6 -> 111
+    //   108: invokestatic 182	com/facebook/imagepipeline/systrace/FrescoSystrace:endSection	()V
+    //   111: aload_1
+    //   112: areturn
+    //   113: astore_1
+    //   114: goto +20 -> 134
+    //   117: astore_1
+    //   118: aload_1
+    //   119: invokestatic 188	com/facebook/datasource/DataSources:immediateFailedDataSource	(Ljava/lang/Throwable;)Lcom/facebook/datasource/DataSource;
+    //   122: astore_1
+    //   123: invokestatic 120	com/facebook/imagepipeline/systrace/FrescoSystrace:isTracing	()Z
+    //   126: ifeq +6 -> 132
+    //   129: invokestatic 182	com/facebook/imagepipeline/systrace/FrescoSystrace:endSection	()V
+    //   132: aload_1
+    //   133: areturn
+    //   134: invokestatic 120	com/facebook/imagepipeline/systrace/FrescoSystrace:isTracing	()Z
+    //   137: ifeq +6 -> 143
+    //   140: invokestatic 182	com/facebook/imagepipeline/systrace/FrescoSystrace:endSection	()V
+    //   143: aload_1
+    //   144: athrow
+    //   145: iconst_0
+    //   146: istore 6
+    //   148: goto -75 -> 73
+    //   151: iconst_1
+    //   152: istore 6
+    //   154: goto -81 -> 73
+    // Local variable table:
+    //   start	length	slot	name	signature
+    //   0	157	0	this	ImagePipeline
+    //   0	157	1	paramProducer	Producer<CloseableReference<T>>
+    //   0	157	2	paramImageRequest	ImageRequest
+    //   0	157	3	paramRequestLevel	ImageRequest.RequestLevel
+    //   0	157	4	paramObject	Object
+    //   0	157	5	paramRequestListener	RequestListener
+    //   87	66	6	bool	boolean
+    //   51	29	7	str	String
+    // Exception table:
+    //   from	to	target	type
+    //   38	70	113	finally
+    //   73	102	113	finally
+    //   118	123	113	finally
+    //   38	70	117	java/lang/Exception
+    //   73	102	117	java/lang/Exception
+  }
+  
+  private DataSource<Void> submitPrefetchRequest(Producer<Void> paramProducer, ImageRequest paramImageRequest, ImageRequest.RequestLevel paramRequestLevel, Object paramObject, Priority paramPriority)
+  {
+    RequestListener localRequestListener = getRequestListenerForRequest(paramImageRequest, null);
+    if (mCallerContextVerifier != null) {
+      mCallerContextVerifier.verifyCallerContext(paramObject);
+    }
+    try
+    {
+      paramRequestLevel = ImageRequest.RequestLevel.getMax(paramImageRequest.getLowestPermittedRequestLevel(), paramRequestLevel);
+      paramProducer = ProducerToDataSourceAdapter.create(paramProducer, new SettableProducerContext(paramImageRequest, generateUniqueFutureId(), localRequestListener, paramObject, paramRequestLevel, true, false, paramPriority), localRequestListener);
+      return paramProducer;
+    }
+    catch (Exception paramProducer) {}
+    return DataSources.immediateFailedDataSource(paramProducer);
+  }
+  
+  public void clearCaches()
+  {
+    clearMemoryCaches();
+    clearDiskCaches();
+  }
+  
+  public void clearDiskCaches()
+  {
+    mMainBufferedDiskCache.clearAll();
+    mSmallImageBufferedDiskCache.clearAll();
+  }
+  
+  public void clearMemoryCaches()
+  {
+    Predicate local4 = new Predicate()
+    {
+      public boolean apply(CacheKey paramAnonymousCacheKey)
+      {
+        return true;
+      }
+    };
+    mBitmapMemoryCache.removeAll(local4);
+    mEncodedMemoryCache.removeAll(local4);
+  }
+  
+  public void evictFromCache(Uri paramUri)
+  {
+    evictFromMemoryCache(paramUri);
+    evictFromDiskCache(paramUri);
+  }
+  
+  public void evictFromDiskCache(Uri paramUri)
+  {
+    evictFromDiskCache(ImageRequest.fromUri(paramUri));
+  }
+  
+  public void evictFromDiskCache(ImageRequest paramImageRequest)
+  {
+    paramImageRequest = mCacheKeyFactory.getEncodedCacheKey(paramImageRequest, null);
+    mMainBufferedDiskCache.remove(paramImageRequest);
+    mSmallImageBufferedDiskCache.remove(paramImageRequest);
+  }
+  
+  public void evictFromMemoryCache(Uri paramUri)
+  {
+    paramUri = predicateForUri(paramUri);
+    mBitmapMemoryCache.removeAll(paramUri);
+    mEncodedMemoryCache.removeAll(paramUri);
+  }
+  
+  public DataSource<CloseableReference<CloseableImage>> fetchDecodedImage(ImageRequest paramImageRequest, Object paramObject)
+  {
+    return fetchDecodedImage(paramImageRequest, paramObject, ImageRequest.RequestLevel.FULL_FETCH);
+  }
+  
+  public DataSource<CloseableReference<CloseableImage>> fetchDecodedImage(ImageRequest paramImageRequest, Object paramObject, @Nullable RequestListener paramRequestListener)
+  {
+    return fetchDecodedImage(paramImageRequest, paramObject, ImageRequest.RequestLevel.FULL_FETCH, paramRequestListener);
+  }
+  
+  public DataSource<CloseableReference<CloseableImage>> fetchDecodedImage(ImageRequest paramImageRequest, Object paramObject, ImageRequest.RequestLevel paramRequestLevel)
+  {
+    return fetchDecodedImage(paramImageRequest, paramObject, paramRequestLevel, null);
+  }
+  
+  public DataSource<CloseableReference<CloseableImage>> fetchDecodedImage(ImageRequest paramImageRequest, Object paramObject, ImageRequest.RequestLevel paramRequestLevel, @Nullable RequestListener paramRequestListener)
+  {
+    try
+    {
+      paramImageRequest = submitFetchRequest(mProducerSequenceFactory.getDecodedImageProducerSequence(paramImageRequest), paramImageRequest, paramRequestLevel, paramObject, paramRequestListener);
+      return paramImageRequest;
+    }
+    catch (Exception paramImageRequest) {}
+    return DataSources.immediateFailedDataSource(paramImageRequest);
+  }
+  
+  public DataSource<CloseableReference<PooledByteBuffer>> fetchEncodedImage(ImageRequest paramImageRequest, Object paramObject)
+  {
+    return fetchEncodedImage(paramImageRequest, paramObject, null);
+  }
+  
+  public DataSource<CloseableReference<PooledByteBuffer>> fetchEncodedImage(ImageRequest paramImageRequest, Object paramObject, @Nullable RequestListener paramRequestListener)
+  {
+    Preconditions.checkNotNull(paramImageRequest.getSourceUri());
+    try
+    {
+      Producer localProducer = mProducerSequenceFactory.getEncodedImageProducerSequence(paramImageRequest);
+      ImageRequest localImageRequest = paramImageRequest;
+      if (paramImageRequest.getResizeOptions() != null) {
+        localImageRequest = ImageRequestBuilder.fromRequest(paramImageRequest).setResizeOptions(null).build();
+      }
+      paramImageRequest = submitFetchRequest(localProducer, localImageRequest, ImageRequest.RequestLevel.FULL_FETCH, paramObject, paramRequestListener);
+      return paramImageRequest;
+    }
+    catch (Exception paramImageRequest) {}
+    return DataSources.immediateFailedDataSource(paramImageRequest);
+  }
+  
+  public DataSource<CloseableReference<CloseableImage>> fetchImageFromBitmapCache(ImageRequest paramImageRequest, Object paramObject)
+  {
+    return fetchDecodedImage(paramImageRequest, paramObject, ImageRequest.RequestLevel.BITMAP_MEMORY_CACHE);
+  }
+  
+  public String generateUniqueFutureId()
+  {
+    return String.valueOf(mIdCounter.getAndIncrement());
+  }
+  
+  public MemoryCache<CacheKey, CloseableImage> getBitmapMemoryCache()
+  {
+    return mBitmapMemoryCache;
+  }
+  
+  @Nullable
+  public CacheKey getCacheKey(@Nullable ImageRequest paramImageRequest, Object paramObject)
+  {
+    if (FrescoSystrace.isTracing()) {
+      FrescoSystrace.beginSection("ImagePipeline#getCacheKey");
+    }
+    CacheKeyFactory localCacheKeyFactory = mCacheKeyFactory;
+    Object localObject2 = null;
+    Object localObject1 = localObject2;
+    if (localCacheKeyFactory != null)
+    {
+      localObject1 = localObject2;
+      if (paramImageRequest != null) {
+        if (paramImageRequest.getPostprocessor() != null) {
+          localObject1 = localCacheKeyFactory.getPostprocessedBitmapCacheKey(paramImageRequest, paramObject);
+        } else {
+          localObject1 = localCacheKeyFactory.getBitmapCacheKey(paramImageRequest, paramObject);
+        }
+      }
+    }
+    if (FrescoSystrace.isTracing()) {
+      FrescoSystrace.endSection();
+    }
+    return localObject1;
+  }
+  
+  public CacheKeyFactory getCacheKeyFactory()
+  {
+    return mCacheKeyFactory;
+  }
+  
+  @Nullable
+  public CloseableReference<CloseableImage> getCachedImage(@Nullable CacheKey paramCacheKey)
+  {
+    MemoryCache localMemoryCache = mBitmapMemoryCache;
+    if (localMemoryCache != null)
+    {
+      if (paramCacheKey == null) {
+        return null;
+      }
+      paramCacheKey = localMemoryCache.get(paramCacheKey);
+      if ((paramCacheKey != null) && (!((CloseableImage)paramCacheKey.get()).getQualityInfo().isOfFullQuality()))
+      {
+        paramCacheKey.close();
+        return null;
+      }
+      return paramCacheKey;
+    }
+    return null;
+  }
+  
+  public Supplier<DataSource<CloseableReference<CloseableImage>>> getDataSourceSupplier(final ImageRequest paramImageRequest, final Object paramObject, final ImageRequest.RequestLevel paramRequestLevel)
+  {
+    new Supplier()
+    {
+      public DataSource<CloseableReference<CloseableImage>> get()
+      {
+        return fetchDecodedImage(paramImageRequest, paramObject, paramRequestLevel);
+      }
+      
+      public String toString()
+      {
+        return Objects.toStringHelper(this).add("uri", paramImageRequest.getSourceUri()).toString();
+      }
+    };
+  }
+  
+  public Supplier<DataSource<CloseableReference<CloseableImage>>> getDataSourceSupplier(final ImageRequest paramImageRequest, final Object paramObject, final ImageRequest.RequestLevel paramRequestLevel, @Nullable final RequestListener paramRequestListener)
+  {
+    new Supplier()
+    {
+      public DataSource<CloseableReference<CloseableImage>> get()
+      {
+        return fetchDecodedImage(paramImageRequest, paramObject, paramRequestLevel, paramRequestListener);
+      }
+      
+      public String toString()
+      {
+        return Objects.toStringHelper(this).add("uri", paramImageRequest.getSourceUri()).toString();
+      }
+    };
+  }
+  
+  public Supplier<DataSource<CloseableReference<PooledByteBuffer>>> getEncodedImageDataSourceSupplier(final ImageRequest paramImageRequest, final Object paramObject)
+  {
+    new Supplier()
+    {
+      public DataSource<CloseableReference<PooledByteBuffer>> get()
+      {
+        return fetchEncodedImage(paramImageRequest, paramObject);
+      }
+      
+      public String toString()
+      {
+        return Objects.toStringHelper(this).add("uri", paramImageRequest.getSourceUri()).toString();
+      }
+    };
+  }
+  
+  public ProducerSequenceFactory getProducerSequenceFactory()
+  {
+    return mProducerSequenceFactory;
+  }
+  
+  public RequestListener getRequestListenerForRequest(ImageRequest paramImageRequest, @Nullable RequestListener paramRequestListener)
+  {
+    if (paramRequestListener == null)
+    {
+      if (paramImageRequest.getRequestListener() == null) {
+        return mRequestListener;
+      }
+      return new ForwardingRequestListener(new RequestListener[] { mRequestListener, paramImageRequest.getRequestListener() });
+    }
+    if (paramImageRequest.getRequestListener() == null) {
+      return new ForwardingRequestListener(new RequestListener[] { mRequestListener, paramRequestListener });
+    }
+    return new ForwardingRequestListener(new RequestListener[] { mRequestListener, paramRequestListener, paramImageRequest.getRequestListener() });
+  }
+  
+  public long getUsedDiskCacheSize()
+  {
+    return mMainBufferedDiskCache.getSize() + mSmallImageBufferedDiskCache.getSize();
+  }
+  
+  public boolean hasCachedImage(@Nullable CacheKey paramCacheKey)
+  {
+    MemoryCache localMemoryCache = mBitmapMemoryCache;
+    if ((localMemoryCache != null) && (paramCacheKey != null)) {
+      return localMemoryCache.contains(paramCacheKey);
+    }
+    return false;
+  }
+  
+  public boolean isInBitmapMemoryCache(Uri paramUri)
+  {
+    if (paramUri == null) {
+      return false;
+    }
+    paramUri = predicateForUri(paramUri);
+    return mBitmapMemoryCache.contains(paramUri);
+  }
+  
+  public boolean isInBitmapMemoryCache(ImageRequest paramImageRequest)
+  {
+    if (paramImageRequest == null) {
+      return false;
+    }
+    paramImageRequest = mCacheKeyFactory.getBitmapCacheKey(paramImageRequest, null);
+    paramImageRequest = mBitmapMemoryCache.get(paramImageRequest);
+    try
+    {
+      boolean bool = CloseableReference.isValid(paramImageRequest);
+      return bool;
+    }
+    finally
+    {
+      CloseableReference.closeSafely(paramImageRequest);
+    }
+  }
+  
+  public DataSource<Boolean> isInDiskCache(Uri paramUri)
+  {
+    return isInDiskCache(ImageRequest.fromUri(paramUri));
+  }
+  
+  public DataSource<Boolean> isInDiskCache(final ImageRequest paramImageRequest)
+  {
+    paramImageRequest = mCacheKeyFactory.getEncodedCacheKey(paramImageRequest, null);
+    final SimpleDataSource localSimpleDataSource = SimpleDataSource.create();
+    mMainBufferedDiskCache.contains(paramImageRequest).continueWithTask(new Continuation()
+    {
+      public Task<Boolean> then(Task<Boolean> paramAnonymousTask)
+        throws Exception
+      {
+        if ((!paramAnonymousTask.isCancelled()) && (!paramAnonymousTask.isFaulted()) && (((Boolean)paramAnonymousTask.getResult()).booleanValue())) {
+          return Task.forResult(Boolean.valueOf(true));
+        }
+        return mSmallImageBufferedDiskCache.contains(paramImageRequest);
+      }
+    }).continueWith(new Continuation()
+    {
+      public Void then(Task<Boolean> paramAnonymousTask)
+        throws Exception
+      {
+        SimpleDataSource localSimpleDataSource = localSimpleDataSource;
+        boolean bool;
+        if ((!paramAnonymousTask.isCancelled()) && (!paramAnonymousTask.isFaulted()) && (((Boolean)paramAnonymousTask.getResult()).booleanValue())) {
+          bool = true;
+        } else {
+          bool = false;
+        }
+        localSimpleDataSource.setResult(Boolean.valueOf(bool));
+        return null;
+      }
+    });
+    return localSimpleDataSource;
+  }
+  
+  public boolean isInDiskCacheSync(Uri paramUri)
+  {
+    return (isInDiskCacheSync(paramUri, ImageRequest.CacheChoice.SMALL)) || (isInDiskCacheSync(paramUri, ImageRequest.CacheChoice.DEFAULT));
+  }
+  
+  public boolean isInDiskCacheSync(Uri paramUri, ImageRequest.CacheChoice paramCacheChoice)
+  {
+    return isInDiskCacheSync(ImageRequestBuilder.newBuilderWithSource(paramUri).setCacheChoice(paramCacheChoice).build());
+  }
+  
+  public boolean isInDiskCacheSync(ImageRequest paramImageRequest)
+  {
+    CacheKey localCacheKey = mCacheKeyFactory.getEncodedCacheKey(paramImageRequest, null);
+    paramImageRequest = paramImageRequest.getCacheChoice();
+    switch (8.$SwitchMap$com$facebook$imagepipeline$request$ImageRequest$CacheChoice[paramImageRequest.ordinal()])
+    {
+    default: 
+      return false;
+    case 2: 
+      return mSmallImageBufferedDiskCache.diskCheckSync(localCacheKey);
+    }
+    return mMainBufferedDiskCache.diskCheckSync(localCacheKey);
+  }
+  
+  public Supplier<Boolean> isLazyDataSource()
+  {
+    return mLazyDataSource;
+  }
+  
+  public boolean isPaused()
+  {
+    return mThreadHandoffProducerQueue.isQueueing();
+  }
+  
+  public void pause()
+  {
+    mThreadHandoffProducerQueue.startQueueing();
+  }
+  
+  public DataSource<Void> prefetchToBitmapCache(ImageRequest paramImageRequest, Object paramObject)
+  {
+    if (!((Boolean)mIsPrefetchEnabledSupplier.get()).booleanValue()) {
+      return DataSources.immediateFailedDataSource(PREFETCH_EXCEPTION);
+    }
+    for (;;)
+    {
+      try
+      {
+        Object localObject = paramImageRequest.shouldDecodePrefetches();
+        if (localObject != null)
+        {
+          if (((Boolean)localObject).booleanValue()) {
+            break label115;
+          }
+          bool = true;
+        }
+        else
+        {
+          bool = ((Boolean)mSuppressBitmapPrefetchingSupplier.get()).booleanValue();
+        }
+        if (bool) {
+          localObject = mProducerSequenceFactory.getEncodedImagePrefetchProducerSequence(paramImageRequest);
+        } else {
+          localObject = mProducerSequenceFactory.getDecodedImagePrefetchProducerSequence(paramImageRequest);
+        }
+        paramImageRequest = submitPrefetchRequest((Producer)localObject, paramImageRequest, ImageRequest.RequestLevel.FULL_FETCH, paramObject, Priority.MEDIUM);
+        return paramImageRequest;
+      }
+      catch (Exception paramImageRequest)
+      {
+        return DataSources.immediateFailedDataSource(paramImageRequest);
+      }
+      label115:
+      boolean bool = false;
+    }
+  }
+  
+  public DataSource<Void> prefetchToDiskCache(ImageRequest paramImageRequest, Object paramObject)
+  {
+    return prefetchToDiskCache(paramImageRequest, paramObject, Priority.MEDIUM);
+  }
+  
+  public DataSource<Void> prefetchToDiskCache(ImageRequest paramImageRequest, Object paramObject, Priority paramPriority)
+  {
+    if (!((Boolean)mIsPrefetchEnabledSupplier.get()).booleanValue()) {
+      return DataSources.immediateFailedDataSource(PREFETCH_EXCEPTION);
+    }
+    try
+    {
+      paramImageRequest = submitPrefetchRequest(mProducerSequenceFactory.getEncodedImagePrefetchProducerSequence(paramImageRequest), paramImageRequest, ImageRequest.RequestLevel.FULL_FETCH, paramObject, paramPriority);
+      return paramImageRequest;
+    }
+    catch (Exception paramImageRequest) {}
+    return DataSources.immediateFailedDataSource(paramImageRequest);
+  }
+  
+  public void resume()
+  {
+    mThreadHandoffProducerQueue.stopQueuing();
+  }
+  
+  /* Error */
+  public <T> DataSource<CloseableReference<T>> submitFetchRequest(Producer<CloseableReference<T>> paramProducer, SettableProducerContext paramSettableProducerContext, RequestListener paramRequestListener)
+  {
+    // Byte code:
+    //   0: invokestatic 120	com/facebook/imagepipeline/systrace/FrescoSystrace:isTracing	()Z
+    //   3: ifeq +8 -> 11
+    //   6: ldc 122
+    //   8: invokestatic 125	com/facebook/imagepipeline/systrace/FrescoSystrace:beginSection	(Ljava/lang/String;)V
+    //   11: aload_1
+    //   12: aload_2
+    //   13: aload_3
+    //   14: invokestatic 179	com/facebook/imagepipeline/datasource/CloseableProducerToDataSourceAdapter:create	(Lcom/facebook/imagepipeline/producers/Producer;Lcom/facebook/imagepipeline/producers/SettableProducerContext;Lcom/facebook/imagepipeline/listener/RequestListener;)Lcom/facebook/datasource/DataSource;
+    //   17: astore_1
+    //   18: invokestatic 120	com/facebook/imagepipeline/systrace/FrescoSystrace:isTracing	()Z
+    //   21: ifeq +6 -> 27
+    //   24: invokestatic 182	com/facebook/imagepipeline/systrace/FrescoSystrace:endSection	()V
+    //   27: aload_1
+    //   28: areturn
+    //   29: astore_1
+    //   30: goto +20 -> 50
+    //   33: astore_1
+    //   34: aload_1
+    //   35: invokestatic 188	com/facebook/datasource/DataSources:immediateFailedDataSource	(Ljava/lang/Throwable;)Lcom/facebook/datasource/DataSource;
+    //   38: astore_1
+    //   39: invokestatic 120	com/facebook/imagepipeline/systrace/FrescoSystrace:isTracing	()Z
+    //   42: ifeq +6 -> 48
+    //   45: invokestatic 182	com/facebook/imagepipeline/systrace/FrescoSystrace:endSection	()V
+    //   48: aload_1
+    //   49: areturn
+    //   50: invokestatic 120	com/facebook/imagepipeline/systrace/FrescoSystrace:isTracing	()Z
+    //   53: ifeq +6 -> 59
+    //   56: invokestatic 182	com/facebook/imagepipeline/systrace/FrescoSystrace:endSection	()V
+    //   59: aload_1
+    //   60: athrow
+    // Local variable table:
+    //   start	length	slot	name	signature
+    //   0	61	0	this	ImagePipeline
+    //   0	61	1	paramProducer	Producer<CloseableReference<T>>
+    //   0	61	2	paramSettableProducerContext	SettableProducerContext
+    //   0	61	3	paramRequestListener	RequestListener
+    // Exception table:
+    //   from	to	target	type
+    //   11	18	29	finally
+    //   34	39	29	finally
+    //   11	18	33	java/lang/Exception
+  }
+}

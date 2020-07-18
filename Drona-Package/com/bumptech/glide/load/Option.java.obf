@@ -1,0 +1,105 @@
+package com.bumptech.glide.load;
+
+import androidx.annotation.NonNull;
+import androidx.annotation.Nullable;
+import com.bumptech.glide.util.Preconditions;
+import java.security.MessageDigest;
+
+public final class Option<T>
+{
+  private static final CacheKeyUpdater<Object> EMPTY_UPDATER = new CacheKeyUpdater()
+  {
+    public void update(@NonNull byte[] paramAnonymousArrayOfByte, @NonNull Object paramAnonymousObject, @NonNull MessageDigest paramAnonymousMessageDigest) {}
+  };
+  private final CacheKeyUpdater<T> cacheKeyUpdater;
+  private final T defaultValue;
+  private final String key;
+  private volatile byte[] keyBytes;
+  
+  private Option(@NonNull String paramString, @Nullable T paramT, @NonNull CacheKeyUpdater<T> paramCacheKeyUpdater)
+  {
+    key = Preconditions.checkNotEmpty(paramString);
+    defaultValue = paramT;
+    cacheKeyUpdater = ((CacheKeyUpdater)Preconditions.checkNotNull(paramCacheKeyUpdater));
+  }
+  
+  @NonNull
+  public static <T> Option<T> disk(@NonNull String paramString, @NonNull CacheKeyUpdater<T> paramCacheKeyUpdater)
+  {
+    return new Option(paramString, null, paramCacheKeyUpdater);
+  }
+  
+  @NonNull
+  public static <T> Option<T> disk(@NonNull String paramString, @Nullable T paramT, @NonNull CacheKeyUpdater<T> paramCacheKeyUpdater)
+  {
+    return new Option(paramString, paramT, paramCacheKeyUpdater);
+  }
+  
+  @NonNull
+  private static <T> CacheKeyUpdater<T> emptyUpdater()
+  {
+    return EMPTY_UPDATER;
+  }
+  
+  @NonNull
+  private byte[] getKeyBytes()
+  {
+    if (keyBytes == null) {
+      keyBytes = key.getBytes(Key.CHARSET);
+    }
+    return keyBytes;
+  }
+  
+  @NonNull
+  public static <T> Option<T> memory(@NonNull String paramString)
+  {
+    return new Option(paramString, null, emptyUpdater());
+  }
+  
+  @NonNull
+  public static <T> Option<T> memory(@NonNull String paramString, @NonNull T paramT)
+  {
+    return new Option(paramString, paramT, emptyUpdater());
+  }
+  
+  public boolean equals(Object paramObject)
+  {
+    if ((paramObject instanceof Option))
+    {
+      paramObject = (Option)paramObject;
+      return key.equals(key);
+    }
+    return false;
+  }
+  
+  @Nullable
+  public T getDefaultValue()
+  {
+    return defaultValue;
+  }
+  
+  public int hashCode()
+  {
+    return key.hashCode();
+  }
+  
+  public String toString()
+  {
+    StringBuilder localStringBuilder = new StringBuilder();
+    localStringBuilder.append("Option{key='");
+    localStringBuilder.append(key);
+    localStringBuilder.append('\'');
+    localStringBuilder.append('}');
+    return localStringBuilder.toString();
+  }
+  
+  public void update(@NonNull T paramT, @NonNull MessageDigest paramMessageDigest)
+  {
+    cacheKeyUpdater.update(getKeyBytes(), paramT, paramMessageDigest);
+  }
+  
+  public static abstract interface CacheKeyUpdater<T>
+  {
+    public abstract void update(@NonNull byte[] paramArrayOfByte, @NonNull T paramT, @NonNull MessageDigest paramMessageDigest);
+  }
+}

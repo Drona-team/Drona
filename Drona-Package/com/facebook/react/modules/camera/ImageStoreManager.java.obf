@@ -1,0 +1,163 @@
+package com.facebook.react.modules.camera;
+
+import android.os.AsyncTask;
+import android.util.Base64OutputStream;
+import com.facebook.react.bridge.Callback;
+import com.facebook.react.bridge.GuardedAsyncTask;
+import com.facebook.react.bridge.ReactApplicationContext;
+import com.facebook.react.bridge.ReactContext;
+import com.facebook.react.bridge.ReactContextBaseJavaModule;
+import com.facebook.react.bridge.ReactMethod;
+import com.facebook.react.module.annotations.ReactModule;
+import java.io.ByteArrayOutputStream;
+import java.io.Closeable;
+import java.io.IOException;
+import java.io.InputStream;
+
+@ReactModule(name="ImageStoreManager")
+public class ImageStoreManager
+  extends ReactContextBaseJavaModule
+{
+  private static final int BUFFER_SIZE = 8192;
+  public static final String NAME = "ImageStoreManager";
+  
+  public ImageStoreManager(ReactApplicationContext paramReactApplicationContext)
+  {
+    super(paramReactApplicationContext);
+  }
+  
+  private static void closeQuietly(Closeable paramCloseable)
+  {
+    try
+    {
+      paramCloseable.close();
+      return;
+    }
+    catch (IOException paramCloseable) {}
+  }
+  
+  String convertInputStreamToBase64OutputStream(InputStream paramInputStream)
+    throws IOException
+  {
+    ByteArrayOutputStream localByteArrayOutputStream = new ByteArrayOutputStream();
+    Base64OutputStream localBase64OutputStream = new Base64OutputStream(localByteArrayOutputStream, 2);
+    byte[] arrayOfByte = new byte['?'];
+    try
+    {
+      for (;;)
+      {
+        int i = paramInputStream.read(arrayOfByte);
+        if (i <= -1) {
+          break;
+        }
+        localBase64OutputStream.write(arrayOfByte, 0, i);
+      }
+      return localByteArrayOutputStream.toString();
+    }
+    finally
+    {
+      closeQuietly(localBase64OutputStream);
+    }
+  }
+  
+  @ReactMethod
+  public void getBase64ForTag(String paramString, Callback paramCallback1, Callback paramCallback2)
+  {
+    new GetBase64Task(getReactApplicationContext(), paramString, paramCallback1, paramCallback2, null).executeOnExecutor(AsyncTask.THREAD_POOL_EXECUTOR, new Void[0]);
+  }
+  
+  public String getName()
+  {
+    return "ImageStoreManager";
+  }
+  
+  private class GetBase64Task
+    extends GuardedAsyncTask<Void, Void>
+  {
+    private final Callback mError;
+    private final Callback mSuccess;
+    private final String mUri;
+    
+    private GetBase64Task(ReactContext paramReactContext, String paramString, Callback paramCallback1, Callback paramCallback2)
+    {
+      super();
+      mUri = paramString;
+      mSuccess = paramCallback1;
+      mError = paramCallback2;
+    }
+    
+    /* Error */
+    protected void doInBackgroundGuarded(Void... paramVarArgs)
+    {
+      // Byte code:
+      //   0: aload_0
+      //   1: getfield 19	com/facebook/react/modules/camera/ImageStoreManager$GetBase64Task:this$0	Lcom/facebook/react/modules/camera/ImageStoreManager;
+      //   4: invokestatic 47	com/facebook/react/modules/camera/ImageStoreManager:access$100	(Lcom/facebook/react/modules/camera/ImageStoreManager;)Lcom/facebook/react/bridge/ReactApplicationContext;
+      //   7: invokevirtual 53	com/facebook/react/bridge/ReactApplicationContext:getContentResolver	()Landroid/content/ContentResolver;
+      //   10: aload_0
+      //   11: getfield 24	com/facebook/react/modules/camera/ImageStoreManager$GetBase64Task:mUri	Ljava/lang/String;
+      //   14: invokestatic 59	android/net/Uri:parse	(Ljava/lang/String;)Landroid/net/Uri;
+      //   17: invokevirtual 65	android/content/ContentResolver:openInputStream	(Landroid/net/Uri;)Ljava/io/InputStream;
+      //   20: astore_1
+      //   21: aload_0
+      //   22: getfield 26	com/facebook/react/modules/camera/ImageStoreManager$GetBase64Task:mSuccess	Lcom/facebook/react/bridge/Callback;
+      //   25: iconst_1
+      //   26: anewarray 67	java/lang/Object
+      //   29: dup
+      //   30: iconst_0
+      //   31: aload_0
+      //   32: getfield 19	com/facebook/react/modules/camera/ImageStoreManager$GetBase64Task:this$0	Lcom/facebook/react/modules/camera/ImageStoreManager;
+      //   35: aload_1
+      //   36: invokevirtual 71	com/facebook/react/modules/camera/ImageStoreManager:convertInputStreamToBase64OutputStream	(Ljava/io/InputStream;)Ljava/lang/String;
+      //   39: aastore
+      //   40: invokeinterface 76 2 0
+      //   45: aload_1
+      //   46: invokestatic 80	com/facebook/react/modules/camera/ImageStoreManager:access$200	(Ljava/io/Closeable;)V
+      //   49: return
+      //   50: astore_2
+      //   51: goto +27 -> 78
+      //   54: astore_2
+      //   55: aload_0
+      //   56: getfield 28	com/facebook/react/modules/camera/ImageStoreManager$GetBase64Task:mError	Lcom/facebook/react/bridge/Callback;
+      //   59: iconst_1
+      //   60: anewarray 67	java/lang/Object
+      //   63: dup
+      //   64: iconst_0
+      //   65: aload_2
+      //   66: invokevirtual 84	java/io/IOException:getMessage	()Ljava/lang/String;
+      //   69: aastore
+      //   70: invokeinterface 76 2 0
+      //   75: goto -30 -> 45
+      //   78: aload_1
+      //   79: invokestatic 80	com/facebook/react/modules/camera/ImageStoreManager:access$200	(Ljava/io/Closeable;)V
+      //   82: aload_2
+      //   83: athrow
+      //   84: astore_1
+      //   85: aload_0
+      //   86: getfield 28	com/facebook/react/modules/camera/ImageStoreManager$GetBase64Task:mError	Lcom/facebook/react/bridge/Callback;
+      //   89: iconst_1
+      //   90: anewarray 67	java/lang/Object
+      //   93: dup
+      //   94: iconst_0
+      //   95: aload_1
+      //   96: invokevirtual 85	java/io/FileNotFoundException:getMessage	()Ljava/lang/String;
+      //   99: aastore
+      //   100: invokeinterface 76 2 0
+      //   105: return
+      // Local variable table:
+      //   start	length	slot	name	signature
+      //   0	106	0	this	GetBase64Task
+      //   0	106	1	paramVarArgs	Void[]
+      //   50	1	2	localObject	Object
+      //   54	29	2	localIOException	IOException
+      // Exception table:
+      //   from	to	target	type
+      //   21	45	50	finally
+      //   55	75	50	finally
+      //   21	45	54	java/io/IOException
+      //   0	21	84	java/io/FileNotFoundException
+      //   45	49	84	java/io/FileNotFoundException
+      //   78	84	84	java/io/FileNotFoundException
+    }
+  }
+}

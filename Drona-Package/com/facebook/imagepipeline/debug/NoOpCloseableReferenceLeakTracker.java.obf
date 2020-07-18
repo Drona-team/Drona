@@ -1,0 +1,19 @@
+package com.facebook.imagepipeline.debug;
+
+import com.facebook.common.references.SharedReference;
+import javax.annotation.Nullable;
+
+public class NoOpCloseableReferenceLeakTracker
+  implements CloseableReferenceLeakTracker
+{
+  public NoOpCloseableReferenceLeakTracker() {}
+  
+  public boolean isSet()
+  {
+    return false;
+  }
+  
+  public void setListener(@Nullable CloseableReferenceLeakTracker.Listener paramListener) {}
+  
+  public void trackCloseableReferenceLeak(SharedReference<Object> paramSharedReference, @Nullable Throwable paramThrowable) {}
+}

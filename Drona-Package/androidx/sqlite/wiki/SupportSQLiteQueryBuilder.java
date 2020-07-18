@@ -1,0 +1,133 @@
+package androidx.sqlite.wiki;
+
+import java.util.regex.Matcher;
+import java.util.regex.Pattern;
+
+public final class SupportSQLiteQueryBuilder
+{
+  private static final Pattern sLimitPattern = Pattern.compile("\\s*\\d+\\s*(,\\s*\\d+\\s*)?");
+  private Object[] mBindArgs;
+  private String[] mColumns = null;
+  private boolean mDistinct = false;
+  private String mGroupBy = null;
+  private String mHaving = null;
+  private String mLimit = null;
+  private String mOrderBy = null;
+  private String mSelection;
+  private final String mTable;
+  
+  private SupportSQLiteQueryBuilder(String paramString)
+  {
+    mTable = paramString;
+  }
+  
+  private static void appendClause(StringBuilder paramStringBuilder, String paramString1, String paramString2)
+  {
+    if (!isEmpty(paramString2))
+    {
+      paramStringBuilder.append(paramString1);
+      paramStringBuilder.append(paramString2);
+    }
+  }
+  
+  private static void appendColumns(StringBuilder paramStringBuilder, String[] paramArrayOfString)
+  {
+    int j = paramArrayOfString.length;
+    int i = 0;
+    while (i < j)
+    {
+      String str = paramArrayOfString[i];
+      if (i > 0) {
+        paramStringBuilder.append(", ");
+      }
+      paramStringBuilder.append(str);
+      i += 1;
+    }
+    paramStringBuilder.append(' ');
+  }
+  
+  public static SupportSQLiteQueryBuilder builder(String paramString)
+  {
+    return new SupportSQLiteQueryBuilder(paramString);
+  }
+  
+  private static boolean isEmpty(String paramString)
+  {
+    return (paramString == null) || (paramString.length() == 0);
+  }
+  
+  public SupportSQLiteQueryBuilder columns(String[] paramArrayOfString)
+  {
+    mColumns = paramArrayOfString;
+    return this;
+  }
+  
+  public SupportSQLiteQuery create()
+  {
+    if ((isEmpty(mGroupBy)) && (!isEmpty(mHaving))) {
+      throw new IllegalArgumentException("HAVING clauses are only permitted when using a groupBy clause");
+    }
+    StringBuilder localStringBuilder = new StringBuilder(120);
+    localStringBuilder.append("SELECT ");
+    if (mDistinct) {
+      localStringBuilder.append("DISTINCT ");
+    }
+    if ((mColumns != null) && (mColumns.length != 0)) {
+      appendColumns(localStringBuilder, mColumns);
+    } else {
+      localStringBuilder.append(" * ");
+    }
+    localStringBuilder.append(" FROM ");
+    localStringBuilder.append(mTable);
+    appendClause(localStringBuilder, " WHERE ", mSelection);
+    appendClause(localStringBuilder, " GROUP BY ", mGroupBy);
+    appendClause(localStringBuilder, " HAVING ", mHaving);
+    appendClause(localStringBuilder, " ORDER BY ", mOrderBy);
+    appendClause(localStringBuilder, " LIMIT ", mLimit);
+    return new SimpleSQLiteQuery(localStringBuilder.toString(), mBindArgs);
+  }
+  
+  public SupportSQLiteQueryBuilder distinct()
+  {
+    mDistinct = true;
+    return this;
+  }
+  
+  public SupportSQLiteQueryBuilder groupBy(String paramString)
+  {
+    mGroupBy = paramString;
+    return this;
+  }
+  
+  public SupportSQLiteQueryBuilder having(String paramString)
+  {
+    mHaving = paramString;
+    return this;
+  }
+  
+  public SupportSQLiteQueryBuilder limit(String paramString)
+  {
+    if ((!isEmpty(paramString)) && (!sLimitPattern.matcher(paramString).matches()))
+    {
+      StringBuilder localStringBuilder = new StringBuilder();
+      localStringBuilder.append("invalid LIMIT clauses:");
+      localStringBuilder.append(paramString);
+      throw new IllegalArgumentException(localStringBuilder.toString());
+    }
+    mLimit = paramString;
+    return this;
+  }
+  
+  public SupportSQLiteQueryBuilder orderBy(String paramString)
+  {
+    mOrderBy = paramString;
+    return this;
+  }
+  
+  public SupportSQLiteQueryBuilder selection(String paramString, Object[] paramArrayOfObject)
+  {
+    mSelection = paramString;
+    mBindArgs = paramArrayOfObject;
+    return this;
+  }
+}

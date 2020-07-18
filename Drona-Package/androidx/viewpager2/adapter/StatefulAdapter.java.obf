@@ -1,0 +1,12 @@
+package androidx.viewpager2.adapter;
+
+import android.os.Parcelable;
+import androidx.annotation.NonNull;
+
+public abstract interface StatefulAdapter
+{
+  public abstract void restoreState(@NonNull Parcelable paramParcelable);
+  
+  @NonNull
+  public abstract Parcelable saveState();
+}

@@ -1,0 +1,367 @@
+package com.facebook.react.modules.image;
+
+import android.net.Uri;
+import android.util.SparseArray;
+import androidx.annotation.Nullable;
+import com.facebook.common.executors.CallerThreadExecutor;
+import com.facebook.common.references.CloseableReference;
+import com.facebook.datasource.BaseDataSubscriber;
+import com.facebook.datasource.DataSource;
+import com.facebook.drawee.backends.pipeline.Fresco;
+import com.facebook.imagepipeline.core.ImagePipeline;
+import com.facebook.imagepipeline.image.CloseableImage;
+import com.facebook.imagepipeline.request.ImageRequestBuilder;
+import com.facebook.react.bridge.Arguments;
+import com.facebook.react.bridge.GuardedAsyncTask;
+import com.facebook.react.bridge.LifecycleEventListener;
+import com.facebook.react.bridge.Promise;
+import com.facebook.react.bridge.ReactApplicationContext;
+import com.facebook.react.bridge.ReactContext;
+import com.facebook.react.bridge.ReactContextBaseJavaModule;
+import com.facebook.react.bridge.ReactMethod;
+import com.facebook.react.bridge.ReadableArray;
+import com.facebook.react.bridge.ReadableMap;
+import com.facebook.react.bridge.WritableMap;
+import com.facebook.react.module.annotations.ReactModule;
+import com.facebook.react.modules.fresco.ReactNetworkImageRequest;
+import com.facebook.react.views.imagehelper.ImageSource;
+
+@ReactModule(name="ImageLoader")
+public class ImageLoaderModule
+  extends ReactContextBaseJavaModule
+  implements LifecycleEventListener
+{
+  private static final String ERROR_GET_SIZE_FAILURE = "E_GET_SIZE_FAILURE";
+  private static final String ERROR_INVALID_URI = "E_INVALID_URI";
+  private static final String ERROR_PREFETCH_FAILURE = "E_PREFETCH_FAILURE";
+  public static final String NAME = "ImageLoader";
+  private final Object mCallerContext;
+  private final Object mEnqueuedRequestMonitor = new Object();
+  private final SparseArray<DataSource<Void>> mEnqueuedRequests = new SparseArray();
+  
+  public ImageLoaderModule(ReactApplicationContext paramReactApplicationContext)
+  {
+    super(paramReactApplicationContext);
+    mCallerContext = this;
+  }
+  
+  public ImageLoaderModule(ReactApplicationContext paramReactApplicationContext, Object paramObject)
+  {
+    super(paramReactApplicationContext);
+    mCallerContext = paramObject;
+  }
+  
+  private void registerRequest(int paramInt, DataSource<Void> paramDataSource)
+  {
+    synchronized (mEnqueuedRequestMonitor)
+    {
+      mEnqueuedRequests.put(paramInt, paramDataSource);
+      return;
+    }
+  }
+  
+  @Nullable
+  private DataSource<Void> removeRequest(int paramInt)
+  {
+    synchronized (mEnqueuedRequestMonitor)
+    {
+      DataSource localDataSource = (DataSource)mEnqueuedRequests.get(paramInt);
+      mEnqueuedRequests.remove(paramInt);
+      return localDataSource;
+    }
+  }
+  
+  @ReactMethod
+  public void abortRequest(int paramInt)
+  {
+    DataSource localDataSource = removeRequest(paramInt);
+    if (localDataSource != null) {
+      localDataSource.close();
+    }
+  }
+  
+  public String getName()
+  {
+    return "ImageLoader";
+  }
+  
+  @ReactMethod
+  public void getSize(String paramString, final Promise paramPromise)
+  {
+    if ((paramString != null) && (!paramString.isEmpty()))
+    {
+      paramString = ImageRequestBuilder.newBuilderWithSource(new ImageSource(getReactApplicationContext(), paramString).getUri()).build();
+      Fresco.getImagePipeline().fetchDecodedImage(paramString, mCallerContext).subscribe(new BaseDataSubscriber()
+      {
+        protected void onFailureImpl(DataSource<CloseableReference<CloseableImage>> paramAnonymousDataSource)
+        {
+          paramPromise.reject("E_GET_SIZE_FAILURE", paramAnonymousDataSource.getFailureCause());
+        }
+        
+        /* Error */
+        protected void onNewResultImpl(DataSource<CloseableReference<CloseableImage>> paramAnonymousDataSource)
+        {
+          // Byte code:
+          //   0: aload_1
+          //   1: invokeinterface 49 1 0
+          //   6: ifne +4 -> 10
+          //   9: return
+          //   10: aload_1
+          //   11: invokeinterface 53 1 0
+          //   16: checkcast 55	com/facebook/common/references/CloseableReference
+          //   19: astore_1
+          //   20: aload_1
+          //   21: ifnull +80 -> 101
+          //   24: aload_1
+          //   25: invokevirtual 58	com/facebook/common/references/CloseableReference:get	()Ljava/lang/Object;
+          //   28: checkcast 60	com/facebook/imagepipeline/image/CloseableImage
+          //   31: astore_2
+          //   32: invokestatic 66	com/facebook/react/bridge/Arguments:createMap	()Lcom/facebook/react/bridge/WritableMap;
+          //   35: astore_3
+          //   36: aload_3
+          //   37: ldc 68
+          //   39: aload_2
+          //   40: invokevirtual 72	com/facebook/imagepipeline/image/CloseableImage:getWidth	()I
+          //   43: invokeinterface 78 3 0
+          //   48: aload_3
+          //   49: ldc 80
+          //   51: aload_2
+          //   52: invokevirtual 83	com/facebook/imagepipeline/image/CloseableImage:getHeight	()I
+          //   55: invokeinterface 78 3 0
+          //   60: aload_0
+          //   61: getfield 20	com/facebook/react/modules/image/ImageLoaderModule$1:val$promise	Lcom/facebook/react/bridge/Promise;
+          //   64: aload_3
+          //   65: invokeinterface 87 2 0
+          //   70: goto +20 -> 90
+          //   73: astore_2
+          //   74: goto +21 -> 95
+          //   77: astore_2
+          //   78: aload_0
+          //   79: getfield 20	com/facebook/react/modules/image/ImageLoaderModule$1:val$promise	Lcom/facebook/react/bridge/Promise;
+          //   82: ldc 28
+          //   84: aload_2
+          //   85: invokeinterface 40 3 0
+          //   90: aload_1
+          //   91: invokestatic 91	com/facebook/common/references/CloseableReference:closeSafely	(Lcom/facebook/common/references/CloseableReference;)V
+          //   94: return
+          //   95: aload_1
+          //   96: invokestatic 91	com/facebook/common/references/CloseableReference:closeSafely	(Lcom/facebook/common/references/CloseableReference;)V
+          //   99: aload_2
+          //   100: athrow
+          //   101: aload_0
+          //   102: getfield 20	com/facebook/react/modules/image/ImageLoaderModule$1:val$promise	Lcom/facebook/react/bridge/Promise;
+          //   105: ldc 28
+          //   107: invokeinterface 94 2 0
+          //   112: return
+          // Local variable table:
+          //   start	length	slot	name	signature
+          //   0	113	0	this	1
+          //   0	113	1	paramAnonymousDataSource	DataSource<CloseableReference<CloseableImage>>
+          //   31	21	2	localCloseableImage	CloseableImage
+          //   73	1	2	localObject	Object
+          //   77	23	2	localException	Exception
+          //   35	30	3	localWritableMap	WritableMap
+          // Exception table:
+          //   from	to	target	type
+          //   24	70	73	finally
+          //   78	90	73	finally
+          //   24	70	77	java/lang/Exception
+        }
+      }, CallerThreadExecutor.getInstance());
+      return;
+    }
+    paramPromise.reject("E_INVALID_URI", "Cannot get the size of an image for an empty URI");
+  }
+  
+  @ReactMethod
+  public void getSizeWithHeaders(String paramString, ReadableMap paramReadableMap, final Promise paramPromise)
+  {
+    if ((paramString != null) && (!paramString.isEmpty()))
+    {
+      paramString = ReactNetworkImageRequest.fromBuilderWithHeaders(ImageRequestBuilder.newBuilderWithSource(new ImageSource(getReactApplicationContext(), paramString).getUri()), paramReadableMap);
+      Fresco.getImagePipeline().fetchDecodedImage(paramString, mCallerContext).subscribe(new BaseDataSubscriber()
+      {
+        protected void onFailureImpl(DataSource<CloseableReference<CloseableImage>> paramAnonymousDataSource)
+        {
+          paramPromise.reject("E_GET_SIZE_FAILURE", paramAnonymousDataSource.getFailureCause());
+        }
+        
+        /* Error */
+        protected void onNewResultImpl(DataSource<CloseableReference<CloseableImage>> paramAnonymousDataSource)
+        {
+          // Byte code:
+          //   0: aload_1
+          //   1: invokeinterface 49 1 0
+          //   6: ifne +4 -> 10
+          //   9: return
+          //   10: aload_1
+          //   11: invokeinterface 53 1 0
+          //   16: checkcast 55	com/facebook/common/references/CloseableReference
+          //   19: astore_1
+          //   20: aload_1
+          //   21: ifnull +80 -> 101
+          //   24: aload_1
+          //   25: invokevirtual 58	com/facebook/common/references/CloseableReference:get	()Ljava/lang/Object;
+          //   28: checkcast 60	com/facebook/imagepipeline/image/CloseableImage
+          //   31: astore_2
+          //   32: invokestatic 66	com/facebook/react/bridge/Arguments:createMap	()Lcom/facebook/react/bridge/WritableMap;
+          //   35: astore_3
+          //   36: aload_3
+          //   37: ldc 68
+          //   39: aload_2
+          //   40: invokevirtual 72	com/facebook/imagepipeline/image/CloseableImage:getWidth	()I
+          //   43: invokeinterface 78 3 0
+          //   48: aload_3
+          //   49: ldc 80
+          //   51: aload_2
+          //   52: invokevirtual 83	com/facebook/imagepipeline/image/CloseableImage:getHeight	()I
+          //   55: invokeinterface 78 3 0
+          //   60: aload_0
+          //   61: getfield 20	com/facebook/react/modules/image/ImageLoaderModule$2:val$promise	Lcom/facebook/react/bridge/Promise;
+          //   64: aload_3
+          //   65: invokeinterface 87 2 0
+          //   70: goto +20 -> 90
+          //   73: astore_2
+          //   74: goto +21 -> 95
+          //   77: astore_2
+          //   78: aload_0
+          //   79: getfield 20	com/facebook/react/modules/image/ImageLoaderModule$2:val$promise	Lcom/facebook/react/bridge/Promise;
+          //   82: ldc 28
+          //   84: aload_2
+          //   85: invokeinterface 40 3 0
+          //   90: aload_1
+          //   91: invokestatic 91	com/facebook/common/references/CloseableReference:closeSafely	(Lcom/facebook/common/references/CloseableReference;)V
+          //   94: return
+          //   95: aload_1
+          //   96: invokestatic 91	com/facebook/common/references/CloseableReference:closeSafely	(Lcom/facebook/common/references/CloseableReference;)V
+          //   99: aload_2
+          //   100: athrow
+          //   101: aload_0
+          //   102: getfield 20	com/facebook/react/modules/image/ImageLoaderModule$2:val$promise	Lcom/facebook/react/bridge/Promise;
+          //   105: ldc 28
+          //   107: invokeinterface 94 2 0
+          //   112: return
+          // Local variable table:
+          //   start	length	slot	name	signature
+          //   0	113	0	this	2
+          //   0	113	1	paramAnonymousDataSource	DataSource<CloseableReference<CloseableImage>>
+          //   31	21	2	localCloseableImage	CloseableImage
+          //   73	1	2	localObject	Object
+          //   77	23	2	localException	Exception
+          //   35	30	3	localWritableMap	WritableMap
+          // Exception table:
+          //   from	to	target	type
+          //   24	70	73	finally
+          //   78	90	73	finally
+          //   24	70	77	java/lang/Exception
+        }
+      }, CallerThreadExecutor.getInstance());
+      return;
+    }
+    paramPromise.reject("E_INVALID_URI", "Cannot get the size of an image for an empty URI");
+  }
+  
+  public void onHostDestroy()
+  {
+    Object localObject1 = mEnqueuedRequestMonitor;
+    int i = 0;
+    for (;;)
+    {
+      try
+      {
+        int j = mEnqueuedRequests.size();
+        if (i < j)
+        {
+          DataSource localDataSource = (DataSource)mEnqueuedRequests.valueAt(i);
+          if (localDataSource != null) {
+            localDataSource.close();
+          }
+        }
+        else
+        {
+          mEnqueuedRequests.clear();
+          return;
+        }
+      }
+      finally {}
+      i += 1;
+    }
+  }
+  
+  public void onHostPause() {}
+  
+  public void onHostResume() {}
+  
+  @ReactMethod
+  public void prefetchImage(String paramString, final int paramInt, final Promise paramPromise)
+  {
+    if ((paramString != null) && (!paramString.isEmpty()))
+    {
+      paramString = ImageRequestBuilder.newBuilderWithSource(Uri.parse(paramString)).build();
+      paramString = Fresco.getImagePipeline().prefetchToDiskCache(paramString, mCallerContext);
+      paramPromise = new BaseDataSubscriber()
+      {
+        protected void onFailureImpl(DataSource<Void> paramAnonymousDataSource)
+        {
+          try
+          {
+            ImageLoaderModule.this.removeRequest(paramInt);
+            paramPromise.reject("E_PREFETCH_FAILURE", paramAnonymousDataSource.getFailureCause());
+            return;
+          }
+          finally
+          {
+            paramAnonymousDataSource.close();
+          }
+        }
+        
+        protected void onNewResultImpl(DataSource<Void> paramAnonymousDataSource)
+        {
+          if (!paramAnonymousDataSource.isFinished()) {
+            return;
+          }
+          try
+          {
+            ImageLoaderModule.this.removeRequest(paramInt);
+            paramPromise.resolve(Boolean.valueOf(true));
+            return;
+          }
+          finally
+          {
+            paramAnonymousDataSource.close();
+          }
+        }
+      };
+      registerRequest(paramInt, paramString);
+      paramString.subscribe(paramPromise, CallerThreadExecutor.getInstance());
+      return;
+    }
+    paramPromise.reject("E_INVALID_URI", "Cannot prefetch an image for an empty URI");
+  }
+  
+  @ReactMethod
+  public void queryCache(final ReadableArray paramReadableArray, final Promise paramPromise)
+  {
+    new GuardedAsyncTask(getReactApplicationContext())
+    {
+      protected void doInBackgroundGuarded(Void... paramAnonymousVarArgs)
+      {
+        paramAnonymousVarArgs = Arguments.createMap();
+        ImagePipeline localImagePipeline = Fresco.getImagePipeline();
+        int i = 0;
+        while (i < paramReadableArray.size())
+        {
+          String str = paramReadableArray.getString(i);
+          Uri localUri = Uri.parse(str);
+          if (localImagePipeline.isInBitmapMemoryCache(localUri)) {
+            paramAnonymousVarArgs.putString(str, "memory");
+          } else if (localImagePipeline.isInDiskCacheSync(localUri)) {
+            paramAnonymousVarArgs.putString(str, "disk");
+          }
+          i += 1;
+        }
+        paramPromise.resolve(paramAnonymousVarArgs);
+      }
+    }.executeOnExecutor(GuardedAsyncTask.THREAD_POOL_EXECUTOR, new Void[0]);
+  }
+}

@@ -1,0 +1,12 @@
+package com.airbnb.lottie.model.content;
+
+import androidx.annotation.Nullable;
+import com.airbnb.lottie.LottieDrawable;
+import com.airbnb.lottie.animation.content.Content;
+import com.airbnb.lottie.model.layer.BaseLayer;
+
+public abstract interface ContentModel
+{
+  @Nullable
+  public abstract Content toContent(LottieDrawable paramLottieDrawable, BaseLayer paramBaseLayer);
+}

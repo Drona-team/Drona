@@ -1,0 +1,119 @@
+package com.google.android.exoplayer2.ui;
+
+import android.app.Notification;
+import android.app.PendingIntent;
+import android.content.Context;
+import android.content.res.Resources;
+import androidx.annotation.DrawableRes;
+import androidx.annotation.Nullable;
+import androidx.annotation.StringRes;
+import androidx.core.app.NotificationCompat.BigTextStyle;
+import androidx.core.app.NotificationCompat.Builder;
+import com.google.android.exoplayer2.offline.DownloadAction;
+import com.google.android.exoplayer2.offline.DownloadManager.TaskState;
+
+public final class DownloadNotificationUtil
+{
+  @StringRes
+  private static final int NULL_STRING_ID = 0;
+  
+  private DownloadNotificationUtil() {}
+  
+  public static Notification buildDownloadCompletedNotification(Context paramContext, @DrawableRes int paramInt, String paramString1, @Nullable PendingIntent paramPendingIntent, @Nullable String paramString2)
+  {
+    return newNotificationBuilder(paramContext, paramInt, paramString1, paramPendingIntent, paramString2, R.string.exo_download_completed).build();
+  }
+  
+  public static Notification buildDownloadFailedNotification(Context paramContext, @DrawableRes int paramInt, String paramString1, @Nullable PendingIntent paramPendingIntent, @Nullable String paramString2)
+  {
+    return newNotificationBuilder(paramContext, paramInt, paramString1, paramPendingIntent, paramString2, R.string.exo_download_failed).build();
+  }
+  
+  public static Notification buildProgressNotification(Context paramContext, @DrawableRes int paramInt, String paramString1, @Nullable PendingIntent paramPendingIntent, @Nullable String paramString2, DownloadManager.TaskState[] paramArrayOfTaskState)
+  {
+    int i2 = paramArrayOfTaskState.length;
+    int j = 0;
+    int i1 = 0;
+    int n = 0;
+    float f1 = 0.0F;
+    int k = 0;
+    int m = 0;
+    int i = 1;
+    while (j < i2)
+    {
+      DownloadManager.TaskState localTaskState = paramArrayOfTaskState[j];
+      if ((state == 1) || (state == 2)) {
+        if (action.isRemoveAction)
+        {
+          n = 1;
+        }
+        else
+        {
+          float f2 = f1;
+          if (downloadPercentage != -1.0F)
+          {
+            f2 = f1 + downloadPercentage;
+            i = 0;
+          }
+          if (downloadedBytes > 0L) {
+            i1 = 1;
+          } else {
+            i1 = 0;
+          }
+          m += 1;
+          k = i1 | k;
+          i1 = 1;
+          f1 = f2;
+        }
+      }
+      j += 1;
+    }
+    if (i1 != 0) {
+      j = R.string.exo_download_downloading;
+    }
+    for (;;)
+    {
+      break;
+      if (n != 0) {
+        j = R.string.exo_download_removing;
+      } else {
+        j = 0;
+      }
+    }
+    paramContext = newNotificationBuilder(paramContext, paramInt, paramString1, paramPendingIntent, paramString2, j);
+    if (i1 != 0)
+    {
+      paramInt = (int)(f1 / m);
+      if ((i == 0) || (k == 0))
+      {
+        bool = false;
+        break label232;
+      }
+    }
+    else
+    {
+      paramInt = 0;
+    }
+    boolean bool = true;
+    label232:
+    paramContext.setProgress(100, paramInt, bool);
+    paramContext.setOngoing(true);
+    paramContext.setShowWhen(false);
+    return paramContext.build();
+  }
+  
+  private static NotificationCompat.Builder newNotificationBuilder(Context paramContext, @DrawableRes int paramInt1, String paramString1, @Nullable PendingIntent paramPendingIntent, @Nullable String paramString2, @StringRes int paramInt2)
+  {
+    paramString1 = new NotificationCompat.Builder(paramContext, paramString1).setSmallIcon(paramInt1);
+    if (paramInt2 != 0) {
+      paramString1.setContentTitle(paramContext.getResources().getString(paramInt2));
+    }
+    if (paramPendingIntent != null) {
+      paramString1.setContentIntent(paramPendingIntent);
+    }
+    if (paramString2 != null) {
+      paramString1.setStyle(new NotificationCompat.BigTextStyle().bigText(paramString2));
+    }
+    return paramString1;
+  }
+}

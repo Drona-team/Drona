@@ -1,0 +1,55 @@
+package com.bumptech.glide.provider;
+
+import androidx.annotation.NonNull;
+import androidx.annotation.Nullable;
+import androidx.collection.ArrayMap;
+import com.bumptech.glide.util.MultiClassKey;
+import java.util.List;
+import java.util.concurrent.atomic.AtomicReference;
+
+public class ModelToResourceClassCache
+{
+  private final ArrayMap<MultiClassKey, List<Class<?>>> registeredResourceClassCache = new ArrayMap();
+  private final AtomicReference<MultiClassKey> resourceClassKeyRef = new AtomicReference();
+  
+  public ModelToResourceClassCache() {}
+  
+  public void clear()
+  {
+    synchronized (registeredResourceClassCache)
+    {
+      registeredResourceClassCache.clear();
+      return;
+    }
+  }
+  
+  @Nullable
+  public List<Class<?>> get(@NonNull Class<?> paramClass1, @NonNull Class<?> arg2, @NonNull Class<?> paramClass3)
+  {
+    MultiClassKey localMultiClassKey = (MultiClassKey)resourceClassKeyRef.getAndSet(null);
+    if (localMultiClassKey == null)
+    {
+      paramClass1 = new MultiClassKey(paramClass1, ???, paramClass3);
+    }
+    else
+    {
+      localMultiClassKey.set(paramClass1, ???, paramClass3);
+      paramClass1 = localMultiClassKey;
+    }
+    synchronized (registeredResourceClassCache)
+    {
+      paramClass3 = (List)registeredResourceClassCache.get(paramClass1);
+      resourceClassKeyRef.set(paramClass1);
+      return paramClass3;
+    }
+  }
+  
+  public void put(@NonNull Class<?> paramClass1, @NonNull Class<?> paramClass2, @NonNull Class<?> paramClass3, @NonNull List<Class<?>> paramList)
+  {
+    synchronized (registeredResourceClassCache)
+    {
+      registeredResourceClassCache.put(new MultiClassKey(paramClass1, paramClass2, paramClass3), paramList);
+      return;
+    }
+  }
+}

@@ -1,0 +1,346 @@
+package expo.modules.barcodescanner;
+
+import android.content.Context;
+import android.graphics.SurfaceTexture;
+import android.hardware.Camera;
+import android.hardware.Camera.Parameters;
+import android.hardware.Camera.PreviewCallback;
+import android.hardware.Camera.Size;
+import android.os.AsyncTask;
+import android.os.Handler;
+import android.os.Looper;
+import android.view.TextureView;
+import android.view.TextureView.SurfaceTextureListener;
+import org.unimodules.core.ModuleRegistry;
+import org.unimodules.interfaces.barcodescanner.BarCodeScanner;
+import org.unimodules.interfaces.barcodescanner.BarCodeScannerProvider;
+import org.unimodules.interfaces.barcodescanner.BarCodeScannerResult;
+import org.unimodules.interfaces.barcodescanner.BarCodeScannerSettings;
+
+class BarCodeScannerViewFinder
+  extends TextureView
+  implements TextureView.SurfaceTextureListener, Camera.PreviewCallback
+{
+  public static volatile boolean barCodeScannerTaskLock = false;
+  private BarCodeScanner mBarCodeScanner;
+  private BarCodeScannerView mBarCodeScannerView;
+  private Camera mCamera;
+  private int mCameraType;
+  private volatile boolean mIsChanging;
+  private volatile boolean mIsStarting;
+  private volatile boolean mIsStopping;
+  private final ModuleRegistry mModuleRegistry;
+  private SurfaceTexture mSurfaceTexture;
+  
+  public BarCodeScannerViewFinder(Context paramContext, int paramInt, BarCodeScannerView paramBarCodeScannerView, ModuleRegistry paramModuleRegistry)
+  {
+    super(paramContext);
+    mModuleRegistry = paramModuleRegistry;
+    mCameraType = paramInt;
+    mBarCodeScannerView = paramBarCodeScannerView;
+    setSurfaceTextureListener(this);
+    initBarCodeScanner();
+  }
+  
+  private void initBarCodeScanner()
+  {
+    BarCodeScannerProvider localBarCodeScannerProvider = (BarCodeScannerProvider)mModuleRegistry.getModule(BarCodeScannerProvider.class);
+    if (localBarCodeScannerProvider != null) {
+      mBarCodeScanner = localBarCodeScannerProvider.createBarCodeDetectorWithContext(getContext());
+    }
+  }
+  
+  /* Error */
+  private void startCamera()
+  {
+    // Byte code:
+    //   0: aload_0
+    //   1: monitorenter
+    //   2: aload_0
+    //   3: getfield 102	expo/modules/barcodescanner/BarCodeScannerViewFinder:mIsStarting	Z
+    //   6: ifne +157 -> 163
+    //   9: aload_0
+    //   10: iconst_1
+    //   11: putfield 102	expo/modules/barcodescanner/BarCodeScannerViewFinder:mIsStarting	Z
+    //   14: aload_0
+    //   15: invokestatic 108	expo/modules/barcodescanner/ExpoBarCodeScanner:getInstance	()Lexpo/modules/barcodescanner/ExpoBarCodeScanner;
+    //   18: aload_0
+    //   19: getfield 45	expo/modules/barcodescanner/BarCodeScannerViewFinder:mCameraType	I
+    //   22: invokevirtual 112	expo/modules/barcodescanner/ExpoBarCodeScanner:acquireCameraInstance	(I)Landroid/hardware/Camera;
+    //   25: putfield 114	expo/modules/barcodescanner/BarCodeScannerViewFinder:mCamera	Landroid/hardware/Camera;
+    //   28: aload_0
+    //   29: getfield 114	expo/modules/barcodescanner/BarCodeScannerViewFinder:mCamera	Landroid/hardware/Camera;
+    //   32: invokevirtual 120	android/hardware/Camera:getParameters	()Landroid/hardware/Camera$Parameters;
+    //   35: astore_1
+    //   36: aload_1
+    //   37: invokevirtual 126	android/hardware/Camera$Parameters:getSupportedFocusModes	()Ljava/util/List;
+    //   40: ldc -128
+    //   42: invokeinterface 134 2 0
+    //   47: ifeq +9 -> 56
+    //   50: aload_1
+    //   51: ldc -128
+    //   53: invokevirtual 138	android/hardware/Camera$Parameters:setFocusMode	(Ljava/lang/String;)V
+    //   56: invokestatic 108	expo/modules/barcodescanner/ExpoBarCodeScanner:getInstance	()Lexpo/modules/barcodescanner/ExpoBarCodeScanner;
+    //   59: aload_1
+    //   60: invokevirtual 141	android/hardware/Camera$Parameters:getSupportedPictureSizes	()Ljava/util/List;
+    //   63: ldc -114
+    //   65: ldc -114
+    //   67: invokevirtual 146	expo/modules/barcodescanner/ExpoBarCodeScanner:getBestSize	(Ljava/util/List;II)Landroid/hardware/Camera$Size;
+    //   70: astore_2
+    //   71: aload_1
+    //   72: aload_2
+    //   73: getfield 151	android/hardware/Camera$Size:width	I
+    //   76: aload_2
+    //   77: getfield 154	android/hardware/Camera$Size:height	I
+    //   80: invokevirtual 158	android/hardware/Camera$Parameters:setPictureSize	(II)V
+    //   83: aload_0
+    //   84: getfield 114	expo/modules/barcodescanner/BarCodeScannerViewFinder:mCamera	Landroid/hardware/Camera;
+    //   87: aload_1
+    //   88: invokevirtual 162	android/hardware/Camera:setParameters	(Landroid/hardware/Camera$Parameters;)V
+    //   91: aload_0
+    //   92: getfield 114	expo/modules/barcodescanner/BarCodeScannerViewFinder:mCamera	Landroid/hardware/Camera;
+    //   95: aload_0
+    //   96: getfield 164	expo/modules/barcodescanner/BarCodeScannerViewFinder:mSurfaceTexture	Landroid/graphics/SurfaceTexture;
+    //   99: invokevirtual 168	android/hardware/Camera:setPreviewTexture	(Landroid/graphics/SurfaceTexture;)V
+    //   102: aload_0
+    //   103: getfield 114	expo/modules/barcodescanner/BarCodeScannerViewFinder:mCamera	Landroid/hardware/Camera;
+    //   106: invokevirtual 169	android/hardware/Camera:startPreview	()V
+    //   109: aload_0
+    //   110: getfield 114	expo/modules/barcodescanner/BarCodeScannerViewFinder:mCamera	Landroid/hardware/Camera;
+    //   113: aload_0
+    //   114: invokevirtual 173	android/hardware/Camera:setPreviewCallback	(Landroid/hardware/Camera$PreviewCallback;)V
+    //   117: aload_0
+    //   118: getfield 47	expo/modules/barcodescanner/BarCodeScannerViewFinder:mBarCodeScannerView	Lexpo/modules/barcodescanner/BarCodeScannerView;
+    //   121: invokevirtual 178	expo/modules/barcodescanner/BarCodeScannerView:layoutViewFinder	()V
+    //   124: aload_0
+    //   125: iconst_0
+    //   126: putfield 102	expo/modules/barcodescanner/BarCodeScannerViewFinder:mIsStarting	Z
+    //   129: goto +34 -> 163
+    //   132: astore_1
+    //   133: goto +23 -> 156
+    //   136: astore_1
+    //   137: aload_1
+    //   138: invokevirtual 181	java/lang/Exception:printStackTrace	()V
+    //   141: aload_0
+    //   142: invokespecial 184	expo/modules/barcodescanner/BarCodeScannerViewFinder:stopCamera	()V
+    //   145: goto -21 -> 124
+    //   148: astore_1
+    //   149: aload_1
+    //   150: invokevirtual 185	java/lang/NullPointerException:printStackTrace	()V
+    //   153: goto -29 -> 124
+    //   156: aload_0
+    //   157: iconst_0
+    //   158: putfield 102	expo/modules/barcodescanner/BarCodeScannerViewFinder:mIsStarting	Z
+    //   161: aload_1
+    //   162: athrow
+    //   163: aload_0
+    //   164: monitorexit
+    //   165: return
+    //   166: astore_1
+    //   167: aload_0
+    //   168: monitorexit
+    //   169: aload_1
+    //   170: athrow
+    // Local variable table:
+    //   start	length	slot	name	signature
+    //   0	171	0	this	BarCodeScannerViewFinder
+    //   35	53	1	localParameters	Camera.Parameters
+    //   132	1	1	localObject1	Object
+    //   136	2	1	localException	Exception
+    //   148	14	1	localNullPointerException	NullPointerException
+    //   166	4	1	localObject2	Object
+    //   70	7	2	localSize	Camera.Size
+    // Exception table:
+    //   from	to	target	type
+    //   14	56	132	finally
+    //   56	124	132	finally
+    //   137	145	132	finally
+    //   149	153	132	finally
+    //   14	56	136	java/lang/Exception
+    //   56	124	136	java/lang/Exception
+    //   14	56	148	java/lang/NullPointerException
+    //   56	124	148	java/lang/NullPointerException
+    //   2	14	166	finally
+    //   124	129	166	finally
+    //   156	163	166	finally
+  }
+  
+  private void startPreview()
+  {
+    if (mSurfaceTexture != null) {
+      startCamera();
+    }
+  }
+  
+  /* Error */
+  private void stopCamera()
+  {
+    // Byte code:
+    //   0: aload_0
+    //   1: monitorenter
+    //   2: aload_0
+    //   3: getfield 189	expo/modules/barcodescanner/BarCodeScannerViewFinder:mIsStopping	Z
+    //   6: ifne +68 -> 74
+    //   9: aload_0
+    //   10: iconst_1
+    //   11: putfield 189	expo/modules/barcodescanner/BarCodeScannerViewFinder:mIsStopping	Z
+    //   14: aload_0
+    //   15: getfield 114	expo/modules/barcodescanner/BarCodeScannerViewFinder:mCamera	Landroid/hardware/Camera;
+    //   18: ifnull +29 -> 47
+    //   21: aload_0
+    //   22: getfield 114	expo/modules/barcodescanner/BarCodeScannerViewFinder:mCamera	Landroid/hardware/Camera;
+    //   25: invokevirtual 190	android/hardware/Camera:stopPreview	()V
+    //   28: aload_0
+    //   29: getfield 114	expo/modules/barcodescanner/BarCodeScannerViewFinder:mCamera	Landroid/hardware/Camera;
+    //   32: aconst_null
+    //   33: invokevirtual 173	android/hardware/Camera:setPreviewCallback	(Landroid/hardware/Camera$PreviewCallback;)V
+    //   36: invokestatic 108	expo/modules/barcodescanner/ExpoBarCodeScanner:getInstance	()Lexpo/modules/barcodescanner/ExpoBarCodeScanner;
+    //   39: invokevirtual 193	expo/modules/barcodescanner/ExpoBarCodeScanner:releaseCameraInstance	()V
+    //   42: aload_0
+    //   43: aconst_null
+    //   44: putfield 114	expo/modules/barcodescanner/BarCodeScannerViewFinder:mCamera	Landroid/hardware/Camera;
+    //   47: aload_0
+    //   48: iconst_0
+    //   49: putfield 189	expo/modules/barcodescanner/BarCodeScannerViewFinder:mIsStopping	Z
+    //   52: goto +22 -> 74
+    //   55: astore_1
+    //   56: goto +11 -> 67
+    //   59: astore_1
+    //   60: aload_1
+    //   61: invokevirtual 181	java/lang/Exception:printStackTrace	()V
+    //   64: goto -17 -> 47
+    //   67: aload_0
+    //   68: iconst_0
+    //   69: putfield 189	expo/modules/barcodescanner/BarCodeScannerViewFinder:mIsStopping	Z
+    //   72: aload_1
+    //   73: athrow
+    //   74: aload_0
+    //   75: monitorexit
+    //   76: return
+    //   77: astore_1
+    //   78: aload_0
+    //   79: monitorexit
+    //   80: aload_1
+    //   81: athrow
+    // Local variable table:
+    //   start	length	slot	name	signature
+    //   0	82	0	this	BarCodeScannerViewFinder
+    //   55	1	1	localObject1	Object
+    //   59	14	1	localException	Exception
+    //   77	4	1	localObject2	Object
+    // Exception table:
+    //   from	to	target	type
+    //   14	47	55	finally
+    //   60	64	55	finally
+    //   14	47	59	java/lang/Exception
+    //   2	14	77	finally
+    //   47	52	77	finally
+    //   67	74	77	finally
+  }
+  
+  private void stopPreview()
+  {
+    if (mCamera != null) {
+      stopCamera();
+    }
+  }
+  
+  public double getRatio()
+  {
+    int i = ExpoBarCodeScanner.getInstance().getPreviewWidth(mCameraType);
+    int j = ExpoBarCodeScanner.getInstance().getPreviewHeight(mCameraType);
+    return i / j;
+  }
+  
+  public void onPreviewFrame(byte[] paramArrayOfByte, Camera paramCamera)
+  {
+    if (!barCodeScannerTaskLock)
+    {
+      barCodeScannerTaskLock = true;
+      new BarCodeScannerAsyncTask(paramCamera, paramArrayOfByte, mBarCodeScannerView).execute(new Void[0]);
+    }
+  }
+  
+  public void onSurfaceTextureAvailable(SurfaceTexture paramSurfaceTexture, int paramInt1, int paramInt2)
+  {
+    mSurfaceTexture = paramSurfaceTexture;
+    startCamera();
+  }
+  
+  public boolean onSurfaceTextureDestroyed(SurfaceTexture paramSurfaceTexture)
+  {
+    mSurfaceTexture = null;
+    stopCamera();
+    return true;
+  }
+  
+  public void onSurfaceTextureSizeChanged(SurfaceTexture paramSurfaceTexture, int paramInt1, int paramInt2) {}
+  
+  public void onSurfaceTextureUpdated(SurfaceTexture paramSurfaceTexture)
+  {
+    mSurfaceTexture = paramSurfaceTexture;
+  }
+  
+  public void setBarCodeScannerSettings(BarCodeScannerSettings paramBarCodeScannerSettings)
+  {
+    mBarCodeScanner.setSettings(paramBarCodeScannerSettings);
+  }
+  
+  public void setCameraType(final int paramInt)
+  {
+    if (mCameraType == paramInt) {
+      return;
+    }
+    new Thread(new Runnable()
+    {
+      public void run()
+      {
+        BarCodeScannerViewFinder.access$002(BarCodeScannerViewFinder.this, true);
+        BarCodeScannerViewFinder.this.stopPreview();
+        BarCodeScannerViewFinder.access$202(BarCodeScannerViewFinder.this, paramInt);
+        BarCodeScannerViewFinder.this.startPreview();
+        BarCodeScannerViewFinder.access$002(BarCodeScannerViewFinder.this, false);
+      }
+    }).start();
+  }
+  
+  private class BarCodeScannerAsyncTask
+    extends AsyncTask<Void, Void, Void>
+  {
+    private final Camera mCamera;
+    private byte[] mImageData;
+    
+    BarCodeScannerAsyncTask(Camera paramCamera, byte[] paramArrayOfByte, BarCodeScannerView paramBarCodeScannerView)
+    {
+      mCamera = paramCamera;
+      mImageData = paramArrayOfByte;
+      BarCodeScannerViewFinder.access$402(BarCodeScannerViewFinder.this, paramBarCodeScannerView);
+    }
+    
+    protected Void doInBackground(final Void... paramVarArgs)
+    {
+      if (isCancelled()) {
+        return null;
+      }
+      if ((!mIsChanging) && (mCamera != null))
+      {
+        paramVarArgs = mCamera.getParameters().getPreviewSize();
+        int i = width;
+        int j = height;
+        int k = ExpoBarCodeScanner.getInstance().getRotation();
+        paramVarArgs = mBarCodeScanner.scan(mImageData, i, j, k);
+        if (paramVarArgs != null) {
+          new Handler(Looper.getMainLooper()).post(new Runnable()
+          {
+            public void run()
+            {
+              mBarCodeScannerView.onBarCodeScanned(paramVarArgs);
+            }
+          });
+        }
+      }
+      BarCodeScannerViewFinder.barCodeScannerTaskLock = false;
+      return null;
+    }
+  }
+}

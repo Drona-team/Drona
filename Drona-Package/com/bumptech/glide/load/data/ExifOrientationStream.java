@@ -1,0 +1,105 @@
+package com.bumptech.glide.load.data;
+
+import java.io.FilterInputStream;
+import java.io.IOException;
+import java.io.InputStream;
+
+public final class ExifOrientationStream
+  extends FilterInputStream
+{
+  private static final byte[] EXIF_SEGMENT = { -1, -31, 0, 28, 69, 120, 105, 102, 0, 0, 77, 77, 0, 0, 0, 0, 0, 8, 0, 1, 1, 18, 0, 2, 0, 0, 0, 1, 0 };
+  private static final int ORIENTATION_POSITION = SEGMENT_LENGTH + 2;
+  private static final int SEGMENT_LENGTH = EXIF_SEGMENT.length;
+  private static final int SEGMENT_START_POSITION = 2;
+  private final byte orientation;
+  private int position;
+  
+  public ExifOrientationStream(InputStream paramInputStream, int paramInt)
+  {
+    super(paramInputStream);
+    if ((paramInt >= -1) && (paramInt <= 8))
+    {
+      orientation = ((byte)paramInt);
+      return;
+    }
+    paramInputStream = new StringBuilder();
+    paramInputStream.append("Cannot add invalid orientation: ");
+    paramInputStream.append(paramInt);
+    throw new IllegalArgumentException(paramInputStream.toString());
+  }
+  
+  public void mark(int paramInt)
+  {
+    throw new UnsupportedOperationException();
+  }
+  
+  public boolean markSupported()
+  {
+    return false;
+  }
+  
+  public int read()
+    throws IOException
+  {
+    int i;
+    if ((position >= 2) && (position <= ORIENTATION_POSITION))
+    {
+      if (position == ORIENTATION_POSITION) {
+        i = orientation;
+      } else {
+        i = EXIF_SEGMENT[(position - 2)] & 0xFF;
+      }
+    }
+    else {
+      i = super.read();
+    }
+    if (i != -1) {
+      position += 1;
+    }
+    return i;
+  }
+  
+  public int read(byte[] paramArrayOfByte, int paramInt1, int paramInt2)
+    throws IOException
+  {
+    if (position > ORIENTATION_POSITION)
+    {
+      paramInt1 = super.read(paramArrayOfByte, paramInt1, paramInt2);
+    }
+    else if (position == ORIENTATION_POSITION)
+    {
+      paramArrayOfByte[paramInt1] = orientation;
+      paramInt1 = 1;
+    }
+    else if (position < 2)
+    {
+      paramInt1 = super.read(paramArrayOfByte, paramInt1, 2 - position);
+    }
+    else
+    {
+      paramInt2 = Math.min(ORIENTATION_POSITION - position, paramInt2);
+      System.arraycopy(EXIF_SEGMENT, position - 2, paramArrayOfByte, paramInt1, paramInt2);
+      paramInt1 = paramInt2;
+    }
+    if (paramInt1 > 0) {
+      position += paramInt1;
+    }
+    return paramInt1;
+  }
+  
+  public void reset()
+    throws IOException
+  {
+    throw new UnsupportedOperationException();
+  }
+  
+  public long skip(long paramLong)
+    throws IOException
+  {
+    paramLong = super.skip(paramLong);
+    if (paramLong > 0L) {
+      position = ((int)(position + paramLong));
+    }
+    return paramLong;
+  }
+}

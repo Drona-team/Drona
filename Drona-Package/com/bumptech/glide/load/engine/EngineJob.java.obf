@@ -1,0 +1,603 @@
+package com.bumptech.glide.load.engine;
+
+import androidx.annotation.NonNull;
+import androidx.annotation.VisibleForTesting;
+import androidx.core.util.Pools.Pool;
+import com.bumptech.glide.load.DataSource;
+import com.bumptech.glide.load.Key;
+import com.bumptech.glide.load.engine.executor.GlideExecutor;
+import com.bumptech.glide.request.ResourceCallback;
+import com.bumptech.glide.util.Executors;
+import com.bumptech.glide.util.Preconditions;
+import com.bumptech.glide.util.pool.FactoryPools.Poolable;
+import com.bumptech.glide.util.pool.StateVerifier;
+import java.util.ArrayList;
+import java.util.Iterator;
+import java.util.List;
+import java.util.concurrent.Executor;
+import java.util.concurrent.atomic.AtomicInteger;
+
+class EngineJob<R>
+  implements DecodeJob.Callback<R>, FactoryPools.Poolable
+{
+  private static final EngineResourceFactory DEFAULT_FACTORY = new EngineResourceFactory();
+  private final GlideExecutor animationExecutor;
+  final ResourceCallbacksAndExecutors cbs = new ResourceCallbacksAndExecutors();
+  DataSource dataSource;
+  private DecodeJob<R> decodeJob;
+  private final GlideExecutor diskCacheExecutor;
+  EngineResource<?> engineResource;
+  private final EngineResourceFactory engineResourceFactory;
+  GlideException exception;
+  private boolean hasLoadFailed;
+  private boolean hasResource;
+  private boolean isCacheable;
+  private volatile boolean isCancelled;
+  private Key key;
+  private final EngineJobListener listener;
+  private boolean onlyRetrieveFromCache;
+  private final AtomicInteger pendingCallbacks = new AtomicInteger();
+  private final Pools.Pool<EngineJob<?>> pool;
+  private Resource<?> resource;
+  private final GlideExecutor sourceExecutor;
+  private final GlideExecutor sourceUnlimitedExecutor;
+  private final StateVerifier stateVerifier = StateVerifier.newInstance();
+  private boolean useAnimationPool;
+  private boolean useUnlimitedSourceGeneratorPool;
+  
+  EngineJob(GlideExecutor paramGlideExecutor1, GlideExecutor paramGlideExecutor2, GlideExecutor paramGlideExecutor3, GlideExecutor paramGlideExecutor4, EngineJobListener paramEngineJobListener, Pools.Pool<EngineJob<?>> paramPool)
+  {
+    this(paramGlideExecutor1, paramGlideExecutor2, paramGlideExecutor3, paramGlideExecutor4, paramEngineJobListener, paramPool, DEFAULT_FACTORY);
+  }
+  
+  @VisibleForTesting
+  EngineJob(GlideExecutor paramGlideExecutor1, GlideExecutor paramGlideExecutor2, GlideExecutor paramGlideExecutor3, GlideExecutor paramGlideExecutor4, EngineJobListener paramEngineJobListener, Pools.Pool<EngineJob<?>> paramPool, EngineResourceFactory paramEngineResourceFactory)
+  {
+    diskCacheExecutor = paramGlideExecutor1;
+    sourceExecutor = paramGlideExecutor2;
+    sourceUnlimitedExecutor = paramGlideExecutor3;
+    animationExecutor = paramGlideExecutor4;
+    listener = paramEngineJobListener;
+    pool = paramPool;
+    engineResourceFactory = paramEngineResourceFactory;
+  }
+  
+  private GlideExecutor getActiveSourceExecutor()
+  {
+    if (useUnlimitedSourceGeneratorPool) {
+      return sourceUnlimitedExecutor;
+    }
+    if (useAnimationPool) {
+      return animationExecutor;
+    }
+    return sourceExecutor;
+  }
+  
+  private boolean isDone()
+  {
+    return (hasLoadFailed) || (hasResource) || (isCancelled);
+  }
+  
+  private void release()
+  {
+    try
+    {
+      if (key != null)
+      {
+        cbs.clear();
+        key = null;
+        engineResource = null;
+        resource = null;
+        hasLoadFailed = false;
+        isCancelled = false;
+        hasResource = false;
+        decodeJob.release(false);
+        decodeJob = null;
+        exception = null;
+        dataSource = null;
+        pool.release(this);
+        return;
+      }
+      throw new IllegalArgumentException();
+    }
+    finally {}
+  }
+  
+  void addCallback(ResourceCallback paramResourceCallback, Executor paramExecutor)
+  {
+    try
+    {
+      stateVerifier.throwIfRecycled();
+      cbs.add(paramResourceCallback, paramExecutor);
+      if (hasResource)
+      {
+        incrementPendingCallbacks(1);
+        paramExecutor.execute(new CallResourceReady(paramResourceCallback));
+      }
+      else if (hasLoadFailed)
+      {
+        incrementPendingCallbacks(1);
+        paramExecutor.execute(new CallLoadFailed(paramResourceCallback));
+      }
+      else
+      {
+        Preconditions.checkArgument(isCancelled ^ true, "Cannot add callbacks to a cancelled EngineJob");
+      }
+      return;
+    }
+    finally {}
+  }
+  
+  /* Error */
+  void callCallbackOnLoadFailed(ResourceCallback paramResourceCallback)
+  {
+    // Byte code:
+    //   0: aload_0
+    //   1: monitorenter
+    //   2: aload_1
+    //   3: aload_0
+    //   4: getfield 147	com/bumptech/glide/load/engine/EngineJob:exception	Lcom/bumptech/glide/load/engine/GlideException;
+    //   7: invokeinterface 197 2 0
+    //   12: aload_0
+    //   13: monitorexit
+    //   14: return
+    //   15: astore_1
+    //   16: goto +13 -> 29
+    //   19: astore_1
+    //   20: new 199	com/bumptech/glide/load/engine/CallbackException
+    //   23: dup
+    //   24: aload_1
+    //   25: invokespecial 202	com/bumptech/glide/load/engine/CallbackException:<init>	(Ljava/lang/Throwable;)V
+    //   28: athrow
+    //   29: aload_0
+    //   30: monitorexit
+    //   31: aload_1
+    //   32: athrow
+    // Local variable table:
+    //   start	length	slot	name	signature
+    //   0	33	0	this	EngineJob
+    //   0	33	1	paramResourceCallback	ResourceCallback
+    // Exception table:
+    //   from	to	target	type
+    //   2	12	15	finally
+    //   20	29	15	finally
+    //   2	12	19	java/lang/Throwable
+  }
+  
+  /* Error */
+  void callCallbackOnResourceReady(ResourceCallback paramResourceCallback)
+  {
+    // Byte code:
+    //   0: aload_0
+    //   1: monitorenter
+    //   2: aload_1
+    //   3: aload_0
+    //   4: getfield 136	com/bumptech/glide/load/engine/EngineJob:engineResource	Lcom/bumptech/glide/load/engine/EngineResource;
+    //   7: aload_0
+    //   8: getfield 149	com/bumptech/glide/load/engine/EngineJob:dataSource	Lcom/bumptech/glide/load/DataSource;
+    //   11: invokeinterface 207 3 0
+    //   16: aload_0
+    //   17: monitorexit
+    //   18: return
+    //   19: astore_1
+    //   20: goto +13 -> 33
+    //   23: astore_1
+    //   24: new 199	com/bumptech/glide/load/engine/CallbackException
+    //   27: dup
+    //   28: aload_1
+    //   29: invokespecial 202	com/bumptech/glide/load/engine/CallbackException:<init>	(Ljava/lang/Throwable;)V
+    //   32: athrow
+    //   33: aload_0
+    //   34: monitorexit
+    //   35: aload_1
+    //   36: athrow
+    // Local variable table:
+    //   start	length	slot	name	signature
+    //   0	37	0	this	EngineJob
+    //   0	37	1	paramResourceCallback	ResourceCallback
+    // Exception table:
+    //   from	to	target	type
+    //   2	16	19	finally
+    //   24	33	19	finally
+    //   2	16	23	java/lang/Throwable
+  }
+  
+  void cancel()
+  {
+    if (isDone()) {
+      return;
+    }
+    isCancelled = true;
+    decodeJob.cancel();
+    listener.onEngineJobCancelled(this, key);
+  }
+  
+  void decrementPendingCallbacks()
+  {
+    for (;;)
+    {
+      try
+      {
+        stateVerifier.throwIfRecycled();
+        Preconditions.checkArgument(isDone(), "Not yet complete!");
+        int i = pendingCallbacks.decrementAndGet();
+        if (i >= 0)
+        {
+          bool = true;
+          Preconditions.checkArgument(bool, "Can't decrement below 0");
+          if (i == 0)
+          {
+            if (engineResource != null) {
+              engineResource.release();
+            }
+            release();
+          }
+          return;
+        }
+      }
+      finally {}
+      boolean bool = false;
+    }
+  }
+  
+  @NonNull
+  public StateVerifier getVerifier()
+  {
+    return stateVerifier;
+  }
+  
+  void incrementPendingCallbacks(int paramInt)
+  {
+    try
+    {
+      Preconditions.checkArgument(isDone(), "Not yet complete!");
+      if ((pendingCallbacks.getAndAdd(paramInt) == 0) && (engineResource != null)) {
+        engineResource.acquire();
+      }
+      return;
+    }
+    finally
+    {
+      localObject = finally;
+      throw localObject;
+    }
+  }
+  
+  @VisibleForTesting
+  EngineJob<R> init(Key paramKey, boolean paramBoolean1, boolean paramBoolean2, boolean paramBoolean3, boolean paramBoolean4)
+  {
+    try
+    {
+      key = paramKey;
+      isCacheable = paramBoolean1;
+      useUnlimitedSourceGeneratorPool = paramBoolean2;
+      useAnimationPool = paramBoolean3;
+      onlyRetrieveFromCache = paramBoolean4;
+      return this;
+    }
+    finally
+    {
+      paramKey = finally;
+      throw paramKey;
+    }
+  }
+  
+  boolean isCancelled()
+  {
+    try
+    {
+      boolean bool = isCancelled;
+      return bool;
+    }
+    finally
+    {
+      localObject = finally;
+      throw localObject;
+    }
+  }
+  
+  void notifyCallbacksOfException()
+  {
+    try
+    {
+      stateVerifier.throwIfRecycled();
+      if (isCancelled)
+      {
+        release();
+        return;
+      }
+      if (!cbs.isEmpty())
+      {
+        if (!hasLoadFailed)
+        {
+          hasLoadFailed = true;
+          Object localObject1 = key;
+          Object localObject3 = cbs.copy();
+          incrementPendingCallbacks(((ResourceCallbacksAndExecutors)localObject3).size() + 1);
+          listener.onEngineJobComplete(this, (Key)localObject1, null);
+          localObject1 = ((ResourceCallbacksAndExecutors)localObject3).iterator();
+          while (((Iterator)localObject1).hasNext())
+          {
+            localObject3 = (ResourceCallbackAndExecutor)((Iterator)localObject1).next();
+            executor.execute(new CallLoadFailed(cb));
+          }
+          decrementPendingCallbacks();
+          return;
+        }
+        throw new IllegalStateException("Already failed once");
+      }
+      throw new IllegalStateException("Received an exception without any callbacks to notify");
+    }
+    finally {}
+  }
+  
+  void notifyCallbacksOfResult()
+  {
+    try
+    {
+      stateVerifier.throwIfRecycled();
+      if (isCancelled)
+      {
+        resource.recycle();
+        release();
+        return;
+      }
+      if (!cbs.isEmpty())
+      {
+        if (!hasResource)
+        {
+          engineResource = engineResourceFactory.build(resource, isCacheable);
+          hasResource = true;
+          Object localObject1 = cbs.copy();
+          incrementPendingCallbacks(((ResourceCallbacksAndExecutors)localObject1).size() + 1);
+          Object localObject3 = key;
+          EngineResource localEngineResource = engineResource;
+          listener.onEngineJobComplete(this, (Key)localObject3, localEngineResource);
+          localObject1 = ((ResourceCallbacksAndExecutors)localObject1).iterator();
+          while (((Iterator)localObject1).hasNext())
+          {
+            localObject3 = (ResourceCallbackAndExecutor)((Iterator)localObject1).next();
+            executor.execute(new CallResourceReady(cb));
+          }
+          decrementPendingCallbacks();
+          return;
+        }
+        throw new IllegalStateException("Already have resource");
+      }
+      throw new IllegalStateException("Received a resource without any callbacks to notify");
+    }
+    finally {}
+  }
+  
+  public void onLoadFailed(GlideException paramGlideException)
+  {
+    try
+    {
+      exception = paramGlideException;
+      notifyCallbacksOfException();
+      return;
+    }
+    finally {}
+  }
+  
+  public void onResourceReady(Resource<R> paramResource, DataSource paramDataSource)
+  {
+    try
+    {
+      resource = paramResource;
+      dataSource = paramDataSource;
+      notifyCallbacksOfResult();
+      return;
+    }
+    finally {}
+  }
+  
+  boolean onlyRetrieveFromCache()
+  {
+    return onlyRetrieveFromCache;
+  }
+  
+  void removeCallback(ResourceCallback paramResourceCallback)
+  {
+    for (;;)
+    {
+      try
+      {
+        stateVerifier.throwIfRecycled();
+        cbs.remove(paramResourceCallback);
+        if (cbs.isEmpty())
+        {
+          cancel();
+          if (hasResource) {
+            break label79;
+          }
+          if (!hasLoadFailed) {
+            break label74;
+          }
+          break label79;
+          if ((i != 0) && (pendingCallbacks.get() == 0)) {
+            release();
+          }
+        }
+        return;
+      }
+      finally {}
+      label74:
+      int i = 0;
+      continue;
+      label79:
+      i = 1;
+    }
+  }
+  
+  public void reschedule(DecodeJob<?> paramDecodeJob)
+  {
+    getActiveSourceExecutor().execute(paramDecodeJob);
+  }
+  
+  public void start(DecodeJob<R> paramDecodeJob)
+  {
+    try
+    {
+      decodeJob = paramDecodeJob;
+      GlideExecutor localGlideExecutor;
+      if (paramDecodeJob.willDecodeFromCache()) {
+        localGlideExecutor = diskCacheExecutor;
+      } else {
+        localGlideExecutor = getActiveSourceExecutor();
+      }
+      localGlideExecutor.execute(paramDecodeJob);
+      return;
+    }
+    finally {}
+  }
+  
+  private class CallLoadFailed
+    implements Runnable
+  {
+    private final ResourceCallback cb;
+    
+    CallLoadFailed(ResourceCallback paramResourceCallback)
+    {
+      cb = paramResourceCallback;
+    }
+    
+    public void run()
+    {
+      synchronized (EngineJob.this)
+      {
+        if (cbs.contains(cb)) {
+          callCallbackOnLoadFailed(cb);
+        }
+        decrementPendingCallbacks();
+        return;
+      }
+    }
+  }
+  
+  private class CallResourceReady
+    implements Runnable
+  {
+    private final ResourceCallback cb;
+    
+    CallResourceReady(ResourceCallback paramResourceCallback)
+    {
+      cb = paramResourceCallback;
+    }
+    
+    public void run()
+    {
+      synchronized (EngineJob.this)
+      {
+        if (cbs.contains(cb))
+        {
+          engineResource.acquire();
+          callCallbackOnResourceReady(cb);
+          removeCallback(cb);
+        }
+        decrementPendingCallbacks();
+        return;
+      }
+    }
+  }
+  
+  @VisibleForTesting
+  static class EngineResourceFactory
+  {
+    EngineResourceFactory() {}
+    
+    public <R> EngineResource<R> build(Resource<R> paramResource, boolean paramBoolean)
+    {
+      return new EngineResource(paramResource, paramBoolean, true);
+    }
+  }
+  
+  static final class ResourceCallbackAndExecutor
+  {
+    final ResourceCallback cb;
+    final Executor executor;
+    
+    ResourceCallbackAndExecutor(ResourceCallback paramResourceCallback, Executor paramExecutor)
+    {
+      cb = paramResourceCallback;
+      executor = paramExecutor;
+    }
+    
+    public boolean equals(Object paramObject)
+    {
+      if ((paramObject instanceof ResourceCallbackAndExecutor))
+      {
+        paramObject = (ResourceCallbackAndExecutor)paramObject;
+        return cb.equals(cb);
+      }
+      return false;
+    }
+    
+    public int hashCode()
+    {
+      return cb.hashCode();
+    }
+  }
+  
+  static final class ResourceCallbacksAndExecutors
+    implements Iterable<EngineJob.ResourceCallbackAndExecutor>
+  {
+    private final List<EngineJob.ResourceCallbackAndExecutor> callbacksAndExecutors;
+    
+    ResourceCallbacksAndExecutors()
+    {
+      this(new ArrayList(2));
+    }
+    
+    ResourceCallbacksAndExecutors(List<EngineJob.ResourceCallbackAndExecutor> paramList)
+    {
+      callbacksAndExecutors = paramList;
+    }
+    
+    private static EngineJob.ResourceCallbackAndExecutor defaultCallbackAndExecutor(ResourceCallback paramResourceCallback)
+    {
+      return new EngineJob.ResourceCallbackAndExecutor(paramResourceCallback, Executors.directExecutor());
+    }
+    
+    void add(ResourceCallback paramResourceCallback, Executor paramExecutor)
+    {
+      callbacksAndExecutors.add(new EngineJob.ResourceCallbackAndExecutor(paramResourceCallback, paramExecutor));
+    }
+    
+    void clear()
+    {
+      callbacksAndExecutors.clear();
+    }
+    
+    boolean contains(ResourceCallback paramResourceCallback)
+    {
+      return callbacksAndExecutors.contains(defaultCallbackAndExecutor(paramResourceCallback));
+    }
+    
+    ResourceCallbacksAndExecutors copy()
+    {
+      return new ResourceCallbacksAndExecutors(new ArrayList(callbacksAndExecutors));
+    }
+    
+    boolean isEmpty()
+    {
+      return callbacksAndExecutors.isEmpty();
+    }
+    
+    @NonNull
+    public Iterator<EngineJob.ResourceCallbackAndExecutor> iterator()
+    {
+      return callbacksAndExecutors.iterator();
+    }
+    
+    void remove(ResourceCallback paramResourceCallback)
+    {
+      callbacksAndExecutors.remove(defaultCallbackAndExecutor(paramResourceCallback));
+    }
+    
+    int size()
+    {
+      return callbacksAndExecutors.size();
+    }
+  }
+}

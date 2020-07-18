@@ -1,0 +1,84 @@
+package com.facebook.soloader;
+
+import android.util.Log;
+import java.util.Iterator;
+import java.util.List;
+import javax.annotation.Nullable;
+
+public abstract class NativeLibrary
+{
+  private static final String TAG = "com.facebook.soloader.NativeLibrary";
+  private boolean mLibrariesLoaded = false;
+  @Nullable
+  private List<String> mLibraryNames;
+  @Nullable
+  private volatile UnsatisfiedLinkError mLinkError = null;
+  private Boolean mLoadLibraries = Boolean.valueOf(true);
+  private final Object mLock = new Object();
+  
+  protected NativeLibrary(List<String> paramList)
+  {
+    mLibraryNames = paramList;
+  }
+  
+  public void ensureLoaded()
+    throws UnsatisfiedLinkError
+  {
+    if (loadLibraries()) {
+      return;
+    }
+    throw mLinkError;
+  }
+  
+  @Nullable
+  public UnsatisfiedLinkError getError()
+  {
+    return mLinkError;
+  }
+  
+  protected void initialNativeCheck()
+    throws UnsatisfiedLinkError
+  {}
+  
+  @Nullable
+  public boolean loadLibraries()
+  {
+    synchronized (mLock)
+    {
+      if (!mLoadLibraries.booleanValue())
+      {
+        bool = mLibrariesLoaded;
+        return bool;
+      }
+      try
+      {
+        if (mLibraryNames != null)
+        {
+          Iterator localIterator = mLibraryNames.iterator();
+          while (localIterator.hasNext()) {
+            SoLoader.loadLibrary((String)localIterator.next());
+          }
+        }
+        initialNativeCheck();
+        mLibrariesLoaded = true;
+        mLibraryNames = null;
+      }
+      catch (Throwable localThrowable)
+      {
+        Log.e(TAG, "Failed to load native lib (other error): ", localThrowable);
+        mLinkError = new UnsatisfiedLinkError("Failed loading libraries");
+        mLinkError.initCause(localThrowable);
+        mLibrariesLoaded = false;
+      }
+      catch (UnsatisfiedLinkError localUnsatisfiedLinkError)
+      {
+        Log.e(TAG, "Failed to load native lib (initial check): ", localUnsatisfiedLinkError);
+        mLinkError = localUnsatisfiedLinkError;
+        mLibrariesLoaded = false;
+      }
+      mLoadLibraries = Boolean.valueOf(false);
+      boolean bool = mLibrariesLoaded;
+      return bool;
+    }
+  }
+}

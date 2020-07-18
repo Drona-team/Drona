@@ -1,0 +1,95 @@
+package androidx.lifecycle;
+
+import androidx.annotation.MainThread;
+import androidx.annotation.NonNull;
+import androidx.annotation.RestrictTo;
+import androidx.annotation.VisibleForTesting;
+import androidx.annotation.WorkerThread;
+import androidx.arch.core.executor.ArchTaskExecutor;
+import java.util.concurrent.Executor;
+import java.util.concurrent.atomic.AtomicBoolean;
+
+@RestrictTo({androidx.annotation.RestrictTo.Scope.LIBRARY_GROUP})
+public abstract class ComputableLiveData<T>
+{
+  final AtomicBoolean mComputing = new AtomicBoolean(false);
+  final Executor mExecutor;
+  final AtomicBoolean mInvalid = new AtomicBoolean(true);
+  @VisibleForTesting
+  final Runnable mInvalidationRunnable = new Runnable()
+  {
+    @MainThread
+    public void run()
+    {
+      boolean bool = mLiveData.hasActiveObservers();
+      if ((mInvalid.compareAndSet(false, true)) && (bool)) {
+        mExecutor.execute(mRefreshRunnable);
+      }
+    }
+  };
+  final LiveData<T> mLiveData;
+  @VisibleForTesting
+  final Runnable mRefreshRunnable = new Runnable()
+  {
+    @WorkerThread
+    public void run()
+    {
+      int i;
+      do
+      {
+        if (mComputing.compareAndSet(false, true))
+        {
+          Object localObject1 = null;
+          i = 0;
+          try
+          {
+            while (mInvalid.compareAndSet(true, false))
+            {
+              localObject1 = compute();
+              i = 1;
+            }
+            if (i != 0) {
+              mLiveData.postValue(localObject1);
+            }
+          }
+          finally
+          {
+            mComputing.set(false);
+          }
+        }
+        i = 0;
+      } while ((i != 0) && (mInvalid.get()));
+    }
+  };
+  
+  public ComputableLiveData()
+  {
+    this(ArchTaskExecutor.getIOThreadExecutor());
+  }
+  
+  public ComputableLiveData(@NonNull Executor paramExecutor)
+  {
+    mExecutor = paramExecutor;
+    mLiveData = new LiveData()
+    {
+      protected void onActive()
+      {
+        mExecutor.execute(mRefreshRunnable);
+      }
+    };
+  }
+  
+  @WorkerThread
+  protected abstract T compute();
+  
+  @NonNull
+  public LiveData<T> getLiveData()
+  {
+    return mLiveData;
+  }
+  
+  public void invalidate()
+  {
+    ArchTaskExecutor.getInstance().executeOnMainThread(mInvalidationRunnable);
+  }
+}

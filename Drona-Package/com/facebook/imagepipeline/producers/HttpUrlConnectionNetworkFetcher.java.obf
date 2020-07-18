@@ -1,0 +1,306 @@
+package com.facebook.imagepipeline.producers;
+
+import android.net.Uri;
+import com.facebook.common.internal.VisibleForTesting;
+import com.facebook.common.time.MonotonicClock;
+import com.facebook.common.time.RealtimeSinceBootClock;
+import com.facebook.common.util.UriUtil;
+import com.facebook.imagepipeline.image.EncodedImage;
+import java.io.IOException;
+import java.net.HttpURLConnection;
+import java.net.URL;
+import java.util.HashMap;
+import java.util.Locale;
+import java.util.Map;
+import java.util.concurrent.ExecutorService;
+import java.util.concurrent.Executors;
+import java.util.concurrent.Future;
+
+public class HttpUrlConnectionNetworkFetcher
+  extends BaseNetworkFetcher<HttpUrlConnectionNetworkFetchState>
+{
+  private static final String FETCH_TIME = "fetch_time";
+  public static final int HTTP_DEFAULT_TIMEOUT = 30000;
+  public static final int HTTP_PERMANENT_REDIRECT = 308;
+  public static final int HTTP_TEMPORARY_REDIRECT = 307;
+  private static final String IMAGE_SIZE = "image_size";
+  private static final int MAX_REDIRECTS = 5;
+  private static final int NUM_NETWORK_THREADS = 3;
+  private static final String QUEUE_TIME = "queue_time";
+  private static final String TOTAL_TIME = "total_time";
+  private final ExecutorService mExecutorService = Executors.newFixedThreadPool(3);
+  private int mHttpConnectionTimeout;
+  private final MonotonicClock mMonotonicClock;
+  
+  public HttpUrlConnectionNetworkFetcher()
+  {
+    this(RealtimeSinceBootClock.get());
+  }
+  
+  public HttpUrlConnectionNetworkFetcher(int paramInt)
+  {
+    this(RealtimeSinceBootClock.get());
+    mHttpConnectionTimeout = paramInt;
+  }
+  
+  @VisibleForTesting
+  HttpUrlConnectionNetworkFetcher(MonotonicClock paramMonotonicClock)
+  {
+    mMonotonicClock = paramMonotonicClock;
+  }
+  
+  private HttpURLConnection downloadFrom(Uri paramUri, int paramInt)
+    throws IOException
+  {
+    Object localObject = openConnectionTo(paramUri);
+    ((HttpURLConnection)localObject).setConnectTimeout(mHttpConnectionTimeout);
+    int i = ((HttpURLConnection)localObject).getResponseCode();
+    if (isHttpSuccess(i)) {
+      return localObject;
+    }
+    if (isHttpRedirect(i))
+    {
+      String str = ((HttpURLConnection)localObject).getHeaderField("Location");
+      ((HttpURLConnection)localObject).disconnect();
+      if (str == null) {
+        localObject = null;
+      } else {
+        localObject = Uri.parse(str);
+      }
+      str = paramUri.getScheme();
+      if ((paramInt > 0) && (localObject != null) && (!((Uri)localObject).getScheme().equals(str))) {
+        return downloadFrom((Uri)localObject, paramInt - 1);
+      }
+      if (paramInt == 0) {
+        paramUri = error("URL %s follows too many redirects", new Object[] { paramUri.toString() });
+      } else {
+        paramUri = error("URL %s returned %d without a valid redirect", new Object[] { paramUri.toString(), Integer.valueOf(i) });
+      }
+      throw new IOException(paramUri);
+    }
+    ((HttpURLConnection)localObject).disconnect();
+    throw new IOException(String.format("Image URL %s returned HTTP code %d", new Object[] { paramUri.toString(), Integer.valueOf(i) }));
+  }
+  
+  private static String error(String paramString, Object... paramVarArgs)
+  {
+    return String.format(Locale.getDefault(), paramString, paramVarArgs);
+  }
+  
+  private static boolean isHttpRedirect(int paramInt)
+  {
+    switch (paramInt)
+    {
+    case 304: 
+    case 305: 
+    case 306: 
+    default: 
+      return false;
+    }
+    return true;
+  }
+  
+  private static boolean isHttpSuccess(int paramInt)
+  {
+    return (paramInt >= 200) && (paramInt < 300);
+  }
+  
+  @VisibleForTesting
+  static HttpURLConnection openConnectionTo(Uri paramUri)
+    throws IOException
+  {
+    return (HttpURLConnection)UriUtil.uriToUrl(paramUri).openConnection();
+  }
+  
+  public HttpUrlConnectionNetworkFetchState createFetchState(Consumer<EncodedImage> paramConsumer, ProducerContext paramProducerContext)
+  {
+    return new HttpUrlConnectionNetworkFetchState(paramConsumer, paramProducerContext);
+  }
+  
+  public void fetch(final HttpUrlConnectionNetworkFetchState paramHttpUrlConnectionNetworkFetchState, final NetworkFetcher.Callback paramCallback)
+  {
+    HttpUrlConnectionNetworkFetchState.access$002(paramHttpUrlConnectionNetworkFetchState, mMonotonicClock.now());
+    final Future localFuture = mExecutorService.submit(new Runnable()
+    {
+      public void run()
+      {
+        fetchSync(paramHttpUrlConnectionNetworkFetchState, paramCallback);
+      }
+    });
+    paramHttpUrlConnectionNetworkFetchState.getContext().addCallbacks(new BaseProducerContextCallbacks()
+    {
+      public void onCancellationRequested()
+      {
+        if (localFuture.cancel(false)) {
+          paramCallback.onCancellation();
+        }
+      }
+    });
+  }
+  
+  /* Error */
+  @VisibleForTesting
+  void fetchSync(HttpUrlConnectionNetworkFetchState paramHttpUrlConnectionNetworkFetchState, NetworkFetcher.Callback paramCallback)
+  {
+    // Byte code:
+    //   0: aconst_null
+    //   1: astore 6
+    //   3: aconst_null
+    //   4: astore 4
+    //   6: aconst_null
+    //   7: astore 7
+    //   9: aload_0
+    //   10: aload_1
+    //   11: invokevirtual 222	com/facebook/imagepipeline/producers/HttpUrlConnectionNetworkFetcher$HttpUrlConnectionNetworkFetchState:getUri	()Landroid/net/Uri;
+    //   14: iconst_5
+    //   15: invokespecial 121	com/facebook/imagepipeline/producers/HttpUrlConnectionNetworkFetcher:downloadFrom	(Landroid/net/Uri;I)Ljava/net/HttpURLConnection;
+    //   18: astore_3
+    //   19: aload 6
+    //   21: astore 4
+    //   23: aload_3
+    //   24: astore 5
+    //   26: aload_1
+    //   27: aload_0
+    //   28: getfield 69	com/facebook/imagepipeline/producers/HttpUrlConnectionNetworkFetcher:mMonotonicClock	Lcom/facebook/common/time/MonotonicClock;
+    //   31: invokeinterface 191 1 0
+    //   36: invokestatic 225	com/facebook/imagepipeline/producers/HttpUrlConnectionNetworkFetcher$HttpUrlConnectionNetworkFetchState:access$102	(Lcom/facebook/imagepipeline/producers/HttpUrlConnectionNetworkFetcher$HttpUrlConnectionNetworkFetchState;J)J
+    //   39: pop2
+    //   40: aload_3
+    //   41: ifnull +40 -> 81
+    //   44: aload 6
+    //   46: astore 4
+    //   48: aload_3
+    //   49: astore 5
+    //   51: aload_3
+    //   52: invokevirtual 229	java/net/HttpURLConnection:getInputStream	()Ljava/io/InputStream;
+    //   55: astore_1
+    //   56: aload_2
+    //   57: aload_1
+    //   58: iconst_m1
+    //   59: invokeinterface 235 3 0
+    //   64: goto +19 -> 83
+    //   67: astore_2
+    //   68: aload_1
+    //   69: astore 4
+    //   71: aload_2
+    //   72: astore_1
+    //   73: goto +87 -> 160
+    //   76: astore 6
+    //   78: goto +44 -> 122
+    //   81: aconst_null
+    //   82: astore_1
+    //   83: aload_1
+    //   84: ifnull +10 -> 94
+    //   87: aload_1
+    //   88: invokevirtual 240	java/io/InputStream:close	()V
+    //   91: goto +3 -> 94
+    //   94: aload_3
+    //   95: ifnull +60 -> 155
+    //   98: goto +53 -> 151
+    //   101: astore 6
+    //   103: aload 7
+    //   105: astore_1
+    //   106: goto +16 -> 122
+    //   109: astore_1
+    //   110: aconst_null
+    //   111: astore_3
+    //   112: goto +48 -> 160
+    //   115: astore 6
+    //   117: aconst_null
+    //   118: astore_3
+    //   119: aload 7
+    //   121: astore_1
+    //   122: aload_1
+    //   123: astore 4
+    //   125: aload_3
+    //   126: astore 5
+    //   128: aload_2
+    //   129: aload 6
+    //   131: invokeinterface 244 2 0
+    //   136: aload_1
+    //   137: ifnull +10 -> 147
+    //   140: aload_1
+    //   141: invokevirtual 240	java/io/InputStream:close	()V
+    //   144: goto +3 -> 147
+    //   147: aload_3
+    //   148: ifnull +7 -> 155
+    //   151: aload_3
+    //   152: invokevirtual 103	java/net/HttpURLConnection:disconnect	()V
+    //   155: return
+    //   156: astore_1
+    //   157: aload 5
+    //   159: astore_3
+    //   160: aload 4
+    //   162: ifnull +11 -> 173
+    //   165: aload 4
+    //   167: invokevirtual 240	java/io/InputStream:close	()V
+    //   170: goto +3 -> 173
+    //   173: aload_3
+    //   174: ifnull +7 -> 181
+    //   177: aload_3
+    //   178: invokevirtual 103	java/net/HttpURLConnection:disconnect	()V
+    //   181: aload_1
+    //   182: athrow
+    //   183: astore_1
+    //   184: goto -90 -> 94
+    //   187: astore_1
+    //   188: goto -41 -> 147
+    //   191: astore_2
+    //   192: goto -19 -> 173
+    // Local variable table:
+    //   start	length	slot	name	signature
+    //   0	195	0	this	HttpUrlConnectionNetworkFetcher
+    //   0	195	1	paramHttpUrlConnectionNetworkFetchState	HttpUrlConnectionNetworkFetchState
+    //   0	195	2	paramCallback	NetworkFetcher.Callback
+    //   18	160	3	localObject1	Object
+    //   4	162	4	localObject2	Object
+    //   24	134	5	localObject3	Object
+    //   1	44	6	localObject4	Object
+    //   76	1	6	localIOException1	IOException
+    //   101	1	6	localIOException2	IOException
+    //   115	15	6	localIOException3	IOException
+    //   7	113	7	localObject5	Object
+    // Exception table:
+    //   from	to	target	type
+    //   56	64	67	finally
+    //   56	64	76	java/io/IOException
+    //   26	40	101	java/io/IOException
+    //   51	56	101	java/io/IOException
+    //   9	19	109	finally
+    //   9	19	115	java/io/IOException
+    //   26	40	156	finally
+    //   51	56	156	finally
+    //   128	136	156	finally
+    //   87	91	183	java/io/IOException
+    //   140	144	187	java/io/IOException
+    //   165	170	191	java/io/IOException
+  }
+  
+  public Map<String, String> getExtraMap(HttpUrlConnectionNetworkFetchState paramHttpUrlConnectionNetworkFetchState, int paramInt)
+  {
+    HashMap localHashMap = new HashMap(4);
+    localHashMap.put("queue_time", Long.toString(responseTime - submitTime));
+    localHashMap.put("fetch_time", Long.toString(fetchCompleteTime - responseTime));
+    localHashMap.put("total_time", Long.toString(fetchCompleteTime - submitTime));
+    localHashMap.put("image_size", Integer.toString(paramInt));
+    return localHashMap;
+  }
+  
+  public void onFetchCompletion(HttpUrlConnectionNetworkFetchState paramHttpUrlConnectionNetworkFetchState, int paramInt)
+  {
+    HttpUrlConnectionNetworkFetchState.access$202(paramHttpUrlConnectionNetworkFetchState, mMonotonicClock.now());
+  }
+  
+  public static class HttpUrlConnectionNetworkFetchState
+    extends FetchState
+  {
+    private long fetchCompleteTime;
+    private long responseTime;
+    private long submitTime;
+    
+    public HttpUrlConnectionNetworkFetchState(Consumer<EncodedImage> paramConsumer, ProducerContext paramProducerContext)
+    {
+      super(paramProducerContext);
+    }
+  }
+}

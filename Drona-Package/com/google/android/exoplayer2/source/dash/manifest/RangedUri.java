@@ -1,0 +1,100 @@
+package com.google.android.exoplayer2.source.dash.manifest;
+
+import android.net.Uri;
+import com.google.android.exoplayer2.util.UriUtil;
+
+public final class RangedUri
+{
+  private int hashCode;
+  public final long length;
+  private final String referenceUri;
+  public final long start;
+  
+  public RangedUri(String paramString, long paramLong1, long paramLong2)
+  {
+    String str = paramString;
+    if (paramString == null) {
+      str = "";
+    }
+    referenceUri = str;
+    start = paramLong1;
+    length = paramLong2;
+  }
+  
+  public RangedUri attemptMerge(RangedUri paramRangedUri, String paramString)
+  {
+    String str = resolveUriString(paramString);
+    if (paramRangedUri != null)
+    {
+      if (!str.equals(paramRangedUri.resolveUriString(paramString))) {
+        return null;
+      }
+      long l2 = length;
+      long l1 = -1L;
+      if ((l2 != -1L) && (start + length == start))
+      {
+        l2 = start;
+        if (length != -1L) {
+          l1 = length + length;
+        }
+        return new RangedUri(str, l2, l1);
+      }
+      if ((length != -1L) && (start + length == start))
+      {
+        l2 = start;
+        if (length != -1L) {
+          l1 = length + length;
+        }
+        return new RangedUri(str, l2, l1);
+      }
+    }
+    return null;
+  }
+  
+  public boolean equals(Object paramObject)
+  {
+    if (this == paramObject) {
+      return true;
+    }
+    if (paramObject != null)
+    {
+      if (getClass() != paramObject.getClass()) {
+        return false;
+      }
+      paramObject = (RangedUri)paramObject;
+      return (start == start) && (length == length) && (referenceUri.equals(referenceUri));
+    }
+    return false;
+  }
+  
+  public int hashCode()
+  {
+    if (hashCode == 0) {
+      hashCode = (((527 + (int)start) * 31 + (int)length) * 31 + referenceUri.hashCode());
+    }
+    return hashCode;
+  }
+  
+  public Uri resolveUri(String paramString)
+  {
+    return UriUtil.resolveToUri(paramString, referenceUri);
+  }
+  
+  public String resolveUriString(String paramString)
+  {
+    return UriUtil.resolve(paramString, referenceUri);
+  }
+  
+  public String toString()
+  {
+    StringBuilder localStringBuilder = new StringBuilder();
+    localStringBuilder.append("RangedUri(referenceUri=");
+    localStringBuilder.append(referenceUri);
+    localStringBuilder.append(", start=");
+    localStringBuilder.append(start);
+    localStringBuilder.append(", length=");
+    localStringBuilder.append(length);
+    localStringBuilder.append(")");
+    return localStringBuilder.toString();
+  }
+}

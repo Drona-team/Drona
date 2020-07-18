@@ -1,0 +1,129 @@
+package com.google.android.exoplayer2;
+
+import com.google.android.exoplayer2.util.Util;
+
+public abstract class BasePlayer
+  implements Player
+{
+  protected final Timeline.Window window = new Timeline.Window();
+  
+  public BasePlayer() {}
+  
+  private int getRepeatModeForNavigation()
+  {
+    int i = getRepeatMode();
+    if (i == 1) {
+      return 0;
+    }
+    return i;
+  }
+  
+  public final int getBufferedPercentage()
+  {
+    long l1 = getBufferedPosition();
+    long l2 = getDuration();
+    if ((l1 != -9223372036854775807L) && (l2 != -9223372036854775807L))
+    {
+      if (l2 == 0L) {
+        return 100;
+      }
+      return Util.constrainValue((int)(l1 * 100L / l2), 0, 100);
+    }
+    return 0;
+  }
+  
+  public final long getContentDuration()
+  {
+    Timeline localTimeline = getCurrentTimeline();
+    if (localTimeline.isEmpty()) {
+      return -9223372036854775807L;
+    }
+    return localTimeline.getWindow(getCurrentWindowIndex(), window).getDurationMs();
+  }
+  
+  public final Object getCurrentTag()
+  {
+    int i = getCurrentWindowIndex();
+    Timeline localTimeline = getCurrentTimeline();
+    if (i >= localTimeline.getWindowCount()) {
+      return null;
+    }
+    return getWindowwindow, true).head;
+  }
+  
+  public final int getNextWindowIndex()
+  {
+    Timeline localTimeline = getCurrentTimeline();
+    if (localTimeline.isEmpty()) {
+      return -1;
+    }
+    return localTimeline.getNextWindowIndex(getCurrentWindowIndex(), getRepeatModeForNavigation(), getShuffleModeEnabled());
+  }
+  
+  public final int getPreviousWindowIndex()
+  {
+    Timeline localTimeline = getCurrentTimeline();
+    if (localTimeline.isEmpty()) {
+      return -1;
+    }
+    return localTimeline.getPreviousWindowIndex(getCurrentWindowIndex(), getRepeatModeForNavigation(), getShuffleModeEnabled());
+  }
+  
+  public final boolean hasNext()
+  {
+    return getNextWindowIndex() != -1;
+  }
+  
+  public final boolean hasPrevious()
+  {
+    return getPreviousWindowIndex() != -1;
+  }
+  
+  public final boolean isCurrentWindowDynamic()
+  {
+    Timeline localTimeline = getCurrentTimeline();
+    return (!localTimeline.isEmpty()) && (getWindowgetCurrentWindowIndexwindow).isDynamic);
+  }
+  
+  public final boolean isCurrentWindowSeekable()
+  {
+    Timeline localTimeline = getCurrentTimeline();
+    return (!localTimeline.isEmpty()) && (getWindowgetCurrentWindowIndexwindow).isSeekable);
+  }
+  
+  public final void next()
+  {
+    int i = getNextWindowIndex();
+    if (i != -1) {
+      seekToDefaultPosition(i);
+    }
+  }
+  
+  public final void previous()
+  {
+    int i = getPreviousWindowIndex();
+    if (i != -1) {
+      seekToDefaultPosition(i);
+    }
+  }
+  
+  public final void seekTo(long paramLong)
+  {
+    seekTo(getCurrentWindowIndex(), paramLong);
+  }
+  
+  public final void seekToDefaultPosition()
+  {
+    seekToDefaultPosition(getCurrentWindowIndex());
+  }
+  
+  public final void seekToDefaultPosition(int paramInt)
+  {
+    seekTo(paramInt, -9223372036854775807L);
+  }
+  
+  public final void stop()
+  {
+    stop(false);
+  }
+}

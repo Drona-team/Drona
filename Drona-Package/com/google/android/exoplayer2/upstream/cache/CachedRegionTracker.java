@@ -1,0 +1,205 @@
+package com.google.android.exoplayer2.upstream.cache;
+
+import com.google.android.exoplayer2.extractor.ChunkIndex;
+import com.google.android.exoplayer2.util.Log;
+import java.util.Arrays;
+import java.util.Iterator;
+import java.util.NavigableSet;
+import java.util.TreeSet;
+
+public final class CachedRegionTracker
+  implements Cache.Listener
+{
+  public static final int CACHED_TO_END = -2;
+  public static final int NOT_CACHED = -1;
+  private static final String PAGE_KEY = "CachedRegionTracker";
+  private final Cache cache;
+  private final String cacheKey;
+  private final ChunkIndex chunkIndex;
+  private final Region lookupRegion;
+  private final TreeSet<Region> regions;
+  
+  public CachedRegionTracker(Cache paramCache, String paramString, ChunkIndex paramChunkIndex)
+  {
+    cache = paramCache;
+    cacheKey = paramString;
+    chunkIndex = paramChunkIndex;
+    regions = new TreeSet();
+    lookupRegion = new Region(0L, 0L);
+    try
+    {
+      paramCache = paramCache.addListener(paramString, this).descendingIterator();
+      while (paramCache.hasNext()) {
+        mergeSpan((CacheSpan)paramCache.next());
+      }
+      return;
+    }
+    catch (Throwable paramCache)
+    {
+      throw paramCache;
+    }
+  }
+  
+  private void mergeSpan(CacheSpan paramCacheSpan)
+  {
+    Object localObject = new Region(position, position + length);
+    paramCacheSpan = (Region)regions.floor(localObject);
+    Region localRegion = (Region)regions.ceiling(localObject);
+    boolean bool = regionsConnect(paramCacheSpan, (Region)localObject);
+    if (regionsConnect((Region)localObject, localRegion))
+    {
+      if (bool)
+      {
+        endOffset = endOffset;
+        endOffsetIndex = endOffsetIndex;
+      }
+      else
+      {
+        endOffset = endOffset;
+        endOffsetIndex = endOffsetIndex;
+        regions.add(localObject);
+      }
+      regions.remove(localRegion);
+      return;
+    }
+    if (bool)
+    {
+      endOffset = endOffset;
+      for (i = endOffsetIndex; i < chunkIndex.length - 1; i = j)
+      {
+        localObject = chunkIndex.offsets;
+        j = i + 1;
+        if (localObject[j] > endOffset) {
+          break;
+        }
+      }
+      endOffsetIndex = i;
+      return;
+    }
+    int j = Arrays.binarySearch(chunkIndex.offsets, endOffset);
+    int i = j;
+    if (j < 0) {
+      i = -j - 2;
+    }
+    endOffsetIndex = i;
+    regions.add(localObject);
+  }
+  
+  private boolean regionsConnect(Region paramRegion1, Region paramRegion2)
+  {
+    return (paramRegion1 != null) && (paramRegion2 != null) && (endOffset == startOffset);
+  }
+  
+  public int getRegionEndTimeMs(long paramLong)
+  {
+    try
+    {
+      lookupRegion.startOffset = paramLong;
+      Region localRegion = (Region)regions.floor(lookupRegion);
+      if ((localRegion != null) && (paramLong <= endOffset) && (endOffsetIndex != -1))
+      {
+        int i = endOffsetIndex;
+        if (i == chunkIndex.length - 1)
+        {
+          paramLong = endOffset;
+          long l = chunkIndex.offsets[i];
+          int j = chunkIndex.sizes[i];
+          if (paramLong == l + j) {
+            return -2;
+          }
+        }
+        paramLong = chunkIndex.durationsUs[i] * (endOffset - chunkIndex.offsets[i]) / chunkIndex.sizes[i];
+        paramLong = (chunkIndex.timesUs[i] + paramLong) / 1000L;
+        i = (int)paramLong;
+        return i;
+      }
+      return -1;
+    }
+    catch (Throwable localThrowable)
+    {
+      throw localThrowable;
+    }
+  }
+  
+  public void onSpanAdded(Cache paramCache, CacheSpan paramCacheSpan)
+  {
+    try
+    {
+      mergeSpan(paramCacheSpan);
+      return;
+    }
+    catch (Throwable paramCache)
+    {
+      throw paramCache;
+    }
+  }
+  
+  public void onSpanRemoved(Cache paramCache, CacheSpan paramCacheSpan)
+  {
+    try
+    {
+      paramCacheSpan = new Region(position, position + length);
+      paramCache = (Region)regions.floor(paramCacheSpan);
+      if (paramCache == null)
+      {
+        Log.e("CachedRegionTracker", "Removed a span we were not aware of");
+        return;
+      }
+      regions.remove(paramCache);
+      if (startOffset < startOffset)
+      {
+        Region localRegion = new Region(startOffset, startOffset);
+        int j = Arrays.binarySearch(chunkIndex.offsets, endOffset);
+        int i = j;
+        if (j < 0) {
+          i = -j - 2;
+        }
+        endOffsetIndex = i;
+        regions.add(localRegion);
+      }
+      if (endOffset > endOffset)
+      {
+        paramCacheSpan = new Region(endOffset + 1L, endOffset);
+        endOffsetIndex = endOffsetIndex;
+        regions.add(paramCacheSpan);
+      }
+      return;
+    }
+    catch (Throwable paramCache)
+    {
+      throw paramCache;
+    }
+  }
+  
+  public void onSpanTouched(Cache paramCache, CacheSpan paramCacheSpan1, CacheSpan paramCacheSpan2) {}
+  
+  public void release()
+  {
+    cache.removeListener(cacheKey, this);
+  }
+  
+  private static class Region
+    implements Comparable<Region>
+  {
+    public long endOffset;
+    public int endOffsetIndex;
+    public long startOffset;
+    
+    public Region(long paramLong1, long paramLong2)
+    {
+      startOffset = paramLong1;
+      endOffset = paramLong2;
+    }
+    
+    public int compareTo(Region paramRegion)
+    {
+      if (startOffset < startOffset) {
+        return -1;
+      }
+      if (startOffset == startOffset) {
+        return 0;
+      }
+      return 1;
+    }
+  }
+}

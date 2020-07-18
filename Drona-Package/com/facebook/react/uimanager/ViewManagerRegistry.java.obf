@@ -1,0 +1,64 @@
+package com.facebook.react.uimanager;
+
+import androidx.annotation.Nullable;
+import com.facebook.react.common.MapBuilder;
+import java.util.HashMap;
+import java.util.Iterator;
+import java.util.List;
+import java.util.Map;
+
+public final class ViewManagerRegistry
+{
+  @Nullable
+  private final UIManagerModule.ViewManagerResolver mViewManagerResolver;
+  private final Map<String, ViewManager> mViewManagers;
+  
+  public ViewManagerRegistry(UIManagerModule.ViewManagerResolver paramViewManagerResolver)
+  {
+    mViewManagers = MapBuilder.newHashMap();
+    mViewManagerResolver = paramViewManagerResolver;
+  }
+  
+  public ViewManagerRegistry(List<ViewManager> paramList)
+  {
+    HashMap localHashMap = MapBuilder.newHashMap();
+    paramList = paramList.iterator();
+    while (paramList.hasNext())
+    {
+      ViewManager localViewManager = (ViewManager)paramList.next();
+      localHashMap.put(localViewManager.getName(), localViewManager);
+    }
+    mViewManagers = localHashMap;
+    mViewManagerResolver = null;
+  }
+  
+  public ViewManagerRegistry(Map<String, ViewManager> paramMap)
+  {
+    if (paramMap == null) {
+      paramMap = MapBuilder.newHashMap();
+    }
+    mViewManagers = paramMap;
+    mViewManagerResolver = null;
+  }
+  
+  public ViewManager get(String paramString)
+  {
+    Object localObject = (ViewManager)mViewManagers.get(paramString);
+    if (localObject != null) {
+      return localObject;
+    }
+    if (mViewManagerResolver != null)
+    {
+      localObject = mViewManagerResolver.getViewManager(paramString);
+      if (localObject != null)
+      {
+        mViewManagers.put(paramString, localObject);
+        return localObject;
+      }
+    }
+    localObject = new StringBuilder();
+    ((StringBuilder)localObject).append("No ViewManager defined for class ");
+    ((StringBuilder)localObject).append(paramString);
+    throw new IllegalViewOperationException(((StringBuilder)localObject).toString());
+  }
+}

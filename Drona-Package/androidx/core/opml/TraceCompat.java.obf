@@ -1,0 +1,24 @@
+package androidx.core.os;
+
+import android.os.Build.VERSION;
+import android.os.Trace;
+import androidx.annotation.NonNull;
+
+public final class TraceCompat
+{
+  private TraceCompat() {}
+  
+  public static void beginSection(@NonNull String paramString)
+  {
+    if (Build.VERSION.SDK_INT >= 18) {
+      Trace.beginSection(paramString);
+    }
+  }
+  
+  public static void endSection()
+  {
+    if (Build.VERSION.SDK_INT >= 18) {
+      Trace.endSection();
+    }
+  }
+}

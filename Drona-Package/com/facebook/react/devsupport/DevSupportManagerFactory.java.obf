@@ -1,0 +1,41 @@
+package com.facebook.react.devsupport;
+
+import android.content.Context;
+import androidx.annotation.Nullable;
+import com.facebook.react.devsupport.interfaces.DevBundleDownloadListener;
+import com.facebook.react.devsupport.interfaces.DevSupportManager;
+import com.facebook.react.packagerconnection.RequestHandler;
+import java.lang.reflect.Constructor;
+import java.util.Map;
+
+public class DevSupportManagerFactory
+{
+  private static final String DEVSUPPORT_IMPL_CLASS = "DevSupportManagerImpl";
+  private static final String DEVSUPPORT_IMPL_PACKAGE = "com.facebook.react.devsupport";
+  
+  public DevSupportManagerFactory() {}
+  
+  public static DevSupportManager create(Context paramContext, ReactInstanceManagerDevHelper paramReactInstanceManagerDevHelper, @Nullable String paramString, boolean paramBoolean, int paramInt)
+  {
+    return create(paramContext, paramReactInstanceManagerDevHelper, paramString, paramBoolean, null, null, paramInt, null);
+  }
+  
+  public static DevSupportManager create(Context paramContext, ReactInstanceManagerDevHelper paramReactInstanceManagerDevHelper, @Nullable String paramString, boolean paramBoolean, @Nullable RedBoxHandler paramRedBoxHandler, @Nullable DevBundleDownloadListener paramDevBundleDownloadListener, int paramInt, @Nullable Map<String, RequestHandler> paramMap)
+  {
+    if (!paramBoolean) {
+      return new DisabledDevSupportManager();
+    }
+    try
+    {
+      StringBuilder localStringBuilder = new StringBuilder("com.facebook.react.devsupport");
+      localStringBuilder.append(".");
+      localStringBuilder.append("DevSupportManagerImpl");
+      paramContext = (DevSupportManager)Class.forName(localStringBuilder.toString()).getConstructor(new Class[] { Context.class, ReactInstanceManagerDevHelper.class, String.class, Boolean.TYPE, RedBoxHandler.class, DevBundleDownloadListener.class, Integer.TYPE, Map.class }).newInstance(new Object[] { paramContext, paramReactInstanceManagerDevHelper, paramString, Boolean.valueOf(true), paramRedBoxHandler, paramDevBundleDownloadListener, Integer.valueOf(paramInt), paramMap });
+      return paramContext;
+    }
+    catch (Exception paramContext)
+    {
+      throw new RuntimeException("Requested enabled DevSupportManager, but DevSupportManagerImpl class was not found or could not be created", paramContext);
+    }
+  }
+}

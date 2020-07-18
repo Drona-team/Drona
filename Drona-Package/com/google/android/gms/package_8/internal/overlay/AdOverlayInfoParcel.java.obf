@@ -1,0 +1,233 @@
+package com.google.android.gms.ads.internal.overlay;
+
+import android.content.Intent;
+import android.os.Bundle;
+import android.os.IBinder;
+import android.os.Parcel;
+import android.os.Parcelable.Creator;
+import com.google.android.gms.ads.internal.zzh;
+import com.google.android.gms.common.internal.ReflectedParcelable;
+import com.google.android.gms.common.internal.safeparcel.AbstractSafeParcelable;
+import com.google.android.gms.common.internal.safeparcel.SafeParcelWriter;
+import com.google.android.gms.common.internal.safeparcel.SafeParcelable.Class;
+import com.google.android.gms.common.internal.safeparcel.SafeParcelable.Constructor;
+import com.google.android.gms.common.internal.safeparcel.SafeParcelable.Field;
+import com.google.android.gms.common.internal.safeparcel.SafeParcelable.Param;
+import com.google.android.gms.common.internal.safeparcel.SafeParcelable.Reserved;
+import com.google.android.gms.dynamic.IObjectWrapper;
+import com.google.android.gms.dynamic.IObjectWrapper.Stub;
+import com.google.android.gms.dynamic.ObjectWrapper;
+import com.google.android.gms.internal.ads.zzagv;
+import com.google.android.gms.internal.ads.zzagx;
+import com.google.android.gms.internal.ads.zzard;
+import com.google.android.gms.internal.ads.zzbai;
+import com.google.android.gms.internal.ads.zzbgz;
+import com.google.android.gms.internal.ads.zzxr;
+
+@zzard
+@SafeParcelable.Class(creator="AdOverlayInfoCreator")
+@SafeParcelable.Reserved({1})
+public final class AdOverlayInfoParcel
+  extends AbstractSafeParcelable
+  implements ReflectedParcelable
+{
+  public static final Parcelable.Creator<AdOverlayInfoParcel> CREATOR = new zzn();
+  @SafeParcelable.Field(id=11)
+  public final int orientation;
+  @SafeParcelable.Field(id=13)
+  public final String url;
+  @SafeParcelable.Field(id=14)
+  public final zzbai zzbtc;
+  @SafeParcelable.Field(getter="getAdClickListenerAsBinder", id=3, type="android.os.IBinder")
+  public final zzxr zzcgi;
+  @SafeParcelable.Field(getter="getAdMetadataGmsgListenerAsBinder", id=18, type="android.os.IBinder")
+  public final zzagv zzczo;
+  @SafeParcelable.Field(getter="getAppEventGmsgListenerAsBinder", id=6, type="android.os.IBinder")
+  public final zzagx zzczp;
+  @SafeParcelable.Field(getter="getAdWebViewAsBinder", id=5, type="android.os.IBinder")
+  public final zzbgz zzdbs;
+  @SafeParcelable.Field(id=2)
+  public final zzc zzdkl;
+  @SafeParcelable.Field(getter="getAdOverlayListenerAsBinder", id=4, type="android.os.IBinder")
+  public final zzo zzdkm;
+  @SafeParcelable.Field(id=7)
+  public final String zzdkn;
+  @SafeParcelable.Field(id=8)
+  public final boolean zzdko;
+  @SafeParcelable.Field(id=9)
+  public final String zzdkp;
+  @SafeParcelable.Field(getter="getLeaveApplicationListenerAsBinder", id=10, type="android.os.IBinder")
+  public final zzu zzdkq;
+  @SafeParcelable.Field(id=12)
+  public final int zzdkr;
+  @SafeParcelable.Field(id=16)
+  public final String zzdks;
+  @SafeParcelable.Field(id=17)
+  public final zzh zzdkt;
+  
+  @SafeParcelable.Constructor
+  AdOverlayInfoParcel(@SafeParcelable.Param(id=2) zzc paramZzc, @SafeParcelable.Param(id=3) IBinder paramIBinder1, @SafeParcelable.Param(id=4) IBinder paramIBinder2, @SafeParcelable.Param(id=5) IBinder paramIBinder3, @SafeParcelable.Param(id=6) IBinder paramIBinder4, @SafeParcelable.Param(id=7) String paramString1, @SafeParcelable.Param(id=8) boolean paramBoolean, @SafeParcelable.Param(id=9) String paramString2, @SafeParcelable.Param(id=10) IBinder paramIBinder5, @SafeParcelable.Param(id=11) int paramInt1, @SafeParcelable.Param(id=12) int paramInt2, @SafeParcelable.Param(id=13) String paramString3, @SafeParcelable.Param(id=14) zzbai paramZzbai, @SafeParcelable.Param(id=16) String paramString4, @SafeParcelable.Param(id=17) zzh paramZzh, @SafeParcelable.Param(id=18) IBinder paramIBinder6)
+  {
+    zzdkl = paramZzc;
+    zzcgi = ((zzxr)ObjectWrapper.unwrap(IObjectWrapper.Stub.asInterface(paramIBinder1)));
+    zzdkm = ((zzo)ObjectWrapper.unwrap(IObjectWrapper.Stub.asInterface(paramIBinder2)));
+    zzdbs = ((zzbgz)ObjectWrapper.unwrap(IObjectWrapper.Stub.asInterface(paramIBinder3)));
+    zzczo = ((zzagv)ObjectWrapper.unwrap(IObjectWrapper.Stub.asInterface(paramIBinder6)));
+    zzczp = ((zzagx)ObjectWrapper.unwrap(IObjectWrapper.Stub.asInterface(paramIBinder4)));
+    zzdkn = paramString1;
+    zzdko = paramBoolean;
+    zzdkp = paramString2;
+    zzdkq = ((zzu)ObjectWrapper.unwrap(IObjectWrapper.Stub.asInterface(paramIBinder5)));
+    orientation = paramInt1;
+    zzdkr = paramInt2;
+    url = paramString3;
+    zzbtc = paramZzbai;
+    zzdks = paramString4;
+    zzdkt = paramZzh;
+  }
+  
+  public AdOverlayInfoParcel(zzc paramZzc, zzxr paramZzxr, zzo paramZzo, zzu paramZzu, zzbai paramZzbai)
+  {
+    zzdkl = paramZzc;
+    zzcgi = paramZzxr;
+    zzdkm = paramZzo;
+    zzdbs = null;
+    zzczo = null;
+    zzczp = null;
+    zzdkn = null;
+    zzdko = false;
+    zzdkp = null;
+    zzdkq = paramZzu;
+    orientation = -1;
+    zzdkr = 4;
+    url = null;
+    zzbtc = paramZzbai;
+    zzdks = null;
+    zzdkt = null;
+  }
+  
+  public AdOverlayInfoParcel(zzxr paramZzxr, zzo paramZzo, zzu paramZzu, zzbgz paramZzbgz, int paramInt, zzbai paramZzbai, String paramString, zzh paramZzh)
+  {
+    zzdkl = null;
+    zzcgi = null;
+    zzdkm = paramZzo;
+    zzdbs = paramZzbgz;
+    zzczo = null;
+    zzczp = null;
+    zzdkn = null;
+    zzdko = false;
+    zzdkp = null;
+    zzdkq = null;
+    orientation = paramInt;
+    zzdkr = 1;
+    url = null;
+    zzbtc = paramZzbai;
+    zzdks = paramString;
+    zzdkt = paramZzh;
+  }
+  
+  public AdOverlayInfoParcel(zzxr paramZzxr, zzo paramZzo, zzu paramZzu, zzbgz paramZzbgz, boolean paramBoolean, int paramInt, zzbai paramZzbai)
+  {
+    zzdkl = null;
+    zzcgi = paramZzxr;
+    zzdkm = paramZzo;
+    zzdbs = paramZzbgz;
+    zzczo = null;
+    zzczp = null;
+    zzdkn = null;
+    zzdko = paramBoolean;
+    zzdkp = null;
+    zzdkq = paramZzu;
+    orientation = paramInt;
+    zzdkr = 2;
+    url = null;
+    zzbtc = paramZzbai;
+    zzdks = null;
+    zzdkt = null;
+  }
+  
+  public AdOverlayInfoParcel(zzxr paramZzxr, zzo paramZzo, zzagv paramZzagv, zzagx paramZzagx, zzu paramZzu, zzbgz paramZzbgz, boolean paramBoolean, int paramInt, String paramString, zzbai paramZzbai)
+  {
+    zzdkl = null;
+    zzcgi = paramZzxr;
+    zzdkm = paramZzo;
+    zzdbs = paramZzbgz;
+    zzczo = paramZzagv;
+    zzczp = paramZzagx;
+    zzdkn = null;
+    zzdko = paramBoolean;
+    zzdkp = null;
+    zzdkq = paramZzu;
+    orientation = paramInt;
+    zzdkr = 3;
+    url = paramString;
+    zzbtc = paramZzbai;
+    zzdks = null;
+    zzdkt = null;
+  }
+  
+  public AdOverlayInfoParcel(zzxr paramZzxr, zzo paramZzo, zzagv paramZzagv, zzagx paramZzagx, zzu paramZzu, zzbgz paramZzbgz, boolean paramBoolean, int paramInt, String paramString1, String paramString2, zzbai paramZzbai)
+  {
+    zzdkl = null;
+    zzcgi = paramZzxr;
+    zzdkm = paramZzo;
+    zzdbs = paramZzbgz;
+    zzczo = paramZzagv;
+    zzczp = paramZzagx;
+    zzdkn = paramString2;
+    zzdko = paramBoolean;
+    zzdkp = paramString1;
+    zzdkq = paramZzu;
+    orientation = paramInt;
+    zzdkr = 3;
+    url = null;
+    zzbtc = paramZzbai;
+    zzdks = null;
+    zzdkt = null;
+  }
+  
+  public static void zza(Intent paramIntent, AdOverlayInfoParcel paramAdOverlayInfoParcel)
+  {
+    Bundle localBundle = new Bundle(1);
+    localBundle.putParcelable("com.google.android.gms.ads.inernal.overlay.AdOverlayInfo", paramAdOverlayInfoParcel);
+    paramIntent.putExtra("com.google.android.gms.ads.inernal.overlay.AdOverlayInfo", localBundle);
+  }
+  
+  public static AdOverlayInfoParcel zzc(Intent paramIntent)
+  {
+    try
+    {
+      paramIntent = paramIntent.getBundleExtra("com.google.android.gms.ads.inernal.overlay.AdOverlayInfo");
+      paramIntent.setClassLoader(AdOverlayInfoParcel.class.getClassLoader());
+      paramIntent = (AdOverlayInfoParcel)paramIntent.getParcelable("com.google.android.gms.ads.inernal.overlay.AdOverlayInfo");
+      return paramIntent;
+    }
+    catch (Exception paramIntent)
+    {
+      for (;;) {}
+    }
+    return null;
+  }
+  
+  public final void writeToParcel(Parcel paramParcel, int paramInt)
+  {
+    int i = SafeParcelWriter.beginObjectHeader(paramParcel);
+    SafeParcelWriter.writeParcelable(paramParcel, 2, zzdkl, paramInt, false);
+    SafeParcelWriter.writeIBinder(paramParcel, 3, ObjectWrapper.wrap(zzcgi).asBinder(), false);
+    SafeParcelWriter.writeIBinder(paramParcel, 4, ObjectWrapper.wrap(zzdkm).asBinder(), false);
+    SafeParcelWriter.writeIBinder(paramParcel, 5, ObjectWrapper.wrap(zzdbs).asBinder(), false);
+    SafeParcelWriter.writeIBinder(paramParcel, 6, ObjectWrapper.wrap(zzczp).asBinder(), false);
+    SafeParcelWriter.writeString(paramParcel, 7, zzdkn, false);
+    SafeParcelWriter.writeBoolean(paramParcel, 8, zzdko);
+    SafeParcelWriter.writeString(paramParcel, 9, zzdkp, false);
+    SafeParcelWriter.writeIBinder(paramParcel, 10, ObjectWrapper.wrap(zzdkq).asBinder(), false);
+    SafeParcelWriter.writeInt(paramParcel, 11, orientation);
+    SafeParcelWriter.writeInt(paramParcel, 12, zzdkr);
+    SafeParcelWriter.writeString(paramParcel, 13, url, false);
+    SafeParcelWriter.writeParcelable(paramParcel, 14, zzbtc, paramInt, false);
+    SafeParcelWriter.writeString(paramParcel, 16, zzdks, false);
+    SafeParcelWriter.writeParcelable(paramParcel, 17, zzdkt, paramInt, false);
+    SafeParcelWriter.writeIBinder(paramParcel, 18, ObjectWrapper.wrap(zzczo).asBinder(), false);
+    SafeParcelWriter.finishObjectHeader(paramParcel, i);
+  }
+}

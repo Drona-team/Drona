@@ -1,0 +1,270 @@
+package androidx.room.util;
+
+import android.database.Cursor;
+import androidx.annotation.RestrictTo;
+import androidx.sqlite.wiki.SupportSQLiteDatabase;
+import java.util.ArrayDeque;
+import java.util.ArrayList;
+import java.util.HashSet;
+import java.util.Iterator;
+import java.util.List;
+import java.util.Set;
+
+@RestrictTo({androidx.annotation.RestrictTo.Scope.LIBRARY_GROUP_PREFIX})
+public class FtsTableInfo
+{
+  private static final String[] FTS_OPTIONS = { "tokenize=", "compress=", "content=", "languageid=", "matchinfo=", "notindexed=", "order=", "prefix=", "uncompress=" };
+  public final Set<String> columns;
+  public final String name;
+  public final Set<String> options;
+  
+  public FtsTableInfo(String paramString1, Set paramSet, String paramString2)
+  {
+    name = paramString1;
+    columns = paramSet;
+    options = parseOptions(paramString2);
+  }
+  
+  public FtsTableInfo(String paramString, Set paramSet1, Set paramSet2)
+  {
+    name = paramString;
+    columns = paramSet1;
+    options = paramSet2;
+  }
+  
+  static Set parseOptions(String paramString)
+  {
+    if (paramString.isEmpty()) {
+      return new HashSet();
+    }
+    paramString = paramString.substring(paramString.indexOf('(') + 1, paramString.lastIndexOf(')'));
+    Object localObject1 = new ArrayList();
+    Object localObject2 = new ArrayDeque();
+    int i = 0;
+    int k;
+    for (int j = -1; i < paramString.length(); j = k)
+    {
+      char c = paramString.charAt(i);
+      if ((c != '"') && (c != '\'')) {
+        if (c != ',')
+        {
+          if (c != '[')
+          {
+            if (c != ']')
+            {
+              if (c != '`')
+              {
+                k = j;
+                break label266;
+              }
+            }
+            else
+            {
+              k = j;
+              if (((ArrayDeque)localObject2).isEmpty()) {
+                break label266;
+              }
+              k = j;
+              if (((Character)((ArrayDeque)localObject2).peek()).charValue() != '[') {
+                break label266;
+              }
+              ((ArrayDeque)localObject2).pop();
+              k = j;
+              break label266;
+            }
+          }
+          else
+          {
+            k = j;
+            if (!((ArrayDeque)localObject2).isEmpty()) {
+              break label266;
+            }
+            ((ArrayDeque)localObject2).push(Character.valueOf(c));
+            k = j;
+            break label266;
+          }
+        }
+        else
+        {
+          k = j;
+          if (!((ArrayDeque)localObject2).isEmpty()) {
+            break label266;
+          }
+          ((List)localObject1).add(paramString.substring(j + 1, i).trim());
+          k = i;
+          break label266;
+        }
+      }
+      if (((ArrayDeque)localObject2).isEmpty())
+      {
+        ((ArrayDeque)localObject2).push(Character.valueOf(c));
+        k = j;
+      }
+      else
+      {
+        k = j;
+        if (((Character)((ArrayDeque)localObject2).peek()).charValue() == c)
+        {
+          ((ArrayDeque)localObject2).pop();
+          k = j;
+        }
+      }
+      label266:
+      i += 1;
+    }
+    ((List)localObject1).add(paramString.substring(j + 1).trim());
+    paramString = new HashSet();
+    localObject1 = ((List)localObject1).iterator();
+    while (((Iterator)localObject1).hasNext())
+    {
+      localObject2 = (String)((Iterator)localObject1).next();
+      String[] arrayOfString = FTS_OPTIONS;
+      j = arrayOfString.length;
+      i = 0;
+      while (i < j)
+      {
+        if (((String)localObject2).startsWith(arrayOfString[i])) {
+          paramString.add(localObject2);
+        }
+        i += 1;
+      }
+    }
+    return paramString;
+  }
+  
+  public static FtsTableInfo read(SupportSQLiteDatabase paramSupportSQLiteDatabase, String paramString)
+  {
+    return new FtsTableInfo(paramString, readColumns(paramSupportSQLiteDatabase, paramString), readOptions(paramSupportSQLiteDatabase, paramString));
+  }
+  
+  private static Set readColumns(SupportSQLiteDatabase paramSupportSQLiteDatabase, String paramString)
+  {
+    StringBuilder localStringBuilder = new StringBuilder();
+    localStringBuilder.append("PRAGMA table_info(`");
+    localStringBuilder.append(paramString);
+    localStringBuilder.append("`)");
+    paramSupportSQLiteDatabase = paramSupportSQLiteDatabase.query(localStringBuilder.toString());
+    paramString = new HashSet();
+    try
+    {
+      int i = paramSupportSQLiteDatabase.getColumnCount();
+      if (i > 0)
+      {
+        i = paramSupportSQLiteDatabase.getColumnIndex("name");
+        for (;;)
+        {
+          boolean bool = paramSupportSQLiteDatabase.moveToNext();
+          if (!bool) {
+            break;
+          }
+          paramString.add(paramSupportSQLiteDatabase.getString(i));
+        }
+      }
+      paramSupportSQLiteDatabase.close();
+      return paramString;
+    }
+    catch (Throwable paramString)
+    {
+      paramSupportSQLiteDatabase.close();
+      throw paramString;
+    }
+  }
+  
+  private static Set readOptions(SupportSQLiteDatabase paramSupportSQLiteDatabase, String paramString)
+  {
+    String str = "";
+    StringBuilder localStringBuilder = new StringBuilder();
+    localStringBuilder.append("SELECT * FROM sqlite_master WHERE `name` = '");
+    localStringBuilder.append(paramString);
+    localStringBuilder.append("'");
+    paramString = paramSupportSQLiteDatabase.query(localStringBuilder.toString());
+    try
+    {
+      boolean bool = paramString.moveToFirst();
+      paramSupportSQLiteDatabase = str;
+      if (bool) {
+        paramSupportSQLiteDatabase = paramString.getString(paramString.getColumnIndexOrThrow("sql"));
+      }
+      paramString.close();
+      return parseOptions(paramSupportSQLiteDatabase);
+    }
+    catch (Throwable paramSupportSQLiteDatabase)
+    {
+      paramString.close();
+      throw paramSupportSQLiteDatabase;
+    }
+  }
+  
+  public boolean equals(Object paramObject)
+  {
+    if (this == paramObject) {
+      return true;
+    }
+    if (paramObject != null)
+    {
+      if (getClass() != paramObject.getClass()) {
+        return false;
+      }
+      paramObject = (FtsTableInfo)paramObject;
+      if (name != null)
+      {
+        if (!name.equals(name)) {
+          return false;
+        }
+      }
+      else if (name != null) {
+        return false;
+      }
+      if (columns != null)
+      {
+        if (!columns.equals(columns)) {
+          return false;
+        }
+      }
+      else if (columns != null) {
+        return false;
+      }
+      if (options != null) {
+        return options.equals(options);
+      }
+      return options == null;
+    }
+    return false;
+  }
+  
+  public int hashCode()
+  {
+    String str = name;
+    int k = 0;
+    int i;
+    if (str != null) {
+      i = name.hashCode();
+    } else {
+      i = 0;
+    }
+    int j;
+    if (columns != null) {
+      j = columns.hashCode();
+    } else {
+      j = 0;
+    }
+    if (options != null) {
+      k = options.hashCode();
+    }
+    return (i * 31 + j) * 31 + k;
+  }
+  
+  public String toString()
+  {
+    StringBuilder localStringBuilder = new StringBuilder();
+    localStringBuilder.append("FtsTableInfo{name='");
+    localStringBuilder.append(name);
+    localStringBuilder.append('\'');
+    localStringBuilder.append(", columns=");
+    localStringBuilder.append(columns);
+    localStringBuilder.append(", options=");
+    localStringBuilder.append(options);
+    localStringBuilder.append('}');
+    return localStringBuilder.toString();
+  }
+}

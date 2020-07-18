@@ -1,0 +1,239 @@
+package com.google.android.exoplayer2.upstream;
+
+import android.net.Uri;
+import androidx.annotation.Nullable;
+import java.io.IOException;
+import java.net.DatagramPacket;
+import java.net.DatagramSocket;
+import java.net.InetAddress;
+import java.net.InetSocketAddress;
+import java.net.MulticastSocket;
+
+public final class UdpDataSource
+  extends BaseDataSource
+{
+  public static final int DEFAULT_MAX_PACKET_SIZE = 2000;
+  public static final int DEFAULT_SOCKET_TIMEOUT_MILLIS = 8000;
+  @Nullable
+  private InetAddress address;
+  @Nullable
+  private MulticastSocket multicastSocket;
+  private boolean opened;
+  private final DatagramPacket packet;
+  private final byte[] packetBuffer;
+  private int packetRemaining;
+  @Nullable
+  private DatagramSocket socket;
+  @Nullable
+  private InetSocketAddress socketAddress;
+  private final int socketTimeoutMillis;
+  @Nullable
+  private Uri uri;
+  
+  public UdpDataSource()
+  {
+    this(2000);
+  }
+  
+  public UdpDataSource(int paramInt)
+  {
+    this(paramInt, 8000);
+  }
+  
+  public UdpDataSource(int paramInt1, int paramInt2)
+  {
+    super(true);
+    socketTimeoutMillis = paramInt2;
+    packetBuffer = new byte[paramInt1];
+    packet = new DatagramPacket(packetBuffer, 0, paramInt1);
+  }
+  
+  @Deprecated
+  public UdpDataSource(@Nullable TransferListener paramTransferListener)
+  {
+    this(paramTransferListener, 2000);
+  }
+  
+  @Deprecated
+  public UdpDataSource(@Nullable TransferListener paramTransferListener, int paramInt)
+  {
+    this(paramTransferListener, paramInt, 8000);
+  }
+  
+  @Deprecated
+  public UdpDataSource(@Nullable TransferListener paramTransferListener, int paramInt1, int paramInt2)
+  {
+    this(paramInt1, paramInt2);
+    if (paramTransferListener != null) {
+      addTransferListener(paramTransferListener);
+    }
+  }
+  
+  public void close()
+  {
+    uri = null;
+    if (multicastSocket != null) {}
+    try
+    {
+      multicastSocket.leaveGroup(address);
+      multicastSocket = null;
+      if (socket != null)
+      {
+        socket.close();
+        socket = null;
+      }
+      address = null;
+      socketAddress = null;
+      packetRemaining = 0;
+      if (opened)
+      {
+        opened = false;
+        transferEnded();
+      }
+      return;
+    }
+    catch (IOException localIOException)
+    {
+      for (;;) {}
+    }
+  }
+  
+  @Nullable
+  public Uri getUri()
+  {
+    return uri;
+  }
+  
+  /* Error */
+  public long open(DataSpec paramDataSpec)
+    throws UdpDataSource.UdpDataSourceException
+  {
+    // Byte code:
+    //   0: aload_0
+    //   1: aload_1
+    //   2: getfield 107	com/google/android/exoplayer2/upstream/DataSpec:uri	Landroid/net/Uri;
+    //   5: putfield 72	com/google/android/exoplayer2/upstream/UdpDataSource:uri	Landroid/net/Uri;
+    //   8: aload_0
+    //   9: getfield 72	com/google/android/exoplayer2/upstream/UdpDataSource:uri	Landroid/net/Uri;
+    //   12: invokevirtual 113	android/net/Uri:getHost	()Ljava/lang/String;
+    //   15: astore_3
+    //   16: aload_0
+    //   17: getfield 72	com/google/android/exoplayer2/upstream/UdpDataSource:uri	Landroid/net/Uri;
+    //   20: invokevirtual 117	android/net/Uri:getPort	()I
+    //   23: istore_2
+    //   24: aload_0
+    //   25: aload_1
+    //   26: invokevirtual 121	com/google/android/exoplayer2/upstream/UdpDataSource:transferInitializing	(Lcom/google/android/exoplayer2/upstream/DataSpec;)V
+    //   29: aload_0
+    //   30: aload_3
+    //   31: invokestatic 127	java/net/InetAddress:getByName	(Ljava/lang/String;)Ljava/net/InetAddress;
+    //   34: putfield 76	com/google/android/exoplayer2/upstream/UdpDataSource:address	Ljava/net/InetAddress;
+    //   37: aload_0
+    //   38: new 129	java/net/InetSocketAddress
+    //   41: dup
+    //   42: aload_0
+    //   43: getfield 76	com/google/android/exoplayer2/upstream/UdpDataSource:address	Ljava/net/InetAddress;
+    //   46: iload_2
+    //   47: invokespecial 132	java/net/InetSocketAddress:<init>	(Ljava/net/InetAddress;I)V
+    //   50: putfield 90	com/google/android/exoplayer2/upstream/UdpDataSource:socketAddress	Ljava/net/InetSocketAddress;
+    //   53: aload_0
+    //   54: getfield 76	com/google/android/exoplayer2/upstream/UdpDataSource:address	Ljava/net/InetAddress;
+    //   57: invokevirtual 136	java/net/InetAddress:isMulticastAddress	()Z
+    //   60: ifeq +40 -> 100
+    //   63: aload_0
+    //   64: new 78	java/net/MulticastSocket
+    //   67: dup
+    //   68: aload_0
+    //   69: getfield 90	com/google/android/exoplayer2/upstream/UdpDataSource:socketAddress	Ljava/net/InetSocketAddress;
+    //   72: invokespecial 139	java/net/MulticastSocket:<init>	(Ljava/net/SocketAddress;)V
+    //   75: putfield 74	com/google/android/exoplayer2/upstream/UdpDataSource:multicastSocket	Ljava/net/MulticastSocket;
+    //   78: aload_0
+    //   79: getfield 74	com/google/android/exoplayer2/upstream/UdpDataSource:multicastSocket	Ljava/net/MulticastSocket;
+    //   82: aload_0
+    //   83: getfield 76	com/google/android/exoplayer2/upstream/UdpDataSource:address	Ljava/net/InetAddress;
+    //   86: invokevirtual 142	java/net/MulticastSocket:joinGroup	(Ljava/net/InetAddress;)V
+    //   89: aload_0
+    //   90: aload_0
+    //   91: getfield 74	com/google/android/exoplayer2/upstream/UdpDataSource:multicastSocket	Ljava/net/MulticastSocket;
+    //   94: putfield 84	com/google/android/exoplayer2/upstream/UdpDataSource:socket	Ljava/net/DatagramSocket;
+    //   97: goto +18 -> 115
+    //   100: aload_0
+    //   101: new 86	java/net/DatagramSocket
+    //   104: dup
+    //   105: aload_0
+    //   106: getfield 90	com/google/android/exoplayer2/upstream/UdpDataSource:socketAddress	Ljava/net/InetSocketAddress;
+    //   109: invokespecial 143	java/net/DatagramSocket:<init>	(Ljava/net/SocketAddress;)V
+    //   112: putfield 84	com/google/android/exoplayer2/upstream/UdpDataSource:socket	Ljava/net/DatagramSocket;
+    //   115: aload_0
+    //   116: getfield 84	com/google/android/exoplayer2/upstream/UdpDataSource:socket	Ljava/net/DatagramSocket;
+    //   119: aload_0
+    //   120: getfield 45	com/google/android/exoplayer2/upstream/UdpDataSource:socketTimeoutMillis	I
+    //   123: invokevirtual 146	java/net/DatagramSocket:setSoTimeout	(I)V
+    //   126: aload_0
+    //   127: iconst_1
+    //   128: putfield 94	com/google/android/exoplayer2/upstream/UdpDataSource:opened	Z
+    //   131: aload_0
+    //   132: aload_1
+    //   133: invokevirtual 149	com/google/android/exoplayer2/upstream/UdpDataSource:transferStarted	(Lcom/google/android/exoplayer2/upstream/DataSpec;)V
+    //   136: ldc2_w 150
+    //   139: lreturn
+    //   140: astore_1
+    //   141: new 6	com/google/android/exoplayer2/upstream/UdpDataSource$UdpDataSourceException
+    //   144: dup
+    //   145: aload_1
+    //   146: invokespecial 154	com/google/android/exoplayer2/upstream/UdpDataSource$UdpDataSourceException:<init>	(Ljava/io/IOException;)V
+    //   149: athrow
+    //   150: astore_1
+    //   151: new 6	com/google/android/exoplayer2/upstream/UdpDataSource$UdpDataSourceException
+    //   154: dup
+    //   155: aload_1
+    //   156: invokespecial 154	com/google/android/exoplayer2/upstream/UdpDataSource$UdpDataSourceException:<init>	(Ljava/io/IOException;)V
+    //   159: athrow
+    // Local variable table:
+    //   start	length	slot	name	signature
+    //   0	160	0	this	UdpDataSource
+    //   0	160	1	paramDataSpec	DataSpec
+    //   23	24	2	i	int
+    //   15	16	3	str	String
+    // Exception table:
+    //   from	to	target	type
+    //   115	126	140	java/net/SocketException
+    //   29	97	150	java/io/IOException
+    //   100	115	150	java/io/IOException
+  }
+  
+  public int read(byte[] paramArrayOfByte, int paramInt1, int paramInt2)
+    throws UdpDataSource.UdpDataSourceException
+  {
+    if (paramInt2 == 0) {
+      return 0;
+    }
+    if (packetRemaining == 0) {
+      try
+      {
+        socket.receive(packet);
+        packetRemaining = packet.getLength();
+        bytesTransferred(packetRemaining);
+      }
+      catch (IOException paramArrayOfByte)
+      {
+        throw new UdpDataSourceException(paramArrayOfByte);
+      }
+    }
+    int i = packet.getLength();
+    int j = packetRemaining;
+    paramInt2 = Math.min(packetRemaining, paramInt2);
+    System.arraycopy(packetBuffer, i - j, paramArrayOfByte, paramInt1, paramInt2);
+    packetRemaining -= paramInt2;
+    return paramInt2;
+  }
+  
+  public static final class UdpDataSourceException
+    extends IOException
+  {
+    public UdpDataSourceException(IOException paramIOException)
+    {
+      super();
+    }
+  }
+}

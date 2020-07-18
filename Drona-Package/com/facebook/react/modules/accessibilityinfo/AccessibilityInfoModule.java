@@ -1,0 +1,180 @@
+package com.facebook.react.modules.accessibilityinfo;
+
+import android.annotation.TargetApi;
+import android.content.ContentResolver;
+import android.content.Context;
+import android.content.ContextWrapper;
+import android.database.ContentObserver;
+import android.net.Uri;
+import android.os.Build.VERSION;
+import android.os.Handler;
+import android.os.Looper;
+import android.provider.Settings.Global;
+import android.view.accessibility.AccessibilityEvent;
+import android.view.accessibility.AccessibilityManager;
+import android.view.accessibility.AccessibilityManager.TouchExplorationStateChangeListener;
+import android.view.accessibility.AccessibilityRecord;
+import androidx.annotation.Nullable;
+import com.facebook.react.bridge.BaseJavaModule;
+import com.facebook.react.bridge.Callback;
+import com.facebook.react.bridge.LifecycleEventListener;
+import com.facebook.react.bridge.ReactApplicationContext;
+import com.facebook.react.bridge.ReactContext;
+import com.facebook.react.bridge.ReactContextBaseJavaModule;
+import com.facebook.react.module.annotations.ReactModule;
+import com.facebook.react.modules.core.DeviceEventManagerModule.RCTDeviceEventEmitter;
+import java.util.List;
+
+@ReactModule(name="AccessibilityInfo")
+public class AccessibilityInfoModule
+  extends ReactContextBaseJavaModule
+  implements LifecycleEventListener
+{
+  public static final String NAME = "AccessibilityInfo";
+  private static final String REDUCE_MOTION_EVENT_NAME = "reduceMotionDidChange";
+  private static final String TOUCH_EXPLORATION_EVENT_NAME = "touchExplorationDidChange";
+  private final ContentObserver animationScaleObserver = new ContentObserver(new Handler(Looper.getMainLooper()))
+  {
+    public void onChange(boolean paramAnonymousBoolean)
+    {
+      onChange(paramAnonymousBoolean, null);
+    }
+    
+    public void onChange(boolean paramAnonymousBoolean, Uri paramAnonymousUri)
+    {
+      if (getReactApplicationContext().hasActiveCatalystInstance()) {
+        AccessibilityInfoModule.this.updateAndSendReduceMotionChangeEvent();
+      }
+    }
+  };
+  @Nullable
+  private AccessibilityManager mAccessibilityManager;
+  private final ContentResolver mContentResolver;
+  private boolean mReduceMotionEnabled = false;
+  private boolean mTouchExplorationEnabled = false;
+  @Nullable
+  private ReactTouchExplorationStateChangeListener mTouchExplorationStateChangeListener;
+  
+  public AccessibilityInfoModule(ReactApplicationContext paramReactApplicationContext)
+  {
+    super(paramReactApplicationContext);
+    mAccessibilityManager = ((AccessibilityManager)paramReactApplicationContext.getApplicationContext().getSystemService("accessibility"));
+    mContentResolver = getReactApplicationContext().getContentResolver();
+    mTouchExplorationEnabled = mAccessibilityManager.isTouchExplorationEnabled();
+    mReduceMotionEnabled = getIsReduceMotionEnabledValue();
+    if (Build.VERSION.SDK_INT >= 19) {
+      mTouchExplorationStateChangeListener = new ReactTouchExplorationStateChangeListener(null);
+    }
+  }
+  
+  private boolean getIsReduceMotionEnabledValue()
+  {
+    String str;
+    if (Build.VERSION.SDK_INT < 17) {
+      str = null;
+    } else {
+      str = Settings.Global.getString(mContentResolver, "transition_animation_scale");
+    }
+    return (str != null) && (str.equals("0.0"));
+  }
+  
+  private void updateAndSendReduceMotionChangeEvent()
+  {
+    boolean bool = getIsReduceMotionEnabledValue();
+    if (mReduceMotionEnabled != bool)
+    {
+      mReduceMotionEnabled = bool;
+      ((DeviceEventManagerModule.RCTDeviceEventEmitter)getReactApplicationContext().getJSModule(DeviceEventManagerModule.RCTDeviceEventEmitter.class)).emit("reduceMotionDidChange", Boolean.valueOf(mReduceMotionEnabled));
+    }
+  }
+  
+  private void updateAndSendTouchExplorationChangeEvent(boolean paramBoolean)
+  {
+    if (mTouchExplorationEnabled != paramBoolean)
+    {
+      mTouchExplorationEnabled = paramBoolean;
+      ((DeviceEventManagerModule.RCTDeviceEventEmitter)getReactApplicationContext().getJSModule(DeviceEventManagerModule.RCTDeviceEventEmitter.class)).emit("touchExplorationDidChange", Boolean.valueOf(mTouchExplorationEnabled));
+    }
+  }
+  
+  public void announceForAccessibility(String paramString)
+  {
+    if (mAccessibilityManager != null)
+    {
+      if (!mAccessibilityManager.isEnabled()) {
+        return;
+      }
+      AccessibilityEvent localAccessibilityEvent = AccessibilityEvent.obtain(16384);
+      localAccessibilityEvent.getText().add(paramString);
+      localAccessibilityEvent.setClassName(AccessibilityInfoModule.class.getName());
+      localAccessibilityEvent.setPackageName(getReactApplicationContext().getPackageName());
+      mAccessibilityManager.sendAccessibilityEvent(localAccessibilityEvent);
+    }
+  }
+  
+  public String getName()
+  {
+    return "AccessibilityInfo";
+  }
+  
+  public void initialize()
+  {
+    getReactApplicationContext().addLifecycleEventListener(this);
+    updateAndSendTouchExplorationChangeEvent(mAccessibilityManager.isTouchExplorationEnabled());
+    updateAndSendReduceMotionChangeEvent();
+  }
+  
+  public void isReduceMotionEnabled(Callback paramCallback)
+  {
+    paramCallback.invoke(new Object[] { Boolean.valueOf(mReduceMotionEnabled) });
+  }
+  
+  public void isTouchExplorationEnabled(Callback paramCallback)
+  {
+    paramCallback.invoke(new Object[] { Boolean.valueOf(mTouchExplorationEnabled) });
+  }
+  
+  public void onCatalystInstanceDestroy()
+  {
+    super.onCatalystInstanceDestroy();
+    getReactApplicationContext().removeLifecycleEventListener(this);
+  }
+  
+  public void onHostDestroy() {}
+  
+  public void onHostPause()
+  {
+    if (Build.VERSION.SDK_INT >= 19) {
+      mAccessibilityManager.removeTouchExplorationStateChangeListener(mTouchExplorationStateChangeListener);
+    }
+    if (Build.VERSION.SDK_INT >= 17) {
+      mContentResolver.unregisterContentObserver(animationScaleObserver);
+    }
+  }
+  
+  public void onHostResume()
+  {
+    if (Build.VERSION.SDK_INT >= 19) {
+      mAccessibilityManager.addTouchExplorationStateChangeListener(mTouchExplorationStateChangeListener);
+    }
+    if (Build.VERSION.SDK_INT >= 17)
+    {
+      Uri localUri = Settings.Global.getUriFor("transition_animation_scale");
+      mContentResolver.registerContentObserver(localUri, false, animationScaleObserver);
+    }
+    updateAndSendTouchExplorationChangeEvent(mAccessibilityManager.isTouchExplorationEnabled());
+    updateAndSendReduceMotionChangeEvent();
+  }
+  
+  @TargetApi(19)
+  private class ReactTouchExplorationStateChangeListener
+    implements AccessibilityManager.TouchExplorationStateChangeListener
+  {
+    private ReactTouchExplorationStateChangeListener() {}
+    
+    public void onTouchExplorationStateChanged(boolean paramBoolean)
+    {
+      AccessibilityInfoModule.this.updateAndSendTouchExplorationChangeEvent(paramBoolean);
+    }
+  }
+}

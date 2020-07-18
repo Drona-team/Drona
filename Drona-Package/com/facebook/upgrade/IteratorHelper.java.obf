@@ -1,0 +1,38 @@
+package com.facebook.jni;
+
+import androidx.annotation.Nullable;
+import com.facebook.proguard.annotations.DoNotStrip;
+import java.util.Iterator;
+
+@DoNotStrip
+public class IteratorHelper
+{
+  @Nullable
+  @DoNotStrip
+  private Object mElement;
+  private final Iterator mIterator;
+  
+  @DoNotStrip
+  public IteratorHelper(Iterable paramIterable)
+  {
+    mIterator = paramIterable.iterator();
+  }
+  
+  @DoNotStrip
+  public IteratorHelper(Iterator paramIterator)
+  {
+    mIterator = paramIterator;
+  }
+  
+  @DoNotStrip
+  boolean hasNext()
+  {
+    if (mIterator.hasNext())
+    {
+      mElement = mIterator.next();
+      return true;
+    }
+    mElement = null;
+    return false;
+  }
+}

@@ -1,0 +1,422 @@
+package com.google.android.exoplayer2.upstream;
+
+import android.annotation.SuppressLint;
+import android.os.Handler;
+import android.os.Looper;
+import android.os.Message;
+import android.os.SystemClock;
+import androidx.annotation.Nullable;
+import com.google.android.exoplayer2.util.Assertions;
+import com.google.android.exoplayer2.util.Log;
+import com.google.android.exoplayer2.util.TraceUtil;
+import com.google.android.exoplayer2.util.Util;
+import java.io.IOException;
+import java.util.concurrent.ExecutorService;
+
+public final class Loader
+  implements LoaderErrorThrower
+{
+  private static final int ACTION_TYPE_DONT_RETRY = 2;
+  private static final int ACTION_TYPE_DONT_RETRY_FATAL = 3;
+  private static final int ACTION_TYPE_RETRY = 0;
+  private static final int ACTION_TYPE_RETRY_AND_RESET_ERROR_COUNT = 1;
+  public static final LoadErrorAction DONT_RETRY = new LoadErrorAction(2, -9223372036854775807L, null);
+  public static final LoadErrorAction DONT_RETRY_FATAL = new LoadErrorAction(3, -9223372036854775807L, null);
+  public static final LoadErrorAction RETRY = createRetryAction(false, -9223372036854775807L);
+  public static final LoadErrorAction RETRY_RESET_ERROR_COUNT = createRetryAction(true, -9223372036854775807L);
+  private LoadTask<? extends Loadable> currentTask;
+  private final ExecutorService downloadExecutorService;
+  private IOException fatalError;
+  
+  public Loader(String paramString)
+  {
+    downloadExecutorService = Util.newSingleThreadExecutor(paramString);
+  }
+  
+  public static LoadErrorAction createRetryAction(boolean paramBoolean, long paramLong)
+  {
+    throw new Runtime("d2j fail translate: java.lang.RuntimeException: can not merge I and Z\n\tat com.googlecode.dex2jar.ir.TypeClass.merge(TypeClass.java:100)\n\tat com.googlecode.dex2jar.ir.ts.TypeTransformer$TypeRef.updateTypeClass(TypeTransformer.java:174)\n\tat com.googlecode.dex2jar.ir.ts.TypeTransformer$TypeAnalyze.copyTypes(TypeTransformer.java:311)\n\tat com.googlecode.dex2jar.ir.ts.TypeTransformer$TypeAnalyze.fixTypes(TypeTransformer.java:226)\n\tat com.googlecode.dex2jar.ir.ts.TypeTransformer$TypeAnalyze.analyze(TypeTransformer.java:207)\n\tat com.googlecode.dex2jar.ir.ts.TypeTransformer.transform(TypeTransformer.java:44)\n\tat com.googlecode.d2j.dex.Dex2jar$2.optimize(Dex2jar.java:162)\n\tat com.googlecode.d2j.dex.Dex2Asm.convertCode(Dex2Asm.java:414)\n\tat com.googlecode.d2j.dex.ExDex2Asm.convertCode(ExDex2Asm.java:42)\n\tat com.googlecode.d2j.dex.Dex2jar$2.convertCode(Dex2jar.java:128)\n\tat com.googlecode.d2j.dex.Dex2Asm.convertMethod(Dex2Asm.java:509)\n\tat com.googlecode.d2j.dex.Dex2Asm.convertClass(Dex2Asm.java:406)\n\tat com.googlecode.d2j.dex.Dex2Asm.convertDex(Dex2Asm.java:422)\n\tat com.googlecode.d2j.dex.Dex2jar.doTranslate(Dex2jar.java:172)\n\tat com.googlecode.d2j.dex.Dex2jar.to(Dex2jar.java:272)\n\tat com.googlecode.dex2jar.tools.Dex2jarCmd.doCommandLine(Dex2jarCmd.java:108)\n\tat com.googlecode.dex2jar.tools.BaseCmd.doMain(BaseCmd.java:288)\n\tat com.googlecode.dex2jar.tools.Dex2jarCmd.main(Dex2jarCmd.java:32)\n");
+  }
+  
+  public void cancelLoading()
+  {
+    currentTask.cancel(false);
+  }
+  
+  public boolean isLoading()
+  {
+    return currentTask != null;
+  }
+  
+  public void maybeThrowError()
+    throws IOException
+  {
+    maybeThrowError(Integer.MIN_VALUE);
+  }
+  
+  public void maybeThrowError(int paramInt)
+    throws IOException
+  {
+    if (fatalError == null)
+    {
+      if (currentTask != null)
+      {
+        LoadTask localLoadTask = currentTask;
+        int i = paramInt;
+        if (paramInt == Integer.MIN_VALUE) {
+          i = currentTask.defaultMinRetryCount;
+        }
+        localLoadTask.maybeThrowError(i);
+      }
+      return;
+    }
+    throw fatalError;
+  }
+  
+  public void release()
+  {
+    release(null);
+  }
+  
+  public void release(@Nullable ReleaseCallback paramReleaseCallback)
+  {
+    if (currentTask != null) {
+      currentTask.cancel(true);
+    }
+    if (paramReleaseCallback != null) {
+      downloadExecutorService.execute(new ReleaseTask(paramReleaseCallback));
+    }
+    downloadExecutorService.shutdown();
+  }
+  
+  public <T extends Loadable> long startLoading(T paramT, Callback<T> paramCallback, int paramInt)
+  {
+    Looper localLooper = Looper.myLooper();
+    boolean bool;
+    if (localLooper != null) {
+      bool = true;
+    } else {
+      bool = false;
+    }
+    Assertions.checkState(bool);
+    fatalError = null;
+    long l = SystemClock.elapsedRealtime();
+    new LoadTask(localLooper, paramT, paramCallback, paramInt, l).start(0L);
+    return l;
+  }
+  
+  public static abstract interface Callback<T extends Loader.Loadable>
+  {
+    public abstract void onLoadCanceled(T paramT, long paramLong1, long paramLong2, boolean paramBoolean);
+    
+    public abstract void onLoadCompleted(T paramT, long paramLong1, long paramLong2);
+    
+    public abstract Loader.LoadErrorAction onLoadError(T paramT, long paramLong1, long paramLong2, IOException paramIOException, int paramInt);
+  }
+  
+  public static final class LoadErrorAction
+  {
+    private final long retryDelayMillis;
+    private final int type;
+    
+    private LoadErrorAction(int paramInt, long paramLong)
+    {
+      type = paramInt;
+      retryDelayMillis = paramLong;
+    }
+    
+    public boolean isRetry()
+    {
+      int i = type;
+      boolean bool = true;
+      if (i != 0)
+      {
+        if (type == 1) {
+          return true;
+        }
+        bool = false;
+      }
+      return bool;
+    }
+  }
+  
+  @SuppressLint({"HandlerLeak"})
+  private final class LoadTask<T extends Loader.Loadable>
+    extends Handler
+    implements Runnable
+  {
+    private static final int MSG_CANCEL = 1;
+    private static final int MSG_END_OF_SOURCE = 2;
+    private static final int MSG_FATAL_ERROR = 4;
+    private static final int MSG_IO_EXCEPTION = 3;
+    private static final int MSG_START = 0;
+    private static final String TAG = "LoadTask";
+    @Nullable
+    private Loader.Callback<T> callback;
+    private volatile boolean canceled;
+    private IOException currentError;
+    public final int defaultMinRetryCount;
+    private int errorCount;
+    private volatile Thread executorThread;
+    private final T loadable;
+    private volatile boolean released;
+    private final long startTimeMs;
+    
+    public LoadTask(T paramT, Loader.Callback<T> paramCallback, int paramInt, long paramLong)
+    {
+      super();
+      loadable = paramCallback;
+      callback = paramInt;
+      defaultMinRetryCount = paramLong;
+      Object localObject;
+      startTimeMs = localObject;
+    }
+    
+    private void execute()
+    {
+      currentError = null;
+      downloadExecutorService.execute(currentTask);
+    }
+    
+    private void finish()
+    {
+      Loader.access$102(Loader.this, null);
+    }
+    
+    private long getRetryDelayMillis()
+    {
+      return Math.min((errorCount - 1) * 1000, 5000);
+    }
+    
+    public void cancel(boolean paramBoolean)
+    {
+      released = paramBoolean;
+      currentError = null;
+      if (hasMessages(0))
+      {
+        removeMessages(0);
+        if (!paramBoolean) {
+          sendEmptyMessage(1);
+        }
+      }
+      else
+      {
+        canceled = true;
+        loadable.cancelLoad();
+        if (executorThread != null) {
+          executorThread.interrupt();
+        }
+      }
+      if (paramBoolean)
+      {
+        finish();
+        long l = SystemClock.elapsedRealtime();
+        callback.onLoadCanceled(loadable, l, l - startTimeMs, true);
+        callback = null;
+      }
+    }
+    
+    public void handleMessage(Message paramMessage)
+    {
+      if (released) {
+        return;
+      }
+      if (what == 0)
+      {
+        execute();
+        return;
+      }
+      if (what != 4)
+      {
+        finish();
+        long l1 = SystemClock.elapsedRealtime();
+        long l2 = l1 - startTimeMs;
+        if (canceled)
+        {
+          callback.onLoadCanceled(loadable, l1, l2, false);
+          return;
+        }
+        switch (what)
+        {
+        default: 
+          return;
+        case 3: 
+          currentError = ((IOException)obj);
+          errorCount += 1;
+          paramMessage = callback.onLoadError(loadable, l1, l2, currentError, errorCount);
+          if (type == 3)
+          {
+            Loader.access$202(Loader.this, currentError);
+            return;
+          }
+          if (type == 2) {
+            break label279;
+          }
+          if (type == 1) {
+            errorCount = 1;
+          }
+          if (retryDelayMillis != -9223372036854775807L) {
+            l1 = retryDelayMillis;
+          } else {
+            l1 = getRetryDelayMillis();
+          }
+          start(l1);
+          return;
+        case 2: 
+          try
+          {
+            callback.onLoadCompleted(loadable, l1, l2);
+            return;
+          }
+          catch (RuntimeException paramMessage)
+          {
+            Log.e("LoadTask", "Unexpected exception handling load completed", paramMessage);
+            Loader.access$202(Loader.this, new Loader.UnexpectedLoaderException(paramMessage));
+            return;
+          }
+        }
+        callback.onLoadCanceled(loadable, l1, l2, false);
+        label279:
+        return;
+      }
+      throw ((Error)obj);
+    }
+    
+    public void maybeThrowError(int paramInt)
+      throws IOException
+    {
+      if (currentError != null)
+      {
+        if (errorCount <= paramInt) {
+          return;
+        }
+        throw currentError;
+      }
+    }
+    
+    public void run()
+    {
+      try
+      {
+        executorThread = Thread.currentThread();
+        if (!canceled)
+        {
+          StringBuilder localStringBuilder = new StringBuilder();
+          localStringBuilder.append("load:");
+          localStringBuilder.append(loadable.getClass().getSimpleName());
+          TraceUtil.beginSection(localStringBuilder.toString());
+        }
+        try
+        {
+          loadable.load();
+          TraceUtil.endSection();
+        }
+        finally
+        {
+          TraceUtil.endSection();
+        }
+        sendEmptyMessage(2);
+        return;
+      }
+      catch (Error localError)
+      {
+        Log.e("LoadTask", "Unexpected error loading stream", localError);
+        if (!released) {
+          obtainMessage(4, localError).sendToTarget();
+        }
+        throw localError;
+      }
+      catch (OutOfMemoryError localOutOfMemoryError)
+      {
+        Log.e("LoadTask", "OutOfMemory error loading stream", localOutOfMemoryError);
+        if (!released)
+        {
+          obtainMessage(3, new Loader.UnexpectedLoaderException(localOutOfMemoryError)).sendToTarget();
+          return;
+        }
+      }
+      catch (Exception localException)
+      {
+        Log.e("LoadTask", "Unexpected exception loading stream", localException);
+        if (!released)
+        {
+          obtainMessage(3, new Loader.UnexpectedLoaderException(localException)).sendToTarget();
+          return;
+          Assertions.checkState(canceled);
+          if (!released)
+          {
+            sendEmptyMessage(2);
+            return;
+          }
+        }
+      }
+      catch (IOException localIOException)
+      {
+        if (!released) {
+          obtainMessage(3, localIOException).sendToTarget();
+        }
+        return;
+      }
+      catch (InterruptedException localInterruptedException)
+      {
+        for (;;) {}
+      }
+    }
+    
+    public void start(long paramLong)
+    {
+      boolean bool;
+      if (currentTask == null) {
+        bool = true;
+      } else {
+        bool = false;
+      }
+      Assertions.checkState(bool);
+      Loader.access$102(Loader.this, this);
+      if (paramLong > 0L)
+      {
+        sendEmptyMessageDelayed(0, paramLong);
+        return;
+      }
+      execute();
+    }
+  }
+  
+  public static abstract interface Loadable
+  {
+    public abstract void cancelLoad();
+    
+    public abstract void load()
+      throws IOException, InterruptedException;
+  }
+  
+  public static abstract interface ReleaseCallback
+  {
+    public abstract void onLoaderReleased();
+  }
+  
+  private static final class ReleaseTask
+    implements Runnable
+  {
+    private final Loader.ReleaseCallback callback;
+    
+    public ReleaseTask(Loader.ReleaseCallback paramReleaseCallback)
+    {
+      callback = paramReleaseCallback;
+    }
+    
+    public void run()
+    {
+      callback.onLoaderReleased();
+    }
+  }
+  
+  public static final class UnexpectedLoaderException
+    extends IOException
+  {
+    public UnexpectedLoaderException(Throwable paramThrowable)
+    {
+      super(paramThrowable);
+    }
+  }
+}

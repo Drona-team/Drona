@@ -1,0 +1,702 @@
+package com.facebook.imagepipeline.producers;
+
+import android.util.Pair;
+import com.facebook.common.internal.Preconditions;
+import com.facebook.common.internal.Sets;
+import com.facebook.common.internal.VisibleForTesting;
+import com.facebook.imagepipeline.common.Priority;
+import com.facebook.imagepipeline.systrace.FrescoSystrace;
+import java.io.Closeable;
+import java.io.IOException;
+import java.util.HashMap;
+import java.util.Iterator;
+import java.util.List;
+import java.util.Map;
+import java.util.concurrent.CopyOnWriteArraySet;
+import javax.annotation.Nullable;
+import javax.annotation.concurrent.GuardedBy;
+import javax.annotation.concurrent.ThreadSafe;
+
+@ThreadSafe
+public abstract class MultiplexProducer<K, T extends Closeable>
+  implements Producer<T>
+{
+  private final Producer<T> mInputProducer;
+  @VisibleForTesting
+  @GuardedBy("this")
+  final Map<K, MultiplexProducer<K, T>.Multiplexer> mMultiplexers;
+  
+  protected MultiplexProducer(Producer<T> paramProducer)
+  {
+    mInputProducer = paramProducer;
+    mMultiplexers = new HashMap();
+  }
+  
+  private MultiplexProducer<K, T>.Multiplexer createAndPutNewMultiplexer(K paramK)
+  {
+    try
+    {
+      Multiplexer localMultiplexer = new Multiplexer(paramK);
+      mMultiplexers.put(paramK, localMultiplexer);
+      return localMultiplexer;
+    }
+    finally
+    {
+      paramK = finally;
+      throw paramK;
+    }
+  }
+  
+  private MultiplexProducer<K, T>.Multiplexer getExistingMultiplexer(K paramK)
+  {
+    try
+    {
+      paramK = (Multiplexer)mMultiplexers.get(paramK);
+      return paramK;
+    }
+    finally
+    {
+      paramK = finally;
+      throw paramK;
+    }
+  }
+  
+  private void removeMultiplexer(K paramK, MultiplexProducer<K, T>.Multiplexer paramMultiplexProducer)
+  {
+    try
+    {
+      if (mMultiplexers.get(paramK) == paramMultiplexProducer) {
+        mMultiplexers.remove(paramK);
+      }
+      return;
+    }
+    finally
+    {
+      paramK = finally;
+      throw paramK;
+    }
+  }
+  
+  protected abstract T cloneOrNull(T paramT);
+  
+  protected abstract K getKey(ProducerContext paramProducerContext);
+  
+  /* Error */
+  public void produceResults(Consumer<T> paramConsumer, ProducerContext paramProducerContext)
+  {
+    // Byte code:
+    //   0: invokestatic 88	com/facebook/imagepipeline/systrace/FrescoSystrace:isTracing	()Z
+    //   3: ifeq +8 -> 11
+    //   6: ldc 90
+    //   8: invokestatic 94	com/facebook/imagepipeline/systrace/FrescoSystrace:beginSection	(Ljava/lang/String;)V
+    //   11: aload_0
+    //   12: aload_2
+    //   13: invokevirtual 96	com/facebook/imagepipeline/producers/MultiplexProducer:getKey	(Lcom/facebook/imagepipeline/producers/ProducerContext;)Ljava/lang/Object;
+    //   16: astore 6
+    //   18: iconst_0
+    //   19: istore_3
+    //   20: aload_0
+    //   21: monitorenter
+    //   22: aload_0
+    //   23: aload 6
+    //   25: invokespecial 49	com/facebook/imagepipeline/producers/MultiplexProducer:getExistingMultiplexer	(Ljava/lang/Object;)Lcom/facebook/imagepipeline/producers/MultiplexProducer$Multiplexer;
+    //   28: astore 5
+    //   30: aload 5
+    //   32: astore 4
+    //   34: aload 5
+    //   36: ifnonnull +13 -> 49
+    //   39: aload_0
+    //   40: aload 6
+    //   42: invokespecial 98	com/facebook/imagepipeline/producers/MultiplexProducer:createAndPutNewMultiplexer	(Ljava/lang/Object;)Lcom/facebook/imagepipeline/producers/MultiplexProducer$Multiplexer;
+    //   45: astore 4
+    //   47: iconst_1
+    //   48: istore_3
+    //   49: aload_0
+    //   50: monitorexit
+    //   51: aload 4
+    //   53: aload_1
+    //   54: aload_2
+    //   55: invokevirtual 102	com/facebook/imagepipeline/producers/MultiplexProducer$Multiplexer:addNewConsumer	(Lcom/facebook/imagepipeline/producers/Consumer;Lcom/facebook/imagepipeline/producers/ProducerContext;)Z
+    //   58: ifeq -40 -> 18
+    //   61: iload_3
+    //   62: ifeq +8 -> 70
+    //   65: aload 4
+    //   67: invokestatic 106	com/facebook/imagepipeline/producers/MultiplexProducer$Multiplexer:access$000	(Lcom/facebook/imagepipeline/producers/MultiplexProducer$Multiplexer;)V
+    //   70: invokestatic 88	com/facebook/imagepipeline/systrace/FrescoSystrace:isTracing	()Z
+    //   73: ifeq +6 -> 79
+    //   76: invokestatic 109	com/facebook/imagepipeline/systrace/FrescoSystrace:endSection	()V
+    //   79: return
+    //   80: astore_1
+    //   81: aload_0
+    //   82: monitorexit
+    //   83: aload_1
+    //   84: athrow
+    //   85: astore_1
+    //   86: invokestatic 88	com/facebook/imagepipeline/systrace/FrescoSystrace:isTracing	()Z
+    //   89: ifeq +6 -> 95
+    //   92: invokestatic 109	com/facebook/imagepipeline/systrace/FrescoSystrace:endSection	()V
+    //   95: aload_1
+    //   96: athrow
+    // Local variable table:
+    //   start	length	slot	name	signature
+    //   0	97	0	this	MultiplexProducer
+    //   0	97	1	paramConsumer	Consumer<T>
+    //   0	97	2	paramProducerContext	ProducerContext
+    //   19	43	3	i	int
+    //   32	34	4	localMultiplexer1	Multiplexer
+    //   28	7	5	localMultiplexer2	Multiplexer
+    //   16	25	6	localObject	Object
+    // Exception table:
+    //   from	to	target	type
+    //   22	30	80	finally
+    //   39	47	80	finally
+    //   49	51	80	finally
+    //   81	83	80	finally
+    //   0	11	85	finally
+    //   11	18	85	finally
+    //   20	22	85	finally
+    //   51	61	85	finally
+    //   65	70	85	finally
+    //   83	85	85	finally
+  }
+  
+  @VisibleForTesting
+  class Multiplexer
+  {
+    private final CopyOnWriteArraySet<Pair<Consumer<T>, ProducerContext>> mConsumerContextPairs = Sets.newCopyOnWriteArraySet();
+    @Nullable
+    @GuardedBy("Multiplexer.this")
+    private MultiplexProducer<K, T>.Multiplexer.ForwardingConsumer mForwardingConsumer;
+    private final K mKey;
+    @Nullable
+    @GuardedBy("Multiplexer.this")
+    private T mLastIntermediateResult;
+    @GuardedBy("Multiplexer.this")
+    private float mLastProgress;
+    @GuardedBy("Multiplexer.this")
+    private int mLastStatus;
+    @Nullable
+    @GuardedBy("Multiplexer.this")
+    private BaseProducerContext mMultiplexProducerContext;
+    
+    public Multiplexer()
+    {
+      Object localObject;
+      mKey = localObject;
+    }
+    
+    private void addCallbacks(final Pair<Consumer<T>, ProducerContext> paramPair, ProducerContext paramProducerContext)
+    {
+      paramProducerContext.addCallbacks(new BaseProducerContextCallbacks()
+      {
+        public void onCancellationRequested()
+        {
+          for (;;)
+          {
+            synchronized (MultiplexProducer.Multiplexer.this)
+            {
+              boolean bool = mConsumerContextPairs.remove(paramPair);
+              List localList1 = null;
+              if (bool)
+              {
+                if (mConsumerContextPairs.isEmpty())
+                {
+                  localBaseProducerContext = mMultiplexProducerContext;
+                  break label138;
+                }
+                localList1 = MultiplexProducer.Multiplexer.this.updateIsPrefetch();
+                localList2 = MultiplexProducer.Multiplexer.this.updatePriority();
+                localList3 = MultiplexProducer.Multiplexer.this.updateIsIntermediateResultExpected();
+                BaseProducerContext localBaseProducerContext = null;
+                BaseProducerContext.callOnIsPrefetchChanged(localList1);
+                BaseProducerContext.callOnPriorityChanged(localList2);
+                BaseProducerContext.callOnIsIntermediateResultExpectedChanged(localList3);
+                if (localBaseProducerContext != null) {
+                  localBaseProducerContext.cancel();
+                }
+                if (bool) {
+                  ((Consumer)paramPairfirst).onCancellation();
+                }
+                return;
+              }
+            }
+            Object localObject2 = null;
+            label138:
+            List localList2 = null;
+            List localList3 = null;
+          }
+        }
+        
+        public void onIsIntermediateResultExpectedChanged()
+        {
+          BaseProducerContext.callOnIsIntermediateResultExpectedChanged(MultiplexProducer.Multiplexer.this.updateIsIntermediateResultExpected());
+        }
+        
+        public void onIsPrefetchChanged()
+        {
+          BaseProducerContext.callOnIsPrefetchChanged(MultiplexProducer.Multiplexer.this.updateIsPrefetch());
+        }
+        
+        public void onPriorityChanged()
+        {
+          BaseProducerContext.callOnPriorityChanged(MultiplexProducer.Multiplexer.this.updatePriority());
+        }
+      });
+    }
+    
+    private void closeSafely(Closeable paramCloseable)
+    {
+      if (paramCloseable != null) {
+        try
+        {
+          paramCloseable.close();
+          return;
+        }
+        catch (IOException paramCloseable)
+        {
+          throw new RuntimeException(paramCloseable);
+        }
+      }
+    }
+    
+    private boolean computeIsIntermediateResultExpected()
+    {
+      try
+      {
+        Iterator localIterator = mConsumerContextPairs.iterator();
+        while (localIterator.hasNext())
+        {
+          boolean bool = ((ProducerContext)nextsecond).isIntermediateResultExpected();
+          if (bool) {
+            return true;
+          }
+        }
+        return false;
+      }
+      finally {}
+    }
+    
+    private boolean computeIsPrefetch()
+    {
+      try
+      {
+        Iterator localIterator = mConsumerContextPairs.iterator();
+        while (localIterator.hasNext())
+        {
+          boolean bool = ((ProducerContext)nextsecond).isPrefetch();
+          if (!bool) {
+            return false;
+          }
+        }
+        return true;
+      }
+      finally {}
+    }
+    
+    private Priority computePriority()
+    {
+      try
+      {
+        Priority localPriority = Priority.LOW;
+        Iterator localIterator = mConsumerContextPairs.iterator();
+        while (localIterator.hasNext()) {
+          localPriority = Priority.getHigherPriority(localPriority, ((ProducerContext)nextsecond).getPriority());
+        }
+        return localPriority;
+      }
+      finally {}
+    }
+    
+    private void startInputProducerIfHasAttachedConsumers()
+    {
+      for (;;)
+      {
+        try
+        {
+          Object localObject1 = mMultiplexProducerContext;
+          boolean bool2 = false;
+          if (localObject1 == null)
+          {
+            bool1 = true;
+            Preconditions.checkArgument(bool1);
+            bool1 = bool2;
+            if (mForwardingConsumer == null) {
+              bool1 = true;
+            }
+            Preconditions.checkArgument(bool1);
+            if (mConsumerContextPairs.isEmpty())
+            {
+              MultiplexProducer.this.removeMultiplexer(mKey, this);
+              return;
+            }
+            localObject1 = (ProducerContext)mConsumerContextPairs.iterator().next()).second;
+            mMultiplexProducerContext = new BaseProducerContext(((ProducerContext)localObject1).getImageRequest(), ((ProducerContext)localObject1).getId(), ((ProducerContext)localObject1).getListener(), ((ProducerContext)localObject1).getCallerContext(), ((ProducerContext)localObject1).getLowestPermittedRequestLevel(), computeIsPrefetch(), computeIsIntermediateResultExpected(), computePriority());
+            mForwardingConsumer = new ForwardingConsumer(null);
+            localObject1 = mMultiplexProducerContext;
+            ForwardingConsumer localForwardingConsumer = mForwardingConsumer;
+            mInputProducer.produceResults(localForwardingConsumer, (ProducerContext)localObject1);
+            return;
+          }
+        }
+        finally {}
+        boolean bool1 = false;
+      }
+    }
+    
+    @Nullable
+    private List<ProducerContextCallbacks> updateIsIntermediateResultExpected()
+    {
+      try
+      {
+        Object localObject1 = mMultiplexProducerContext;
+        if (localObject1 == null) {
+          return null;
+        }
+        localObject1 = mMultiplexProducerContext.setIsIntermediateResultExpectedNoCallbacks(computeIsIntermediateResultExpected());
+        return localObject1;
+      }
+      finally {}
+    }
+    
+    @Nullable
+    private List<ProducerContextCallbacks> updateIsPrefetch()
+    {
+      try
+      {
+        Object localObject1 = mMultiplexProducerContext;
+        if (localObject1 == null) {
+          return null;
+        }
+        localObject1 = mMultiplexProducerContext.setIsPrefetchNoCallbacks(computeIsPrefetch());
+        return localObject1;
+      }
+      finally {}
+    }
+    
+    @Nullable
+    private List<ProducerContextCallbacks> updatePriority()
+    {
+      try
+      {
+        Object localObject1 = mMultiplexProducerContext;
+        if (localObject1 == null) {
+          return null;
+        }
+        localObject1 = mMultiplexProducerContext.setPriorityNoCallbacks(computePriority());
+        return localObject1;
+      }
+      finally {}
+    }
+    
+    /* Error */
+    public boolean addNewConsumer(Consumer<T> paramConsumer, ProducerContext paramProducerContext)
+    {
+      // Byte code:
+      //   0: aload_1
+      //   1: aload_2
+      //   2: invokestatic 228	android/util/Pair:create	(Ljava/lang/Object;Ljava/lang/Object;)Landroid/util/Pair;
+      //   5: astore 7
+      //   7: aload_0
+      //   8: monitorenter
+      //   9: aload_0
+      //   10: getfield 41	com/facebook/imagepipeline/producers/MultiplexProducer$Multiplexer:this$0	Lcom/facebook/imagepipeline/producers/MultiplexProducer;
+      //   13: aload_0
+      //   14: getfield 54	com/facebook/imagepipeline/producers/MultiplexProducer$Multiplexer:mKey	Ljava/lang/Object;
+      //   17: invokestatic 232	com/facebook/imagepipeline/producers/MultiplexProducer:access$100	(Lcom/facebook/imagepipeline/producers/MultiplexProducer;Ljava/lang/Object;)Lcom/facebook/imagepipeline/producers/MultiplexProducer$Multiplexer;
+      //   20: aload_0
+      //   21: if_acmpeq +7 -> 28
+      //   24: aload_0
+      //   25: monitorexit
+      //   26: iconst_0
+      //   27: ireturn
+      //   28: aload_0
+      //   29: getfield 52	com/facebook/imagepipeline/producers/MultiplexProducer$Multiplexer:mConsumerContextPairs	Ljava/util/concurrent/CopyOnWriteArraySet;
+      //   32: aload 7
+      //   34: invokevirtual 236	java/util/concurrent/CopyOnWriteArraySet:add	(Ljava/lang/Object;)Z
+      //   37: pop
+      //   38: aload_0
+      //   39: invokespecial 74	com/facebook/imagepipeline/producers/MultiplexProducer$Multiplexer:updateIsPrefetch	()Ljava/util/List;
+      //   42: astore 5
+      //   44: aload_0
+      //   45: invokespecial 78	com/facebook/imagepipeline/producers/MultiplexProducer$Multiplexer:updatePriority	()Ljava/util/List;
+      //   48: astore 8
+      //   50: aload_0
+      //   51: invokespecial 82	com/facebook/imagepipeline/producers/MultiplexProducer$Multiplexer:updateIsIntermediateResultExpected	()Ljava/util/List;
+      //   54: astore 9
+      //   56: aload_0
+      //   57: getfield 238	com/facebook/imagepipeline/producers/MultiplexProducer$Multiplexer:mLastIntermediateResult	Ljava/io/Closeable;
+      //   60: astore 6
+      //   62: aload_0
+      //   63: getfield 240	com/facebook/imagepipeline/producers/MultiplexProducer$Multiplexer:mLastProgress	F
+      //   66: fstore_3
+      //   67: aload_0
+      //   68: getfield 242	com/facebook/imagepipeline/producers/MultiplexProducer$Multiplexer:mLastStatus	I
+      //   71: istore 4
+      //   73: aload_0
+      //   74: monitorexit
+      //   75: aload 5
+      //   77: invokestatic 246	com/facebook/imagepipeline/producers/BaseProducerContext:callOnIsPrefetchChanged	(Ljava/util/List;)V
+      //   80: aload 8
+      //   82: invokestatic 249	com/facebook/imagepipeline/producers/BaseProducerContext:callOnPriorityChanged	(Ljava/util/List;)V
+      //   85: aload 9
+      //   87: invokestatic 252	com/facebook/imagepipeline/producers/BaseProducerContext:callOnIsIntermediateResultExpectedChanged	(Ljava/util/List;)V
+      //   90: aload 7
+      //   92: monitorenter
+      //   93: aload_0
+      //   94: monitorenter
+      //   95: aload 6
+      //   97: aload_0
+      //   98: getfield 238	com/facebook/imagepipeline/producers/MultiplexProducer$Multiplexer:mLastIntermediateResult	Ljava/io/Closeable;
+      //   101: if_acmpeq +9 -> 110
+      //   104: aconst_null
+      //   105: astore 5
+      //   107: goto +23 -> 130
+      //   110: aload 6
+      //   112: astore 5
+      //   114: aload 6
+      //   116: ifnull +14 -> 130
+      //   119: aload_0
+      //   120: getfield 41	com/facebook/imagepipeline/producers/MultiplexProducer$Multiplexer:this$0	Lcom/facebook/imagepipeline/producers/MultiplexProducer;
+      //   123: aload 6
+      //   125: invokevirtual 256	com/facebook/imagepipeline/producers/MultiplexProducer:cloneOrNull	(Ljava/io/Closeable;)Ljava/io/Closeable;
+      //   128: astore 5
+      //   130: aload_0
+      //   131: monitorexit
+      //   132: aload 5
+      //   134: ifnull +32 -> 166
+      //   137: fload_3
+      //   138: fconst_0
+      //   139: fcmpl
+      //   140: ifle +10 -> 150
+      //   143: aload_1
+      //   144: fload_3
+      //   145: invokeinterface 262 2 0
+      //   150: aload_1
+      //   151: aload 5
+      //   153: iload 4
+      //   155: invokeinterface 266 3 0
+      //   160: aload_0
+      //   161: aload 5
+      //   163: invokespecial 268	com/facebook/imagepipeline/producers/MultiplexProducer$Multiplexer:closeSafely	(Ljava/io/Closeable;)V
+      //   166: aload 7
+      //   168: monitorexit
+      //   169: aload_0
+      //   170: aload 7
+      //   172: aload_2
+      //   173: invokespecial 270	com/facebook/imagepipeline/producers/MultiplexProducer$Multiplexer:addCallbacks	(Landroid/util/Pair;Lcom/facebook/imagepipeline/producers/ProducerContext;)V
+      //   176: iconst_1
+      //   177: ireturn
+      //   178: astore_1
+      //   179: aload_0
+      //   180: monitorexit
+      //   181: aload_1
+      //   182: athrow
+      //   183: astore_1
+      //   184: aload 7
+      //   186: monitorexit
+      //   187: aload_1
+      //   188: athrow
+      //   189: astore_1
+      //   190: aload_0
+      //   191: monitorexit
+      //   192: aload_1
+      //   193: athrow
+      // Local variable table:
+      //   start	length	slot	name	signature
+      //   0	194	0	this	Multiplexer
+      //   0	194	1	paramConsumer	Consumer<T>
+      //   0	194	2	paramProducerContext	ProducerContext
+      //   66	79	3	f	float
+      //   71	83	4	i	int
+      //   42	120	5	localObject	Object
+      //   60	64	6	localCloseable	Closeable
+      //   5	180	7	localPair	Pair
+      //   48	33	8	localList1	List
+      //   54	32	9	localList2	List
+      // Exception table:
+      //   from	to	target	type
+      //   95	104	178	finally
+      //   119	130	178	finally
+      //   130	132	178	finally
+      //   179	181	178	finally
+      //   93	95	183	finally
+      //   143	150	183	finally
+      //   150	166	183	finally
+      //   166	169	183	finally
+      //   181	183	183	finally
+      //   184	187	183	finally
+      //   9	26	189	finally
+      //   28	75	189	finally
+      //   190	192	189	finally
+    }
+    
+    public void onCancelled(MultiplexProducer<K, T>.Multiplexer.ForwardingConsumer paramMultiplexProducer)
+    {
+      try
+      {
+        if (mForwardingConsumer != paramMultiplexProducer) {
+          return;
+        }
+        mForwardingConsumer = null;
+        mMultiplexProducerContext = null;
+        closeSafely(mLastIntermediateResult);
+        mLastIntermediateResult = null;
+        startInputProducerIfHasAttachedConsumers();
+        return;
+      }
+      finally {}
+    }
+    
+    public void onFailure(MultiplexProducer<K, T>.Multiplexer.ForwardingConsumer arg1, Throwable paramThrowable)
+    {
+      try
+      {
+        if (mForwardingConsumer != ???) {
+          return;
+        }
+        Iterator localIterator = mConsumerContextPairs.iterator();
+        mConsumerContextPairs.clear();
+        MultiplexProducer.this.removeMultiplexer(mKey, this);
+        closeSafely(mLastIntermediateResult);
+        mLastIntermediateResult = null;
+        while (localIterator.hasNext()) {
+          synchronized ((Pair)localIterator.next())
+          {
+            ((Consumer)first).onFailure(paramThrowable);
+          }
+        }
+        return;
+      }
+      finally {}
+    }
+    
+    public void onNextResult(MultiplexProducer<K, T>.Multiplexer.ForwardingConsumer arg1, T paramT, int paramInt)
+    {
+      try
+      {
+        if (mForwardingConsumer != ???) {
+          return;
+        }
+        closeSafely(mLastIntermediateResult);
+        mLastIntermediateResult = null;
+        Iterator localIterator = mConsumerContextPairs.iterator();
+        if (BaseConsumer.isNotLast(paramInt))
+        {
+          mLastIntermediateResult = cloneOrNull(paramT);
+          mLastStatus = paramInt;
+        }
+        else
+        {
+          mConsumerContextPairs.clear();
+          MultiplexProducer.this.removeMultiplexer(mKey, this);
+        }
+        while (localIterator.hasNext()) {
+          synchronized ((Pair)localIterator.next())
+          {
+            ((Consumer)first).onNewResult(paramT, paramInt);
+          }
+        }
+        return;
+      }
+      finally {}
+    }
+    
+    public void onProgressUpdate(MultiplexProducer<K, T>.Multiplexer.ForwardingConsumer arg1, float paramFloat)
+    {
+      try
+      {
+        if (mForwardingConsumer != ???) {
+          return;
+        }
+        mLastProgress = paramFloat;
+        Iterator localIterator = mConsumerContextPairs.iterator();
+        while (localIterator.hasNext()) {
+          synchronized ((Pair)localIterator.next())
+          {
+            ((Consumer)first).onProgressUpdate(paramFloat);
+          }
+        }
+        return;
+      }
+      finally {}
+    }
+    
+    private class ForwardingConsumer
+      extends BaseConsumer<T>
+    {
+      private ForwardingConsumer() {}
+      
+      protected void onCancellationImpl()
+      {
+        try
+        {
+          if (FrescoSystrace.isTracing()) {
+            FrescoSystrace.beginSection("MultiplexProducer#onCancellation");
+          }
+          onCancelled(this);
+          return;
+        }
+        finally
+        {
+          if (FrescoSystrace.isTracing()) {
+            FrescoSystrace.endSection();
+          }
+        }
+      }
+      
+      protected void onFailureImpl(Throwable paramThrowable)
+      {
+        try
+        {
+          if (FrescoSystrace.isTracing()) {
+            FrescoSystrace.beginSection("MultiplexProducer#onFailure");
+          }
+          onFailure(this, paramThrowable);
+          return;
+        }
+        finally
+        {
+          if (FrescoSystrace.isTracing()) {
+            FrescoSystrace.endSection();
+          }
+        }
+      }
+      
+      protected void onNewResultImpl(T paramT, int paramInt)
+      {
+        try
+        {
+          if (FrescoSystrace.isTracing()) {
+            FrescoSystrace.beginSection("MultiplexProducer#onNewResult");
+          }
+          onNextResult(this, paramT, paramInt);
+          return;
+        }
+        finally
+        {
+          if (FrescoSystrace.isTracing()) {
+            FrescoSystrace.endSection();
+          }
+        }
+      }
+      
+      protected void onProgressUpdateImpl(float paramFloat)
+      {
+        try
+        {
+          if (FrescoSystrace.isTracing()) {
+            FrescoSystrace.beginSection("MultiplexProducer#onProgressUpdate");
+          }
+          onProgressUpdate(this, paramFloat);
+          return;
+        }
+        finally
+        {
+          if (FrescoSystrace.isTracing()) {
+            FrescoSystrace.endSection();
+          }
+        }
+      }
+    }
+  }
+}

@@ -1,0 +1,91 @@
+package com.facebook.react.fabric.mounting.mountitems;
+
+import android.annotation.TargetApi;
+import com.facebook.react.fabric.mounting.MountingManager;
+
+public class UpdateLayoutMountItem
+  implements MountItem
+{
+  private final int mHeight;
+  private final int mLayoutDirection;
+  private final int mReactTag;
+  private final int mWidth;
+  private final int mX;
+  private final int mY;
+  
+  public UpdateLayoutMountItem(int paramInt1, int paramInt2, int paramInt3, int paramInt4, int paramInt5, int paramInt6)
+  {
+    mReactTag = paramInt1;
+    mX = paramInt2;
+    mY = paramInt3;
+    mWidth = paramInt4;
+    mHeight = paramInt5;
+    mLayoutDirection = convertLayoutDirection(paramInt6);
+  }
+  
+  @TargetApi(19)
+  private int convertLayoutDirection(int paramInt)
+  {
+    switch (paramInt)
+    {
+    default: 
+      StringBuilder localStringBuilder = new StringBuilder();
+      localStringBuilder.append("Unsupported layout direction: ");
+      localStringBuilder.append(paramInt);
+      throw new IllegalArgumentException(localStringBuilder.toString());
+    case 2: 
+      return 1;
+    case 1: 
+      return 0;
+    }
+    return 2;
+  }
+  
+  public void execute(MountingManager paramMountingManager)
+  {
+    paramMountingManager.updateLayout(mReactTag, mX, mY, mWidth, mHeight);
+  }
+  
+  public int getHeight()
+  {
+    return mHeight;
+  }
+  
+  public int getLayoutDirection()
+  {
+    return mLayoutDirection;
+  }
+  
+  public int getWidth()
+  {
+    return mWidth;
+  }
+  
+  public int getX()
+  {
+    return mX;
+  }
+  
+  public int getY()
+  {
+    return mY;
+  }
+  
+  public String toString()
+  {
+    StringBuilder localStringBuilder = new StringBuilder();
+    localStringBuilder.append("UpdateLayoutMountItem [");
+    localStringBuilder.append(mReactTag);
+    localStringBuilder.append("] - x: ");
+    localStringBuilder.append(mX);
+    localStringBuilder.append(" - y: ");
+    localStringBuilder.append(mY);
+    localStringBuilder.append(" - height: ");
+    localStringBuilder.append(mHeight);
+    localStringBuilder.append(" - width: ");
+    localStringBuilder.append(mWidth);
+    localStringBuilder.append(" - layoutDirection: ");
+    localStringBuilder.append(mLayoutDirection);
+    return localStringBuilder.toString();
+  }
+}

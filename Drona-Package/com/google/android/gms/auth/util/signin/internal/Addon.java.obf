@@ -1,0 +1,112 @@
+package com.google.android.gms.auth.api.signin.internal;
+
+import android.content.Context;
+import androidx.annotation.NonNull;
+import com.google.android.gms.auth.api.signin.GoogleSignInAccount;
+import com.google.android.gms.auth.api.signin.GoogleSignInOptions;
+import com.google.android.gms.common.util.VisibleForTesting;
+
+public final class zzp
+{
+  private static zzp zzbn;
+  @VisibleForTesting
+  private Storage zzbo;
+  @VisibleForTesting
+  private GoogleSignInAccount zzbp;
+  @VisibleForTesting
+  private GoogleSignInOptions zzbq;
+  
+  private zzp(Context paramContext)
+  {
+    zzbo = Storage.getInstance(paramContext);
+    zzbp = zzbo.getSavedDefaultGoogleSignInAccount();
+    zzbq = zzbo.getSavedDefaultGoogleSignInOptions();
+  }
+  
+  public static zzp zzd(@NonNull Context paramContext)
+  {
+    try
+    {
+      paramContext = zze(paramContext.getApplicationContext());
+      return paramContext;
+    }
+    finally
+    {
+      paramContext = finally;
+      throw paramContext;
+    }
+  }
+  
+  private static zzp zze(Context paramContext)
+  {
+    try
+    {
+      if (zzbn == null) {
+        zzbn = new zzp(paramContext);
+      }
+      paramContext = zzbn;
+      return paramContext;
+    }
+    finally {}
+  }
+  
+  public final void clear()
+  {
+    try
+    {
+      zzbo.clear();
+      zzbp = null;
+      zzbq = null;
+      return;
+    }
+    finally
+    {
+      localObject = finally;
+      throw localObject;
+    }
+  }
+  
+  public final void zzc(GoogleSignInOptions paramGoogleSignInOptions, GoogleSignInAccount paramGoogleSignInAccount)
+  {
+    try
+    {
+      zzbo.saveDefaultGoogleSignInAccount(paramGoogleSignInAccount, paramGoogleSignInOptions);
+      zzbp = paramGoogleSignInAccount;
+      zzbq = paramGoogleSignInOptions;
+      return;
+    }
+    finally
+    {
+      paramGoogleSignInOptions = finally;
+      throw paramGoogleSignInOptions;
+    }
+  }
+  
+  public final GoogleSignInAccount zzh()
+  {
+    try
+    {
+      GoogleSignInAccount localGoogleSignInAccount = zzbp;
+      return localGoogleSignInAccount;
+    }
+    finally
+    {
+      localObject = finally;
+      throw localObject;
+    }
+  }
+  
+  public final GoogleSignInOptions zzi()
+  {
+    try
+    {
+      GoogleSignInOptions localGoogleSignInOptions = zzbq;
+      return localGoogleSignInOptions;
+    }
+    finally
+    {
+      localObject = finally;
+      throw localObject;
+    }
+  }
+}

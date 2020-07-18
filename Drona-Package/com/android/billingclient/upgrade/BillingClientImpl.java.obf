@@ -1,0 +1,1541 @@
+package com.android.billingclient.api;
+
+import android.app.Activity;
+import android.app.PendingIntent;
+import android.content.ComponentName;
+import android.content.Context;
+import android.content.Intent;
+import android.content.ServiceConnection;
+import android.content.pm.PackageManager;
+import android.content.pm.ResolveInfo;
+import android.content.pm.ServiceInfo;
+import android.os.Bundle;
+import android.os.Handler;
+import android.os.IBinder;
+import android.os.Looper;
+import android.os.Parcelable;
+import android.os.RemoteException;
+import android.os.ResultReceiver;
+import android.text.TextUtils;
+import androidx.annotation.NonNull;
+import androidx.annotation.Nullable;
+import androidx.annotation.UiThread;
+import androidx.annotation.VisibleForTesting;
+import androidx.annotation.WorkerThread;
+import com.android.billingclient.util.BillingHelper;
+import com.android.vending.billing.IInAppBillingService;
+import com.android.vending.billing.IInAppBillingService.Stub;
+import java.lang.annotation.Annotation;
+import java.lang.annotation.Retention;
+import java.lang.annotation.RetentionPolicy;
+import java.util.ArrayList;
+import java.util.Arrays;
+import java.util.List;
+import java.util.concurrent.Callable;
+import java.util.concurrent.CancellationException;
+import java.util.concurrent.ExecutorService;
+import java.util.concurrent.Executors;
+import java.util.concurrent.Future;
+import java.util.concurrent.TimeUnit;
+import java.util.concurrent.TimeoutException;
+import org.json.JSONException;
+
+class BillingClientImpl
+  extends BillingClient
+{
+  private static final long ASYNCHRONOUS_TIMEOUT_IN_MILLISECONDS = 30000L;
+  private static final String GET_SKU_DETAILS_ITEM_LIST = "ITEM_ID_LIST";
+  private static final int MAX_IAP_VERSION = 10;
+  private static final int MAX_SKU_DETAILS_ITEMS_PER_REQUEST = 20;
+  private static final int MIN_IAP_VERSION = 3;
+  private static final long SYNCHRONOUS_TIMEOUT_IN_MILLISECONDS = 5000L;
+  private static final String TAG = "BillingClient";
+  private final Context mApplicationContext;
+  private final BillingBroadcastManager mBroadcastManager;
+  private final int mChildDirected;
+  private int mClientState = 0;
+  private final boolean mEnablePendingPurchases;
+  private ExecutorService mExecutorService;
+  private boolean mIABv10Supported;
+  private boolean mIABv6Supported;
+  private boolean mIABv8Supported;
+  private boolean mIABv9Supported;
+  private final String mQualifiedVersionNumber;
+  private IInAppBillingService mService;
+  private BillingServiceConnection mServiceConnection;
+  private boolean mSubscriptionUpdateSupported;
+  private boolean mSubscriptionsSupported;
+  private final Handler mUiThreadHandler = new Handler(Looper.getMainLooper());
+  private final int mUnderAgeOfConsent;
+  private final ResultReceiver onPurchaseFinishedReceiver = new ResultReceiver(mUiThreadHandler)
+  {
+    public void onReceiveResult(int paramAnonymousInt, Bundle paramAnonymousBundle)
+    {
+      PurchasesUpdatedListener localPurchasesUpdatedListener = mBroadcastManager.getListener();
+      if (localPurchasesUpdatedListener == null)
+      {
+        BillingHelper.logWarn("BillingClient", "PurchasesUpdatedListener is null - no way to return the response.");
+        return;
+      }
+      List localList = BillingHelper.extractPurchases(paramAnonymousBundle);
+      localPurchasesUpdatedListener.onPurchasesUpdated(BillingResult.newBuilder().setResponseCode(paramAnonymousInt).setDebugMessage(BillingHelper.getDebugMessageFromBundle(paramAnonymousBundle, "BillingClient")).build(), localList);
+    }
+  };
+  
+  private BillingClientImpl(Activity paramActivity, int paramInt1, int paramInt2, boolean paramBoolean, String paramString)
+  {
+    this(paramActivity.getApplicationContext(), paramInt1, paramInt2, paramBoolean, new BillingClientNativeCallback(), paramString);
+  }
+  
+  @UiThread
+  BillingClientImpl(@NonNull Context paramContext, int paramInt1, int paramInt2, boolean paramBoolean, @NonNull PurchasesUpdatedListener paramPurchasesUpdatedListener)
+  {
+    this(paramContext, paramInt1, paramInt2, paramBoolean, paramPurchasesUpdatedListener, "2.0.3");
+  }
+  
+  private BillingClientImpl(@NonNull Context paramContext, int paramInt1, int paramInt2, boolean paramBoolean, @NonNull PurchasesUpdatedListener paramPurchasesUpdatedListener, String paramString)
+  {
+    mApplicationContext = paramContext.getApplicationContext();
+    mChildDirected = paramInt1;
+    mUnderAgeOfConsent = paramInt2;
+    mEnablePendingPurchases = paramBoolean;
+    mBroadcastManager = new BillingBroadcastManager(mApplicationContext, paramPurchasesUpdatedListener);
+    mQualifiedVersionNumber = paramString;
+  }
+  
+  private void acknowledgePurchase(AcknowledgePurchaseParams paramAcknowledgePurchaseParams, long paramLong)
+  {
+    acknowledgePurchase(paramAcknowledgePurchaseParams, new BillingClientNativeCallback(paramLong));
+  }
+  
+  private BillingResult broadcastFailureAndReturnBillingResponse(BillingResult paramBillingResult)
+  {
+    mBroadcastManager.getListener().onPurchasesUpdated(paramBillingResult, null);
+    return paramBillingResult;
+  }
+  
+  private void consumeAsync(ConsumeParams paramConsumeParams, long paramLong)
+  {
+    consumeAsync(paramConsumeParams, new BillingClientNativeCallback(paramLong));
+  }
+  
+  @WorkerThread
+  private void consumeInternal(final ConsumeParams paramConsumeParams, final ConsumeResponseListener paramConsumeResponseListener)
+  {
+    final String str = paramConsumeParams.getPurchaseToken();
+    try
+    {
+      StringBuilder localStringBuilder = new StringBuilder();
+      localStringBuilder.append("Consuming purchase with token: ");
+      localStringBuilder.append(str);
+      BillingHelper.logVerbose("BillingClient", localStringBuilder.toString());
+      final int i;
+      if (mIABv9Supported)
+      {
+        paramConsumeParams = mService.consumePurchaseExtraParams(9, mApplicationContext.getPackageName(), str, BillingHelper.constructExtraParamsForConsume(paramConsumeParams, mIABv9Supported, mQualifiedVersionNumber));
+        i = paramConsumeParams.getInt("RESPONSE_CODE");
+        paramConsumeParams = BillingHelper.getDebugMessageFromBundle(paramConsumeParams, "BillingClient");
+      }
+      else
+      {
+        i = mService.consumePurchase(3, mApplicationContext.getPackageName(), str);
+        paramConsumeParams = "";
+      }
+      paramConsumeParams = BillingResult.newBuilder().setResponseCode(i).setDebugMessage(paramConsumeParams).build();
+      if (i == 0)
+      {
+        postToUiThread(new Runnable()
+        {
+          public void run()
+          {
+            BillingHelper.logVerbose("BillingClient", "Successfully consumed purchase.");
+            paramConsumeResponseListener.onConsumeResponse(paramConsumeParams, str);
+          }
+        });
+        return;
+      }
+      postToUiThread(new Runnable()
+      {
+        public void run()
+        {
+          StringBuilder localStringBuilder = new StringBuilder();
+          localStringBuilder.append("Error consuming purchase with token. Response code: ");
+          localStringBuilder.append(i);
+          BillingHelper.logWarn("BillingClient", localStringBuilder.toString());
+          paramConsumeResponseListener.onConsumeResponse(paramConsumeParams, str);
+        }
+      });
+      return;
+    }
+    catch (Exception paramConsumeParams)
+    {
+      postToUiThread(new Runnable()
+      {
+        public void run()
+        {
+          StringBuilder localStringBuilder = new StringBuilder();
+          localStringBuilder.append("Error consuming purchase; ex: ");
+          localStringBuilder.append(paramConsumeParams);
+          BillingHelper.logWarn("BillingClient", localStringBuilder.toString());
+          paramConsumeResponseListener.onConsumeResponse(BillingResults.SERVICE_DISCONNECTED, str);
+        }
+      });
+    }
+  }
+  
+  @Nullable
+  private <T> Future<T> executeAsync(@NonNull final Callable<T> paramCallable, long paramLong, @Nullable final Runnable paramRunnable)
+  {
+    paramLong = (paramLong * 0.95D);
+    if (mExecutorService == null) {
+      mExecutorService = Executors.newFixedThreadPool(BillingHelper.NUMBER_OF_CORES);
+    }
+    try
+    {
+      paramCallable = mExecutorService.submit(paramCallable);
+      mUiThreadHandler.postDelayed(new Runnable()
+      {
+        public void run()
+        {
+          if ((!paramCallable.isDone()) && (!paramCallable.isCancelled()))
+          {
+            paramCallable.cancel(true);
+            BillingHelper.logWarn("BillingClient", "Async task is taking too long, cancel it!");
+            if (paramRunnable != null) {
+              paramRunnable.run();
+            }
+          }
+        }
+      }, paramLong);
+      return paramCallable;
+    }
+    catch (Exception paramCallable)
+    {
+      paramRunnable = new StringBuilder();
+      paramRunnable.append("Async task throws exception ");
+      paramRunnable.append(paramCallable);
+      BillingHelper.logWarn("BillingClient", paramRunnable.toString());
+    }
+    return null;
+  }
+  
+  private Bundle generateVrBundle()
+  {
+    Bundle localBundle = new Bundle();
+    localBundle.putBoolean("vr", true);
+    return localBundle;
+  }
+  
+  private BillingResult getBillingResultForNullFutureResult()
+  {
+    if ((mClientState != 0) && (mClientState != 3)) {
+      return BillingResults.INTERNAL_ERROR;
+    }
+    return BillingResults.SERVICE_DISCONNECTED;
+  }
+  
+  private BillingResult isBillingSupportedOnVr(final String paramString)
+  {
+    paramString = executeAsync(new Callable()
+    {
+      public Integer call()
+        throws Exception
+      {
+        return Integer.valueOf(mService.isBillingSupportedExtraParams(7, mApplicationContext.getPackageName(), paramString, BillingClientImpl.this.generateVrBundle()));
+      }
+    }, 5000L, null);
+    try
+    {
+      if (((Integer)paramString.get(5000L, TimeUnit.MILLISECONDS)).intValue() == 0) {
+        return BillingResults.OK;
+      }
+      paramString = BillingResults.FEATURE_NOT_SUPPORTED;
+      return paramString;
+    }
+    catch (Exception paramString)
+    {
+      for (;;) {}
+    }
+    BillingHelper.logWarn("BillingClient", "Exception while checking if billing is supported; try to reconnect");
+    return BillingResults.SERVICE_DISCONNECTED;
+  }
+  
+  private int launchBillingFlowCpp(Activity paramActivity, BillingFlowParams paramBillingFlowParams)
+  {
+    return launchBillingFlow(paramActivity, paramBillingFlowParams).getResponseCode();
+  }
+  
+  private void launchPriceChangeConfirmationFlow(Activity paramActivity, PriceChangeFlowParams paramPriceChangeFlowParams, long paramLong)
+  {
+    launchPriceChangeConfirmationFlow(paramActivity, paramPriceChangeFlowParams, new BillingClientNativeCallback(paramLong));
+  }
+  
+  private void loadRewardedSku(RewardLoadParams paramRewardLoadParams, long paramLong)
+  {
+    loadRewardedSku(paramRewardLoadParams, new BillingClientNativeCallback(paramLong));
+  }
+  
+  private void postToUiThread(Runnable paramRunnable)
+  {
+    if (Thread.interrupted()) {
+      return;
+    }
+    mUiThreadHandler.post(paramRunnable);
+  }
+  
+  private void queryPurchaseHistoryAsync(@NonNull String paramString, long paramLong)
+  {
+    queryPurchaseHistoryAsync(paramString, new BillingClientNativeCallback(paramLong));
+  }
+  
+  private PurchaseHistoryResult queryPurchaseHistoryInternal(String paramString)
+  {
+    Object localObject1 = new StringBuilder();
+    ((StringBuilder)localObject1).append("Querying purchase history, item type: ");
+    ((StringBuilder)localObject1).append(paramString);
+    BillingHelper.logVerbose("BillingClient", ((StringBuilder)localObject1).toString());
+    ArrayList localArrayList1 = new ArrayList();
+    Bundle localBundle = BillingHelper.constructExtraParamsForQueryPurchases(mIABv9Supported, mEnablePendingPurchases, mQualifiedVersionNumber);
+    localObject1 = null;
+    try
+    {
+      Object localObject2;
+      do
+      {
+        if (!mIABv6Supported)
+        {
+          BillingHelper.logWarn("BillingClient", "getPurchaseHistory is not supported on current device");
+          return new PurchaseHistoryResult(BillingResults.GET_PURCHASE_HISTORY_NOT_SUPPORTED, null);
+        }
+        localObject1 = mService.getPurchaseHistory(6, mApplicationContext.getPackageName(), paramString, (String)localObject1, localBundle);
+        localObject2 = PurchaseApiResponseChecker.checkPurchasesBundleValidity((Bundle)localObject1, "BillingClient", "getPurchaseHistory()");
+        if (localObject2 != BillingResults.OK) {
+          return new PurchaseHistoryResult((BillingResult)localObject2, null);
+        }
+        localObject2 = ((Bundle)localObject1).getStringArrayList("INAPP_PURCHASE_ITEM_LIST");
+        ArrayList localArrayList2 = ((Bundle)localObject1).getStringArrayList("INAPP_PURCHASE_DATA_LIST");
+        ArrayList localArrayList3 = ((Bundle)localObject1).getStringArrayList("INAPP_DATA_SIGNATURE_LIST");
+        int i = 0;
+        while (i < localArrayList2.size())
+        {
+          Object localObject3 = (String)localArrayList2.get(i);
+          String str1 = (String)localArrayList3.get(i);
+          String str2 = (String)((ArrayList)localObject2).get(i);
+          StringBuilder localStringBuilder = new StringBuilder();
+          localStringBuilder.append("Purchase record found for sku : ");
+          localStringBuilder.append(str2);
+          BillingHelper.logVerbose("BillingClient", localStringBuilder.toString());
+          try
+          {
+            localObject3 = new PurchaseHistoryRecord((String)localObject3, str1);
+            if (TextUtils.isEmpty(((PurchaseHistoryRecord)localObject3).getPurchaseToken())) {
+              BillingHelper.logWarn("BillingClient", "BUG: empty/null token!");
+            }
+            localArrayList1.add(localObject3);
+            i += 1;
+          }
+          catch (JSONException paramString)
+          {
+            localObject1 = new StringBuilder();
+            ((StringBuilder)localObject1).append("Got an exception trying to decode the purchase: ");
+            ((StringBuilder)localObject1).append(paramString);
+            BillingHelper.logWarn("BillingClient", ((StringBuilder)localObject1).toString());
+            return new PurchaseHistoryResult(BillingResults.INTERNAL_ERROR, null);
+          }
+        }
+        localObject2 = ((Bundle)localObject1).getString("INAPP_CONTINUATION_TOKEN");
+        localObject1 = new StringBuilder();
+        ((StringBuilder)localObject1).append("Continuation token: ");
+        ((StringBuilder)localObject1).append((String)localObject2);
+        BillingHelper.logVerbose("BillingClient", ((StringBuilder)localObject1).toString());
+        localObject1 = localObject2;
+      } while (!TextUtils.isEmpty((CharSequence)localObject2));
+      return new PurchaseHistoryResult(BillingResults.OK, localArrayList1);
+    }
+    catch (RemoteException paramString)
+    {
+      localObject1 = new StringBuilder();
+      ((StringBuilder)localObject1).append("Got exception trying to get purchase history: ");
+      ((StringBuilder)localObject1).append(paramString);
+      ((StringBuilder)localObject1).append("; try to reconnect");
+      BillingHelper.logWarn("BillingClient", ((StringBuilder)localObject1).toString());
+    }
+    return new PurchaseHistoryResult(BillingResults.SERVICE_DISCONNECTED, null);
+  }
+  
+  private void queryPurchases(final String paramString, long paramLong)
+  {
+    final BillingClientNativeCallback localBillingClientNativeCallback = new BillingClientNativeCallback(paramLong);
+    if (!isReady()) {
+      localBillingClientNativeCallback.onQueryPurchasesResponse(BillingResults.SERVICE_DISCONNECTED, null);
+    }
+    if (executeAsync(new Callable()
+    {
+      public Void call()
+      {
+        final Purchase.PurchasesResult localPurchasesResult = BillingClientImpl.this.queryPurchasesInternal(paramString);
+        BillingClientImpl.this.postToUiThread(new Runnable()
+        {
+          public void run()
+          {
+            val$callback.onQueryPurchasesResponse(localPurchasesResult.getBillingResult(), localPurchasesResult.getPurchasesList());
+          }
+        });
+        return null;
+      }
+    }, 30000L, new Runnable()
+    {
+      public void run()
+      {
+        localBillingClientNativeCallback.onQueryPurchasesResponse(BillingResults.SERVICE_TIMEOUT, null);
+      }
+    }) == null) {
+      localBillingClientNativeCallback.onQueryPurchasesResponse(getBillingResultForNullFutureResult(), null);
+    }
+  }
+  
+  private Purchase.PurchasesResult queryPurchasesInternal(String paramString)
+  {
+    Object localObject1 = new StringBuilder();
+    ((StringBuilder)localObject1).append("Querying owned items, item type: ");
+    ((StringBuilder)localObject1).append(paramString);
+    BillingHelper.logVerbose("BillingClient", ((StringBuilder)localObject1).toString());
+    ArrayList localArrayList1 = new ArrayList();
+    Bundle localBundle = BillingHelper.constructExtraParamsForQueryPurchases(mIABv9Supported, mEnablePendingPurchases, mQualifiedVersionNumber);
+    localObject1 = null;
+    try
+    {
+      Object localObject2;
+      do
+      {
+        if (mIABv9Supported) {
+          localObject1 = mService.getPurchasesExtraParams(9, mApplicationContext.getPackageName(), paramString, (String)localObject1, localBundle);
+        } else {
+          localObject1 = mService.getPurchases(3, mApplicationContext.getPackageName(), paramString, (String)localObject1);
+        }
+        localObject2 = PurchaseApiResponseChecker.checkPurchasesBundleValidity((Bundle)localObject1, "BillingClient", "getPurchase()");
+        if (localObject2 != BillingResults.OK) {
+          return new Purchase.PurchasesResult((BillingResult)localObject2, null);
+        }
+        localObject2 = ((Bundle)localObject1).getStringArrayList("INAPP_PURCHASE_ITEM_LIST");
+        ArrayList localArrayList2 = ((Bundle)localObject1).getStringArrayList("INAPP_PURCHASE_DATA_LIST");
+        ArrayList localArrayList3 = ((Bundle)localObject1).getStringArrayList("INAPP_DATA_SIGNATURE_LIST");
+        int i = 0;
+        while (i < localArrayList2.size())
+        {
+          Object localObject3 = (String)localArrayList2.get(i);
+          String str1 = (String)localArrayList3.get(i);
+          String str2 = (String)((ArrayList)localObject2).get(i);
+          StringBuilder localStringBuilder = new StringBuilder();
+          localStringBuilder.append("Sku is owned: ");
+          localStringBuilder.append(str2);
+          BillingHelper.logVerbose("BillingClient", localStringBuilder.toString());
+          try
+          {
+            localObject3 = new Purchase((String)localObject3, str1);
+            if (TextUtils.isEmpty(((Purchase)localObject3).getPurchaseToken())) {
+              BillingHelper.logWarn("BillingClient", "BUG: empty/null token!");
+            }
+            localArrayList1.add(localObject3);
+            i += 1;
+          }
+          catch (JSONException paramString)
+          {
+            localObject1 = new StringBuilder();
+            ((StringBuilder)localObject1).append("Got an exception trying to decode the purchase: ");
+            ((StringBuilder)localObject1).append(paramString);
+            BillingHelper.logWarn("BillingClient", ((StringBuilder)localObject1).toString());
+            return new Purchase.PurchasesResult(BillingResults.INTERNAL_ERROR, null);
+          }
+        }
+        localObject2 = ((Bundle)localObject1).getString("INAPP_CONTINUATION_TOKEN");
+        localObject1 = new StringBuilder();
+        ((StringBuilder)localObject1).append("Continuation token: ");
+        ((StringBuilder)localObject1).append((String)localObject2);
+        BillingHelper.logVerbose("BillingClient", ((StringBuilder)localObject1).toString());
+        localObject1 = localObject2;
+      } while (!TextUtils.isEmpty((CharSequence)localObject2));
+      return new Purchase.PurchasesResult(BillingResults.OK, localArrayList1);
+    }
+    catch (Exception paramString)
+    {
+      localObject1 = new StringBuilder();
+      ((StringBuilder)localObject1).append("Got exception trying to get purchases: ");
+      ((StringBuilder)localObject1).append(paramString);
+      ((StringBuilder)localObject1).append("; try to reconnect");
+      BillingHelper.logWarn("BillingClient", ((StringBuilder)localObject1).toString());
+    }
+    return new Purchase.PurchasesResult(BillingResults.SERVICE_DISCONNECTED, null);
+  }
+  
+  private void querySkuDetailsAsync(String paramString, String[] paramArrayOfString, long paramLong)
+  {
+    querySkuDetailsAsync(SkuDetailsParams.newBuilder().setType(paramString).setSkusList(Arrays.asList(paramArrayOfString)).build(), new BillingClientNativeCallback(paramLong));
+  }
+  
+  private void startConnection(long paramLong)
+  {
+    startConnection(new BillingClientNativeCallback(paramLong));
+  }
+  
+  public void acknowledgePurchase(final AcknowledgePurchaseParams paramAcknowledgePurchaseParams, final AcknowledgePurchaseResponseListener paramAcknowledgePurchaseResponseListener)
+  {
+    if (!isReady())
+    {
+      paramAcknowledgePurchaseResponseListener.onAcknowledgePurchaseResponse(BillingResults.SERVICE_DISCONNECTED);
+      return;
+    }
+    if (TextUtils.isEmpty(paramAcknowledgePurchaseParams.getPurchaseToken()))
+    {
+      BillingHelper.logWarn("BillingClient", "Please provide a valid purchase token.");
+      paramAcknowledgePurchaseResponseListener.onAcknowledgePurchaseResponse(BillingResults.INVALID_PURCHASE_TOKEN);
+      return;
+    }
+    if (!mIABv9Supported)
+    {
+      paramAcknowledgePurchaseResponseListener.onAcknowledgePurchaseResponse(BillingResults.API_VERSION_NOT_V9);
+      return;
+    }
+    if (executeAsync(new Callable()
+    {
+      public Void call()
+      {
+        try
+        {
+          Object localObject = mService.acknowledgePurchaseExtraParams(9, mApplicationContext.getPackageName(), paramAcknowledgePurchaseParams.getPurchaseToken(), BillingHelper.constructExtraParamsForAcknowledgePurchase(paramAcknowledgePurchaseParams, mQualifiedVersionNumber));
+          final int i = BillingHelper.getResponseCodeFromBundle((Bundle)localObject, "BillingClient");
+          localObject = BillingHelper.getDebugMessageFromBundle((Bundle)localObject, "BillingClient");
+          BillingClientImpl.this.postToUiThread(new Runnable()
+          {
+            public void run()
+            {
+              val$listener.onAcknowledgePurchaseResponse(BillingResult.newBuilder().setResponseCode(i).setDebugMessage(val$debugMessage).build());
+            }
+          });
+          return null;
+        }
+        catch (Exception localException)
+        {
+          BillingClientImpl.this.postToUiThread(new Runnable()
+          {
+            public void run()
+            {
+              StringBuilder localStringBuilder = new StringBuilder();
+              localStringBuilder.append("Error acknowledge purchase; ex: ");
+              localStringBuilder.append(localException);
+              BillingHelper.logWarn("BillingClient", localStringBuilder.toString());
+              val$listener.onAcknowledgePurchaseResponse(BillingResults.SERVICE_DISCONNECTED);
+            }
+          });
+        }
+        return null;
+      }
+    }, 30000L, new Runnable()
+    {
+      public void run()
+      {
+        paramAcknowledgePurchaseResponseListener.onAcknowledgePurchaseResponse(BillingResults.SERVICE_TIMEOUT);
+      }
+    }) == null) {
+      paramAcknowledgePurchaseResponseListener.onAcknowledgePurchaseResponse(getBillingResultForNullFutureResult());
+    }
+  }
+  
+  public void consumeAsync(final ConsumeParams paramConsumeParams, final ConsumeResponseListener paramConsumeResponseListener)
+  {
+    if (!isReady())
+    {
+      paramConsumeResponseListener.onConsumeResponse(BillingResults.SERVICE_DISCONNECTED, null);
+      return;
+    }
+    if (executeAsync(new Callable()
+    {
+      public Void call()
+      {
+        BillingClientImpl.this.consumeInternal(paramConsumeParams, paramConsumeResponseListener);
+        return null;
+      }
+    }, 30000L, new Runnable()
+    {
+      public void run()
+      {
+        paramConsumeResponseListener.onConsumeResponse(BillingResults.SERVICE_TIMEOUT, null);
+      }
+    }) == null) {
+      paramConsumeResponseListener.onConsumeResponse(getBillingResultForNullFutureResult(), null);
+    }
+  }
+  
+  /* Error */
+  public void endConnection()
+  {
+    // Byte code:
+    //   0: aload_0
+    //   1: getfield 191	com/android/billingclient/api/BillingClientImpl:mBroadcastManager	Lcom/android/billingclient/api/BillingBroadcastManager;
+    //   4: invokevirtual 690	com/android/billingclient/api/BillingBroadcastManager:destroy	()V
+    //   7: aload_0
+    //   8: getfield 692	com/android/billingclient/api/BillingClientImpl:mServiceConnection	Lcom/android/billingclient/api/BillingClientImpl$BillingServiceConnection;
+    //   11: ifnull +10 -> 21
+    //   14: aload_0
+    //   15: getfield 692	com/android/billingclient/api/BillingClientImpl:mServiceConnection	Lcom/android/billingclient/api/BillingClientImpl$BillingServiceConnection;
+    //   18: invokevirtual 695	com/android/billingclient/api/BillingClientImpl$BillingServiceConnection:markDisconnectedAndCleanUp	()V
+    //   21: aload_0
+    //   22: getfield 692	com/android/billingclient/api/BillingClientImpl:mServiceConnection	Lcom/android/billingclient/api/BillingClientImpl$BillingServiceConnection;
+    //   25: ifnull +34 -> 59
+    //   28: aload_0
+    //   29: getfield 242	com/android/billingclient/api/BillingClientImpl:mService	Lcom/android/vending/billing/IInAppBillingService;
+    //   32: ifnull +27 -> 59
+    //   35: ldc 102
+    //   37: ldc_w 697
+    //   40: invokestatic 322	com/android/billingclient/util/BillingHelper:logVerbose	(Ljava/lang/String;Ljava/lang/String;)V
+    //   43: aload_0
+    //   44: getfield 178	com/android/billingclient/api/BillingClientImpl:mApplicationContext	Landroid/content/Context;
+    //   47: aload_0
+    //   48: getfield 692	com/android/billingclient/api/BillingClientImpl:mServiceConnection	Lcom/android/billingclient/api/BillingClientImpl$BillingServiceConnection;
+    //   51: invokevirtual 701	android/content/Context:unbindService	(Landroid/content/ServiceConnection;)V
+    //   54: aload_0
+    //   55: aconst_null
+    //   56: putfield 692	com/android/billingclient/api/BillingClientImpl:mServiceConnection	Lcom/android/billingclient/api/BillingClientImpl$BillingServiceConnection;
+    //   59: aload_0
+    //   60: aconst_null
+    //   61: putfield 242	com/android/billingclient/api/BillingClientImpl:mService	Lcom/android/vending/billing/IInAppBillingService;
+    //   64: aload_0
+    //   65: getfield 386	com/android/billingclient/api/BillingClientImpl:mExecutorService	Ljava/util/concurrent/ExecutorService;
+    //   68: ifnull +18 -> 86
+    //   71: aload_0
+    //   72: getfield 386	com/android/billingclient/api/BillingClientImpl:mExecutorService	Ljava/util/concurrent/ExecutorService;
+    //   75: invokeinterface 705 1 0
+    //   80: pop
+    //   81: aload_0
+    //   82: aconst_null
+    //   83: putfield 386	com/android/billingclient/api/BillingClientImpl:mExecutorService	Ljava/util/concurrent/ExecutorService;
+    //   86: aload_0
+    //   87: iconst_3
+    //   88: putfield 155	com/android/billingclient/api/BillingClientImpl:mClientState	I
+    //   91: return
+    //   92: astore_1
+    //   93: goto +38 -> 131
+    //   96: astore_1
+    //   97: new 306	java/lang/StringBuilder
+    //   100: dup
+    //   101: invokespecial 307	java/lang/StringBuilder:<init>	()V
+    //   104: astore_2
+    //   105: aload_2
+    //   106: ldc_w 707
+    //   109: invokevirtual 313	java/lang/StringBuilder:append	(Ljava/lang/String;)Ljava/lang/StringBuilder;
+    //   112: pop
+    //   113: aload_2
+    //   114: aload_1
+    //   115: invokevirtual 413	java/lang/StringBuilder:append	(Ljava/lang/Object;)Ljava/lang/StringBuilder;
+    //   118: pop
+    //   119: ldc 102
+    //   121: aload_2
+    //   122: invokevirtual 316	java/lang/StringBuilder:toString	()Ljava/lang/String;
+    //   125: invokestatic 416	com/android/billingclient/util/BillingHelper:logWarn	(Ljava/lang/String;Ljava/lang/String;)V
+    //   128: goto -42 -> 86
+    //   131: aload_0
+    //   132: iconst_3
+    //   133: putfield 155	com/android/billingclient/api/BillingClientImpl:mClientState	I
+    //   136: aload_1
+    //   137: athrow
+    // Local variable table:
+    //   start	length	slot	name	signature
+    //   0	138	0	this	BillingClientImpl
+    //   92	1	1	localObject	Object
+    //   96	41	1	localException	Exception
+    //   104	18	2	localStringBuilder	StringBuilder
+    // Exception table:
+    //   from	to	target	type
+    //   0	21	92	finally
+    //   21	59	92	finally
+    //   59	86	92	finally
+    //   97	128	92	finally
+    //   0	21	96	java/lang/Exception
+    //   21	59	96	java/lang/Exception
+    //   59	86	96	java/lang/Exception
+  }
+  
+  public BillingResult isFeatureSupported(String paramString)
+  {
+    if (!isReady()) {
+      return BillingResults.SERVICE_DISCONNECTED;
+    }
+    int i = -1;
+    switch (paramString.hashCode())
+    {
+    default: 
+      break;
+    case 1987365622: 
+      if (paramString.equals("subscriptions")) {
+        i = 0;
+      }
+      break;
+    case 1219490065: 
+      if (paramString.equals("subscriptionsOnVr")) {
+        i = 3;
+      }
+      break;
+    case 292218239: 
+      if (paramString.equals("inAppItemsOnVr")) {
+        i = 2;
+      }
+      break;
+    case 207616302: 
+      if (paramString.equals("priceChangeConfirmation")) {
+        i = 4;
+      }
+      break;
+    case -422092961: 
+      if (paramString.equals("subscriptionsUpdate")) {
+        i = 1;
+      }
+      break;
+    }
+    switch (i)
+    {
+    default: 
+      StringBuilder localStringBuilder = new StringBuilder();
+      localStringBuilder.append("Unsupported feature: ");
+      localStringBuilder.append(paramString);
+      BillingHelper.logWarn("BillingClient", localStringBuilder.toString());
+      return BillingResults.UNKNOWN_FEATURE;
+    case 4: 
+      if (mIABv8Supported) {
+        return BillingResults.OK;
+      }
+      return BillingResults.FEATURE_NOT_SUPPORTED;
+    case 3: 
+      return isBillingSupportedOnVr("subs");
+    case 2: 
+      return isBillingSupportedOnVr("inapp");
+    case 1: 
+      if (mSubscriptionUpdateSupported) {
+        return BillingResults.OK;
+      }
+      return BillingResults.FEATURE_NOT_SUPPORTED;
+    }
+    if (mSubscriptionsSupported) {
+      return BillingResults.OK;
+    }
+    return BillingResults.FEATURE_NOT_SUPPORTED;
+  }
+  
+  public boolean isReady()
+  {
+    return (mClientState == 2) && (mService != null) && (mServiceConnection != null);
+  }
+  
+  public BillingResult launchBillingFlow(Activity paramActivity, final BillingFlowParams paramBillingFlowParams)
+  {
+    if (!isReady()) {
+      return broadcastFailureAndReturnBillingResponse(BillingResults.SERVICE_DISCONNECTED);
+    }
+    Object localObject1 = paramBillingFlowParams.getSkuType();
+    final String str = paramBillingFlowParams.getSku();
+    SkuDetails localSkuDetails = paramBillingFlowParams.getSkuDetails();
+    int j = 1;
+    final int i;
+    if ((localSkuDetails != null) && (localSkuDetails.isRewarded())) {
+      i = 1;
+    } else {
+      i = 0;
+    }
+    if (str == null)
+    {
+      BillingHelper.logWarn("BillingClient", "Please fix the input params. SKU can't be null.");
+      return broadcastFailureAndReturnBillingResponse(BillingResults.NULL_SKU);
+    }
+    if (localObject1 == null)
+    {
+      BillingHelper.logWarn("BillingClient", "Please fix the input params. SkuType can't be null.");
+      return broadcastFailureAndReturnBillingResponse(BillingResults.NULL_SKU_TYPE);
+    }
+    if ((((String)localObject1).equals("subs")) && (!mSubscriptionsSupported))
+    {
+      BillingHelper.logWarn("BillingClient", "Current client doesn't support subscriptions.");
+      return broadcastFailureAndReturnBillingResponse(BillingResults.SUBSCRIPTIONS_NOT_SUPPORTED);
+    }
+    if (paramBillingFlowParams.getOldSku() == null) {
+      j = 0;
+    }
+    if ((j != 0) && (!mSubscriptionUpdateSupported))
+    {
+      BillingHelper.logWarn("BillingClient", "Current client doesn't support subscriptions update.");
+      return broadcastFailureAndReturnBillingResponse(BillingResults.SUBSCRIPTIONS_UPDATE_NOT_SUPPORTED);
+    }
+    if ((paramBillingFlowParams.hasExtraParams()) && (!mIABv6Supported))
+    {
+      BillingHelper.logWarn("BillingClient", "Current client doesn't support extra params for buy intent.");
+      return broadcastFailureAndReturnBillingResponse(BillingResults.EXTRA_PARAMS_NOT_SUPPORTED);
+    }
+    if ((i != 0) && (!mIABv6Supported))
+    {
+      BillingHelper.logWarn("BillingClient", "Current client doesn't support extra params for buy intent.");
+      return broadcastFailureAndReturnBillingResponse(BillingResults.EXTRA_PARAMS_NOT_SUPPORTED);
+    }
+    Object localObject2 = new StringBuilder();
+    ((StringBuilder)localObject2).append("Constructing buy intent for ");
+    ((StringBuilder)localObject2).append(str);
+    ((StringBuilder)localObject2).append(", item type: ");
+    ((StringBuilder)localObject2).append((String)localObject1);
+    BillingHelper.logVerbose("BillingClient", ((StringBuilder)localObject2).toString());
+    if (mIABv6Supported)
+    {
+      localObject2 = BillingHelper.constructExtraParamsForLaunchBillingFlow(paramBillingFlowParams, mIABv9Supported, mEnablePendingPurchases, mQualifiedVersionNumber);
+      if (!localSkuDetails.getSkuDetailsToken().isEmpty()) {
+        ((Bundle)localObject2).putString("skuDetailsToken", localSkuDetails.getSkuDetailsToken());
+      }
+      if (i != 0)
+      {
+        ((Bundle)localObject2).putString("rewardToken", localSkuDetails.rewardToken());
+        if (mChildDirected != 0) {
+          ((Bundle)localObject2).putInt("childDirected", mChildDirected);
+        }
+        if (mUnderAgeOfConsent != 0) {
+          ((Bundle)localObject2).putInt("underAgeOfConsent", mUnderAgeOfConsent);
+        }
+      }
+      if (mIABv9Supported) {
+        i = 9;
+      } else if (paramBillingFlowParams.getVrPurchaseFlow()) {
+        i = 7;
+      } else {
+        i = 6;
+      }
+      paramBillingFlowParams = executeAsync(new Callable()
+      {
+        public Bundle call()
+          throws Exception
+        {
+          return mService.getBuyIntentExtraParams(i, mApplicationContext.getPackageName(), str, val$skuType, null, val$extraParamsFinal);
+        }
+      }, 5000L, null);
+    }
+    else if (j != 0)
+    {
+      paramBillingFlowParams = executeAsync(new Callable()
+      {
+        public Bundle call()
+          throws Exception
+        {
+          return mService.getBuyIntentToReplaceSkus(5, mApplicationContext.getPackageName(), Arrays.asList(new String[] { paramBillingFlowParams.getOldSku() }), str, "subs", null);
+        }
+      }, 5000L, null);
+    }
+    else
+    {
+      paramBillingFlowParams = executeAsync(new Callable()
+      {
+        public Bundle call()
+          throws Exception
+        {
+          return mService.getBuyIntent(3, mApplicationContext.getPackageName(), str, val$skuType, null);
+        }
+      }, 5000L, null);
+    }
+    try
+    {
+      paramBillingFlowParams = (Bundle)paramBillingFlowParams.get(5000L, TimeUnit.MILLISECONDS);
+      i = BillingHelper.getResponseCodeFromBundle(paramBillingFlowParams, "BillingClient");
+      localObject1 = BillingHelper.getDebugMessageFromBundle(paramBillingFlowParams, "BillingClient");
+      if (i != 0)
+      {
+        paramActivity = new StringBuilder();
+        paramActivity.append("Unable to buy item, Error response code: ");
+        paramActivity.append(i);
+        BillingHelper.logWarn("BillingClient", paramActivity.toString());
+        return broadcastFailureAndReturnBillingResponse(BillingResult.newBuilder().setResponseCode(i).setDebugMessage((String)localObject1).build());
+      }
+      localObject1 = new Intent(paramActivity, ProxyBillingActivity.class);
+      ((Intent)localObject1).putExtra("result_receiver", onPurchaseFinishedReceiver);
+      ((Intent)localObject1).putExtra("BUY_INTENT", (PendingIntent)paramBillingFlowParams.getParcelable("BUY_INTENT"));
+      paramActivity.startActivity((Intent)localObject1);
+      return BillingResults.OK;
+    }
+    catch (TimeoutException|CancellationException paramActivity)
+    {
+      for (;;) {}
+    }
+    catch (Exception paramActivity)
+    {
+      for (;;) {}
+    }
+    paramActivity = new StringBuilder();
+    paramActivity.append("Exception while launching billing flow: ; for sku: ");
+    paramActivity.append(str);
+    paramActivity.append("; try to reconnect");
+    BillingHelper.logWarn("BillingClient", paramActivity.toString());
+    return broadcastFailureAndReturnBillingResponse(BillingResults.SERVICE_DISCONNECTED);
+    paramActivity = new StringBuilder();
+    paramActivity.append("Time out while launching billing flow: ; for sku: ");
+    paramActivity.append(str);
+    paramActivity.append("; try to reconnect");
+    BillingHelper.logWarn("BillingClient", paramActivity.toString());
+    return broadcastFailureAndReturnBillingResponse(BillingResults.SERVICE_TIMEOUT);
+  }
+  
+  public void launchPriceChangeConfirmationFlow(Activity paramActivity, final PriceChangeFlowParams paramPriceChangeFlowParams, @NonNull final PriceChangeConfirmationListener paramPriceChangeConfirmationListener)
+  {
+    if (!isReady())
+    {
+      paramPriceChangeConfirmationListener.onPriceChangeConfirmationResult(BillingResults.SERVICE_DISCONNECTED);
+      return;
+    }
+    Object localObject1;
+    if ((paramPriceChangeFlowParams != null) && (paramPriceChangeFlowParams.getSkuDetails() != null))
+    {
+      paramPriceChangeFlowParams = paramPriceChangeFlowParams.getSkuDetails().getSku();
+      if (paramPriceChangeFlowParams == null)
+      {
+        BillingHelper.logWarn("BillingClient", "Please fix the input params. priceChangeFlowParams must contain valid sku.");
+        paramPriceChangeConfirmationListener.onPriceChangeConfirmationResult(BillingResults.NULL_SKU);
+        return;
+      }
+      if (!mIABv8Supported)
+      {
+        BillingHelper.logWarn("BillingClient", "Current client doesn't support price change confirmation flow.");
+        paramPriceChangeConfirmationListener.onPriceChangeConfirmationResult(BillingResults.FEATURE_NOT_SUPPORTED);
+        return;
+      }
+      localObject1 = new Bundle();
+      ((Bundle)localObject1).putString("playBillingLibraryVersion", mQualifiedVersionNumber);
+      ((Bundle)localObject1).putBoolean("subs_price_change", true);
+      localObject1 = executeAsync(new Callable()
+      {
+        public Bundle call()
+          throws Exception
+        {
+          return mService.getSubscriptionManagementIntent(8, mApplicationContext.getPackageName(), paramPriceChangeFlowParams, "subs", val$extraParamsFinal);
+        }
+      }, 5000L, null);
+    }
+    try
+    {
+      localObject1 = (Bundle)((Future)localObject1).get(5000L, TimeUnit.MILLISECONDS);
+      int i = BillingHelper.getResponseCodeFromBundle((Bundle)localObject1, "BillingClient");
+      Object localObject2 = BillingHelper.getDebugMessageFromBundle((Bundle)localObject1, "BillingClient");
+      localObject2 = BillingResult.newBuilder().setResponseCode(i).setDebugMessage((String)localObject2).build();
+      if (i != 0)
+      {
+        paramActivity = new StringBuilder();
+        paramActivity.append("Unable to launch price change flow, error response code: ");
+        paramActivity.append(i);
+        BillingHelper.logWarn("BillingClient", paramActivity.toString());
+        paramPriceChangeConfirmationListener.onPriceChangeConfirmationResult((BillingResult)localObject2);
+        return;
+      }
+      localObject2 = new ResultReceiver(mUiThreadHandler)
+      {
+        public void onReceiveResult(int paramAnonymousInt, Bundle paramAnonymousBundle)
+        {
+          paramAnonymousBundle = BillingResult.newBuilder().setResponseCode(paramAnonymousInt).setDebugMessage(BillingHelper.getDebugMessageFromBundle(paramAnonymousBundle, "BillingClient")).build();
+          paramPriceChangeConfirmationListener.onPriceChangeConfirmationResult(paramAnonymousBundle);
+        }
+      };
+      Intent localIntent = new Intent(paramActivity, ProxyBillingActivity.class);
+      localIntent.putExtra("SUBS_MANAGEMENT_INTENT", (PendingIntent)((Bundle)localObject1).getParcelable("SUBS_MANAGEMENT_INTENT"));
+      localIntent.putExtra("result_receiver", (Parcelable)localObject2);
+      paramActivity.startActivity(localIntent);
+      return;
+    }
+    catch (TimeoutException|CancellationException paramActivity)
+    {
+      for (;;) {}
+    }
+    catch (Exception paramActivity)
+    {
+      for (;;) {}
+    }
+    paramActivity = new StringBuilder();
+    paramActivity.append("Exception caught while launching Price Change Flow for sku: ");
+    paramActivity.append(paramPriceChangeFlowParams);
+    paramActivity.append("; try to reconnect");
+    BillingHelper.logWarn("BillingClient", paramActivity.toString());
+    paramPriceChangeConfirmationListener.onPriceChangeConfirmationResult(BillingResults.SERVICE_DISCONNECTED);
+    return;
+    paramActivity = new StringBuilder();
+    paramActivity.append("Time out while launching Price Change Flow for sku: ");
+    paramActivity.append(paramPriceChangeFlowParams);
+    paramActivity.append("; try to reconnect");
+    BillingHelper.logWarn("BillingClient", paramActivity.toString());
+    paramPriceChangeConfirmationListener.onPriceChangeConfirmationResult(BillingResults.SERVICE_TIMEOUT);
+    return;
+    BillingHelper.logWarn("BillingClient", "Please fix the input params. priceChangeFlowParams must contain valid sku.");
+    paramPriceChangeConfirmationListener.onPriceChangeConfirmationResult(BillingResults.NULL_SKU);
+  }
+  
+  public void loadRewardedSku(final RewardLoadParams paramRewardLoadParams, final RewardResponseListener paramRewardResponseListener)
+  {
+    if (!mIABv6Supported)
+    {
+      paramRewardResponseListener.onRewardResponse(BillingResults.ITEM_UNAVAILABLE);
+      return;
+    }
+    if (executeAsync(new Callable()
+    {
+      public Void call()
+      {
+        Object localObject = BillingHelper.constructExtraParamsForLoadRewardedSku(paramRewardLoadParams.getSkuDetails().rewardToken(), mChildDirected, mUnderAgeOfConsent, mQualifiedVersionNumber);
+        try
+        {
+          localObject = mService.getBuyIntentExtraParams(6, mApplicationContext.getPackageName(), paramRewardLoadParams.getSkuDetails().getSku(), paramRewardLoadParams.getSkuDetails().getType(), null, (Bundle)localObject);
+          localObject = BillingResult.newBuilder().setResponseCode(BillingHelper.getResponseCodeFromBundle((Bundle)localObject, "BillingClient")).setDebugMessage(BillingHelper.getDebugMessageFromBundle((Bundle)localObject, "BillingClient")).build();
+          BillingClientImpl.this.postToUiThread(new Runnable()
+          {
+            public void run()
+            {
+              val$listener.onRewardResponse(val$billingResult);
+            }
+          });
+          return null;
+        }
+        catch (Exception localException)
+        {
+          for (;;) {}
+        }
+        BillingClientImpl.this.postToUiThread(new Runnable()
+        {
+          public void run()
+          {
+            val$listener.onRewardResponse(BillingResults.INTERNAL_ERROR);
+          }
+        });
+        return null;
+      }
+    }, 30000L, new Runnable()
+    {
+      public void run()
+      {
+        paramRewardResponseListener.onRewardResponse(BillingResults.SERVICE_TIMEOUT);
+      }
+    }) == null) {
+      paramRewardResponseListener.onRewardResponse(getBillingResultForNullFutureResult());
+    }
+  }
+  
+  public void queryPurchaseHistoryAsync(final String paramString, final PurchaseHistoryResponseListener paramPurchaseHistoryResponseListener)
+  {
+    if (!isReady())
+    {
+      paramPurchaseHistoryResponseListener.onPurchaseHistoryResponse(BillingResults.SERVICE_DISCONNECTED, null);
+      return;
+    }
+    if (executeAsync(new Callable()
+    {
+      public Void call()
+      {
+        final BillingClientImpl.PurchaseHistoryResult localPurchaseHistoryResult = BillingClientImpl.this.queryPurchaseHistoryInternal(paramString);
+        BillingClientImpl.this.postToUiThread(new Runnable()
+        {
+          public void run()
+          {
+            val$listener.onPurchaseHistoryResponse(localPurchaseHistoryResult.getBillingResult(), localPurchaseHistoryResult.getPurchaseHistoryRecordList());
+          }
+        });
+        return null;
+      }
+    }, 30000L, new Runnable()
+    {
+      public void run()
+      {
+        paramPurchaseHistoryResponseListener.onPurchaseHistoryResponse(BillingResults.SERVICE_TIMEOUT, null);
+      }
+    }) == null) {
+      paramPurchaseHistoryResponseListener.onPurchaseHistoryResponse(getBillingResultForNullFutureResult(), null);
+    }
+  }
+  
+  public Purchase.PurchasesResult queryPurchases(final String paramString)
+  {
+    if (!isReady()) {
+      return new Purchase.PurchasesResult(BillingResults.SERVICE_DISCONNECTED, null);
+    }
+    if (TextUtils.isEmpty(paramString))
+    {
+      BillingHelper.logWarn("BillingClient", "Please provide a valid SKU type.");
+      return new Purchase.PurchasesResult(BillingResults.EMPTY_SKU_TYPE, null);
+    }
+    paramString = executeAsync(new Callable()
+    {
+      public Purchase.PurchasesResult call()
+        throws Exception
+      {
+        return BillingClientImpl.this.queryPurchasesInternal(paramString);
+      }
+    }, 5000L, null);
+    try
+    {
+      paramString = (Purchase.PurchasesResult)paramString.get(5000L, TimeUnit.MILLISECONDS);
+      return paramString;
+    }
+    catch (TimeoutException|CancellationException paramString)
+    {
+      for (;;) {}
+    }
+    catch (Exception paramString)
+    {
+      for (;;) {}
+    }
+    return new Purchase.PurchasesResult(BillingResults.INTERNAL_ERROR, null);
+    return new Purchase.PurchasesResult(BillingResults.SERVICE_TIMEOUT, null);
+  }
+  
+  public void querySkuDetailsAsync(final SkuDetailsParams paramSkuDetailsParams, final SkuDetailsResponseListener paramSkuDetailsResponseListener)
+  {
+    if (!isReady())
+    {
+      paramSkuDetailsResponseListener.onSkuDetailsResponse(BillingResults.SERVICE_DISCONNECTED, null);
+      return;
+    }
+    final String str = paramSkuDetailsParams.getSkuType();
+    paramSkuDetailsParams = paramSkuDetailsParams.getSkusList();
+    if (TextUtils.isEmpty(str))
+    {
+      BillingHelper.logWarn("BillingClient", "Please fix the input params. SKU type can't be empty.");
+      paramSkuDetailsResponseListener.onSkuDetailsResponse(BillingResults.EMPTY_SKU_TYPE, null);
+      return;
+    }
+    if (paramSkuDetailsParams == null)
+    {
+      BillingHelper.logWarn("BillingClient", "Please fix the input params. The list of SKUs can't be empty.");
+      paramSkuDetailsResponseListener.onSkuDetailsResponse(BillingResults.EMPTY_SKU_LIST, null);
+      return;
+    }
+    if (executeAsync(new Callable()
+    {
+      public Void call()
+      {
+        final SkuDetails.SkuDetailsResult localSkuDetailsResult = querySkuDetailsInternal(str, paramSkuDetailsParams);
+        BillingClientImpl.this.postToUiThread(new Runnable()
+        {
+          public void run()
+          {
+            val$listener.onSkuDetailsResponse(BillingResult.newBuilder().setResponseCode(localSkuDetailsResult.getResponseCode()).setDebugMessage(localSkuDetailsResult.getDebugMessage()).build(), localSkuDetailsResult.getSkuDetailsList());
+          }
+        });
+        return null;
+      }
+    }, 30000L, new Runnable()
+    {
+      public void run()
+      {
+        paramSkuDetailsResponseListener.onSkuDetailsResponse(BillingResults.SERVICE_TIMEOUT, null);
+      }
+    }) == null) {
+      paramSkuDetailsResponseListener.onSkuDetailsResponse(getBillingResultForNullFutureResult(), null);
+    }
+  }
+  
+  @VisibleForTesting
+  SkuDetails.SkuDetailsResult querySkuDetailsInternal(String paramString, List<String> paramList)
+  {
+    ArrayList localArrayList = new ArrayList();
+    int m = paramList.size();
+    int i;
+    for (int j = 0; j < m; j = i)
+    {
+      i = j + 20;
+      int k;
+      if (i > m) {
+        k = m;
+      } else {
+        k = i;
+      }
+      Object localObject1 = new ArrayList(paramList.subList(j, k));
+      Object localObject2 = new Bundle();
+      ((Bundle)localObject2).putStringArrayList("ITEM_ID_LIST", (ArrayList)localObject1);
+      ((Bundle)localObject2).putString("playBillingLibraryVersion", mQualifiedVersionNumber);
+      for (;;)
+      {
+        try
+        {
+          if (mIABv10Supported) {
+            localObject1 = mService.getSkuDetailsExtraParams(10, mApplicationContext.getPackageName(), paramString, (Bundle)localObject2, BillingHelper.constructExtraParamsForGetSkuDetails(mIABv9Supported, mEnablePendingPurchases, mQualifiedVersionNumber));
+          } else {
+            localObject1 = mService.getSkuDetails(3, mApplicationContext.getPackageName(), paramString, (Bundle)localObject2);
+          }
+          if (localObject1 == null)
+          {
+            BillingHelper.logWarn("BillingClient", "querySkuDetailsAsync got null sku details list");
+            return new SkuDetails.SkuDetailsResult(4, "Null sku details list", null);
+          }
+          if (!((Bundle)localObject1).containsKey("DETAILS_LIST"))
+          {
+            i = BillingHelper.getResponseCodeFromBundle((Bundle)localObject1, "BillingClient");
+            paramString = BillingHelper.getDebugMessageFromBundle((Bundle)localObject1, "BillingClient");
+            if (i != 0)
+            {
+              paramList = new StringBuilder();
+              paramList.append("getSkuDetails() failed. Response code: ");
+              paramList.append(i);
+              BillingHelper.logWarn("BillingClient", paramList.toString());
+              return new SkuDetails.SkuDetailsResult(i, paramString, localArrayList);
+            }
+            BillingHelper.logWarn("BillingClient", "getSkuDetails() returned a bundle with neither an error nor a detail list.");
+            return new SkuDetails.SkuDetailsResult(6, paramString, localArrayList);
+          }
+          localObject1 = ((Bundle)localObject1).getStringArrayList("DETAILS_LIST");
+          if (localObject1 == null)
+          {
+            BillingHelper.logWarn("BillingClient", "querySkuDetailsAsync got null response list");
+            return new SkuDetails.SkuDetailsResult(4, "querySkuDetailsAsync got null response list", null);
+          }
+          j = 0;
+          if (j < ((ArrayList)localObject1).size()) {
+            localObject2 = (String)((ArrayList)localObject1).get(j);
+          }
+        }
+        catch (Exception paramString)
+        {
+          StringBuilder localStringBuilder;
+          paramList = new StringBuilder();
+          paramList.append("querySkuDetailsAsync got a remote exception (try to reconnect).");
+          paramList.append(paramString);
+          BillingHelper.logWarn("BillingClient", paramList.toString());
+          return new SkuDetails.SkuDetailsResult(-1, "Service connection is disconnected.", null);
+        }
+        try
+        {
+          localObject2 = new SkuDetails((String)localObject2);
+          localStringBuilder = new StringBuilder();
+          localStringBuilder.append("Got sku details: ");
+          localStringBuilder.append(localObject2);
+          BillingHelper.logVerbose("BillingClient", localStringBuilder.toString());
+          localArrayList.add(localObject2);
+          j += 1;
+        }
+        catch (JSONException paramString) {}
+      }
+      BillingHelper.logWarn("BillingClient", "Got a JSON exception trying to decode SkuDetails.");
+      return new SkuDetails.SkuDetailsResult(6, "Error trying to decode SkuDetails.", null);
+    }
+    return new SkuDetails.SkuDetailsResult(0, "", localArrayList);
+  }
+  
+  @VisibleForTesting
+  void setExecutorService(ExecutorService paramExecutorService)
+  {
+    mExecutorService = paramExecutorService;
+  }
+  
+  public void startConnection(@NonNull BillingClientStateListener paramBillingClientStateListener)
+  {
+    if (isReady())
+    {
+      BillingHelper.logVerbose("BillingClient", "Service connection is valid. No need to re-initialize.");
+      paramBillingClientStateListener.onBillingSetupFinished(BillingResults.OK);
+      return;
+    }
+    if (mClientState == 1)
+    {
+      BillingHelper.logWarn("BillingClient", "Client is already in the process of connecting to billing service.");
+      paramBillingClientStateListener.onBillingSetupFinished(BillingResults.CLIENT_CONNECTING);
+      return;
+    }
+    if (mClientState == 3)
+    {
+      BillingHelper.logWarn("BillingClient", "Client was already closed and can't be reused. Please create another instance.");
+      paramBillingClientStateListener.onBillingSetupFinished(BillingResults.SERVICE_DISCONNECTED);
+      return;
+    }
+    mClientState = 1;
+    mBroadcastManager.registerReceiver();
+    BillingHelper.logVerbose("BillingClient", "Starting in-app billing setup.");
+    mServiceConnection = new BillingServiceConnection(paramBillingClientStateListener, null);
+    Intent localIntent = new Intent("com.android.vending.billing.InAppBillingService.BIND");
+    localIntent.setPackage("com.android.vending");
+    Object localObject1 = mApplicationContext.getPackageManager().queryIntentServices(localIntent, 0);
+    if ((localObject1 != null) && (!((List)localObject1).isEmpty()))
+    {
+      Object localObject2 = (ResolveInfo)((List)localObject1).get(0);
+      if (serviceInfo != null)
+      {
+        localObject1 = serviceInfo.packageName;
+        localObject2 = serviceInfo.name;
+        if (("com.android.vending".equals(localObject1)) && (localObject2 != null))
+        {
+          localObject1 = new ComponentName((String)localObject1, (String)localObject2);
+          localIntent = new Intent(localIntent);
+          localIntent.setComponent((ComponentName)localObject1);
+          localIntent.putExtra("playBillingLibraryVersion", mQualifiedVersionNumber);
+          if (mApplicationContext.bindService(localIntent, mServiceConnection, 1))
+          {
+            BillingHelper.logVerbose("BillingClient", "Service was bonded successfully.");
+            return;
+          }
+          BillingHelper.logWarn("BillingClient", "Connection to Billing service is blocked.");
+        }
+        else
+        {
+          BillingHelper.logWarn("BillingClient", "The device doesn't have valid Play Store.");
+        }
+      }
+    }
+    mClientState = 0;
+    BillingHelper.logVerbose("BillingClient", "Billing service unavailable on device.");
+    paramBillingClientStateListener.onBillingSetupFinished(BillingResults.BILLING_UNAVAILABLE);
+  }
+  
+  private final class BillingServiceConnection
+    implements ServiceConnection
+  {
+    private boolean disconnected = false;
+    private final Object lock = new Object();
+    private BillingClientStateListener mListener;
+    
+    private BillingServiceConnection(BillingClientStateListener paramBillingClientStateListener)
+    {
+      mListener = paramBillingClientStateListener;
+    }
+    
+    private void notifySetupResult(final BillingResult paramBillingResult)
+    {
+      BillingClientImpl.this.postToUiThread(new Runnable()
+      {
+        public void run()
+        {
+          synchronized (lock)
+          {
+            if (mListener != null) {
+              mListener.onBillingSetupFinished(paramBillingResult);
+            }
+            return;
+          }
+        }
+      });
+    }
+    
+    void markDisconnectedAndCleanUp()
+    {
+      synchronized (lock)
+      {
+        mListener = null;
+        disconnected = true;
+        return;
+      }
+    }
+    
+    public void onServiceConnected(ComponentName paramComponentName, IBinder paramIBinder)
+    {
+      BillingHelper.logVerbose("BillingClient", "Billing service connected.");
+      BillingClientImpl.access$302(BillingClientImpl.this, IInAppBillingService.Stub.asInterface(paramIBinder));
+      if (BillingClientImpl.this.executeAsync(new Callable()
+      {
+        public Void call()
+        {
+          synchronized (lock)
+          {
+            if (disconnected) {
+              return null;
+            }
+            try
+            {
+              ??? = mApplicationContext.getPackageName();
+              j = 10;
+              i = 3;
+            }
+            catch (Exception localException1)
+            {
+              for (;;)
+              {
+                label442:
+                continue;
+                continue;
+                int k = 0;
+                int j = i;
+                continue;
+                boolean bool1 = false;
+                continue;
+                bool1 = false;
+                continue;
+                k = 10;
+                int i = j;
+                continue;
+                k -= 1;
+                i = j;
+                continue;
+                k = 0;
+                j = i;
+                continue;
+                bool1 = false;
+                continue;
+                bool1 = false;
+                continue;
+                bool1 = false;
+                continue;
+                bool1 = false;
+              }
+            }
+            if (j >= 3)
+            {
+              try
+              {
+                k = mService.isBillingSupported(j, (String)???, "subs");
+                if (k != 0) {
+                  break label488;
+                }
+                i = k;
+                k = j;
+                j = i;
+                i = j;
+                BillingClientImpl localBillingClientImpl = BillingClientImpl.this;
+                bool2 = true;
+                if (k < 5) {
+                  break label504;
+                }
+                bool1 = true;
+                i = j;
+                BillingClientImpl.access$1602(localBillingClientImpl, bool1);
+                i = j;
+                localBillingClientImpl = BillingClientImpl.this;
+                if (k < 3) {
+                  break label510;
+                }
+                bool1 = true;
+                i = j;
+                BillingClientImpl.access$1702(localBillingClientImpl, bool1);
+                if (k >= 3) {
+                  break label516;
+                }
+                i = j;
+                BillingHelper.logVerbose("BillingClient", "In-app billing API does not support subscription on this device.");
+              }
+              catch (Exception localException2)
+              {
+                boolean bool2;
+                for (;;) {}
+                j -= 1;
+                i = k;
+              }
+              if (k < 3) {
+                break label533;
+              }
+              j = mService.isBillingSupported(k, (String)???, "inapp");
+              if (j != 0) {
+                break label524;
+              }
+              i = j;
+              ??? = BillingClientImpl.this;
+              if (k < 10) {
+                break label540;
+              }
+              bool1 = true;
+              i = j;
+              BillingClientImpl.access$1802((BillingClientImpl)???, bool1);
+              i = j;
+              ??? = BillingClientImpl.this;
+              if (k < 9) {
+                break label546;
+              }
+              bool1 = true;
+              i = j;
+              BillingClientImpl.access$1902((BillingClientImpl)???, bool1);
+              i = j;
+              ??? = BillingClientImpl.this;
+              if (k < 8) {
+                break label552;
+              }
+              bool1 = true;
+              i = j;
+              BillingClientImpl.access$2002((BillingClientImpl)???, bool1);
+              i = j;
+              ??? = BillingClientImpl.this;
+              if (k < 6) {
+                break label558;
+              }
+              bool1 = bool2;
+              i = j;
+              BillingClientImpl.access$2102((BillingClientImpl)???, bool1);
+              if (k < 3)
+              {
+                i = j;
+                BillingHelper.logWarn("BillingClient", "In-app billing API version 3 is not supported on this device.");
+              }
+              if (j == 0)
+              {
+                i = j;
+                BillingClientImpl.access$1202(BillingClientImpl.this, 2);
+                i = j;
+              }
+              else
+              {
+                i = j;
+                BillingClientImpl.access$1202(BillingClientImpl.this, 0);
+                i = j;
+                BillingClientImpl.access$302(BillingClientImpl.this, null);
+                i = j;
+                break label442;
+                i = 3;
+                BillingHelper.logWarn("BillingClient", "Exception while checking if billing is supported; try to reconnect");
+                BillingClientImpl.access$1202(BillingClientImpl.this, 0);
+                BillingClientImpl.access$302(BillingClientImpl.this, null);
+              }
+              if (i == 0)
+              {
+                BillingClientImpl.BillingServiceConnection.this.notifySetupResult(BillingResults.OK);
+                return null;
+              }
+              BillingClientImpl.BillingServiceConnection.this.notifySetupResult(BillingResults.API_VERSION_NOT_V3);
+              return null;
+            }
+          }
+        }
+      }, 30000L, new Runnable()
+      {
+        public void run()
+        {
+          BillingClientImpl.access$1202(BillingClientImpl.this, 0);
+          BillingClientImpl.access$302(BillingClientImpl.this, null);
+          BillingClientImpl.BillingServiceConnection.this.notifySetupResult(BillingResults.SERVICE_TIMEOUT);
+        }
+      }) == null) {
+        notifySetupResult(BillingClientImpl.this.getBillingResultForNullFutureResult());
+      }
+    }
+    
+    public void onServiceDisconnected(ComponentName arg1)
+    {
+      BillingHelper.logWarn("BillingClient", "Billing service disconnected.");
+      BillingClientImpl.access$302(BillingClientImpl.this, null);
+      BillingClientImpl.access$1202(BillingClientImpl.this, 0);
+      synchronized (lock)
+      {
+        if (mListener != null) {
+          mListener.onBillingServiceDisconnected();
+        }
+        return;
+      }
+    }
+  }
+  
+  @Retention(RetentionPolicy.SOURCE)
+  public static @interface ClientState
+  {
+    public static final int CLOSED = 3;
+    public static final int CONNECTED = 2;
+    public static final int CONNECTING = 1;
+    public static final int DISCONNECTED = 0;
+  }
+  
+  private static class PurchaseHistoryResult
+  {
+    private BillingResult mBillingResult;
+    private List<PurchaseHistoryRecord> mPurchaseHistoryRecordList;
+    
+    PurchaseHistoryResult(BillingResult paramBillingResult, List<PurchaseHistoryRecord> paramList)
+    {
+      mPurchaseHistoryRecordList = paramList;
+      mBillingResult = paramBillingResult;
+    }
+    
+    BillingResult getBillingResult()
+    {
+      return mBillingResult;
+    }
+    
+    List<PurchaseHistoryRecord> getPurchaseHistoryRecordList()
+    {
+      return mPurchaseHistoryRecordList;
+    }
+  }
+}

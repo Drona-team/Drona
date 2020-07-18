@@ -1,0 +1,189 @@
+package client.testing.util;
+
+import android.bluetooth.BluetoothAdapter;
+import android.bluetooth.BluetoothClass;
+import android.bluetooth.BluetoothDevice;
+import android.content.BroadcastReceiver;
+import android.content.Context;
+import android.content.Intent;
+import android.content.IntentFilter;
+import android.media.AudioManager;
+import android.os.CountDownTimer;
+import android.util.Log;
+
+public abstract class BluetoothController
+{
+  private static final String PAGE_KEY = "BluetoothController";
+  private AudioManager mAudioManager;
+  private BluetoothAdapter mBluetoothAdapter;
+  private BroadcastReceiver mBroadcastReceiver = new BroadcastReceiver()
+  {
+    public void onReceive(Context paramAnonymousContext, Intent paramAnonymousIntent)
+    {
+      paramAnonymousContext = paramAnonymousIntent.getAction();
+      int i;
+      if (paramAnonymousContext.equals("android.bluetooth.device.action.ACL_CONNECTED"))
+      {
+        paramAnonymousContext = (BluetoothDevice)paramAnonymousIntent.getParcelableExtra("android.bluetooth.device.extra.DEVICE");
+        paramAnonymousIntent = paramAnonymousContext.getBluetoothClass();
+        if (paramAnonymousIntent != null)
+        {
+          i = paramAnonymousIntent.getDeviceClass();
+          if ((i == 1032) || (i == 1028))
+          {
+            mAudioManager.setMode(3);
+            BluetoothController.access$102(BluetoothController.this, true);
+            mCountDown.start();
+            onHeadsetConnected();
+          }
+        }
+        paramAnonymousIntent = new StringBuilder();
+        paramAnonymousIntent.append(paramAnonymousContext.getName());
+        paramAnonymousIntent.append(" connected");
+        Log.d("BluetoothController", paramAnonymousIntent.toString());
+        return;
+      }
+      if (paramAnonymousContext.equals("android.bluetooth.device.action.ACL_DISCONNECTED"))
+      {
+        Log.d("BluetoothController", "Headset disconnected");
+        if (mIsCountDownOn)
+        {
+          BluetoothController.access$102(BluetoothController.this, false);
+          mCountDown.cancel();
+        }
+        mAudioManager.setMode(0);
+        onHeadsetDisconnected();
+        return;
+      }
+      if (paramAnonymousContext.equals("android.media.SCO_AUDIO_STATE_CHANGED"))
+      {
+        i = paramAnonymousIntent.getIntExtra("android.media.extra.SCO_AUDIO_STATE", -1);
+        if (i == 1)
+        {
+          BluetoothController.access$302(BluetoothController.this, true);
+          if (mIsStarting)
+          {
+            BluetoothController.access$402(BluetoothController.this, false);
+            onHeadsetConnected();
+          }
+          if (mIsCountDownOn)
+          {
+            BluetoothController.access$102(BluetoothController.this, false);
+            mCountDown.cancel();
+          }
+          onScoAudioConnected();
+          Log.d("BluetoothController", "Sco connected");
+          return;
+        }
+        if (i == 0)
+        {
+          Log.d("BluetoothController", "Sco disconnected");
+          if (!mIsStarting)
+          {
+            BluetoothController.access$302(BluetoothController.this, false);
+            mAudioManager.stopBluetoothSco();
+            onScoAudioDisconnected();
+          }
+        }
+      }
+    }
+  };
+  private Context mContext;
+  private CountDownTimer mCountDown = new CountDownTimer(10000L, 1000L)
+  {
+    public void onFinish()
+    {
+      BluetoothController.access$102(BluetoothController.this, false);
+      mAudioManager.setMode(0);
+      Log.d("BluetoothController", "\nonFinish fail to connect to headset audio");
+    }
+    
+    public void onTick(long paramAnonymousLong)
+    {
+      BluetoothController localBluetoothController = BluetoothController.this;
+      try
+      {
+        mAudioManager.startBluetoothSco();
+        Log.d("BluetoothController", "\nonTick start bluetooth Sco");
+        return;
+      }
+      catch (Exception localException)
+      {
+        for (;;) {}
+      }
+    }
+  };
+  private boolean mIsCountDownOn;
+  private boolean mIsOnHeadsetSco;
+  private boolean mIsStarted;
+  private boolean mIsStarting;
+  
+  public BluetoothController(Context paramContext)
+  {
+    mContext = paramContext;
+    mBluetoothAdapter = BluetoothAdapter.getDefaultAdapter();
+    mAudioManager = ((AudioManager)mContext.getSystemService("audio"));
+  }
+  
+  private boolean startBluetooth()
+  {
+    Log.d("BluetoothController", "startBluetooth");
+    if ((mBluetoothAdapter != null) && (mAudioManager.isBluetoothScoAvailableOffCall()))
+    {
+      mContext.registerReceiver(mBroadcastReceiver, new IntentFilter("android.bluetooth.device.action.ACL_CONNECTED"));
+      mContext.registerReceiver(mBroadcastReceiver, new IntentFilter("android.bluetooth.device.action.ACL_DISCONNECTED"));
+      mContext.registerReceiver(mBroadcastReceiver, new IntentFilter("android.media.SCO_AUDIO_STATE_CHANGED"));
+      mAudioManager.setMode(3);
+      mIsCountDownOn = true;
+      mCountDown.start();
+      mIsStarting = true;
+      return true;
+    }
+    return false;
+  }
+  
+  private void stopBluetooth()
+  {
+    Log.d("BluetoothController", "stopBluetooth");
+    if (mIsCountDownOn)
+    {
+      mIsCountDownOn = false;
+      mCountDown.cancel();
+    }
+    mContext.unregisterReceiver(mBroadcastReceiver);
+    mAudioManager.stopBluetoothSco();
+    mAudioManager.setMode(0);
+  }
+  
+  public boolean isOnHeadsetSco()
+  {
+    return mIsOnHeadsetSco;
+  }
+  
+  public abstract void onHeadsetConnected();
+  
+  public abstract void onHeadsetDisconnected();
+  
+  public abstract void onScoAudioConnected();
+  
+  public abstract void onScoAudioDisconnected();
+  
+  public boolean start()
+  {
+    if (!mIsStarted)
+    {
+      mIsStarted = true;
+      mIsStarted = startBluetooth();
+    }
+    return mIsStarted;
+  }
+  
+  public void stop()
+  {
+    if (mIsStarted)
+    {
+      mIsStarted = false;
+      stopBluetooth();
+    }
+  }
+}

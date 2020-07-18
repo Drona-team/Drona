@@ -1,0 +1,157 @@
+package com.facebook.react.uimanager;
+
+import android.content.Context;
+import android.view.View;
+import androidx.annotation.NonNull;
+import androidx.annotation.Nullable;
+import com.facebook.react.bridge.BaseJavaModule;
+import com.facebook.react.bridge.ReactApplicationContext;
+import com.facebook.react.bridge.ReadableArray;
+import com.facebook.react.bridge.ReadableMap;
+import com.facebook.react.config.ReactFeatureFlags;
+import com.facebook.react.touch.JSResponderHandler;
+import com.facebook.react.touch.ReactInterceptingViewGroup;
+import com.facebook.react.uimanager.annotations.ReactPropertyHolder;
+import com.facebook.yoga.YogaMeasureMode;
+import java.util.Map;
+
+@ReactPropertyHolder
+public abstract class ViewManager<T extends View, C extends ReactShadowNode>
+  extends BaseJavaModule
+{
+  public ViewManager() {}
+  
+  @NonNull
+  private final T createView(@NonNull ThemedReactContext paramThemedReactContext, JSResponderHandler paramJSResponderHandler)
+  {
+    return createView(paramThemedReactContext, null, null, paramJSResponderHandler);
+  }
+  
+  protected void addEventEmitters(@NonNull ThemedReactContext paramThemedReactContext, @NonNull T paramT) {}
+  
+  public C createShadowNodeInstance()
+  {
+    throw new RuntimeException("ViewManager subclasses must implement createShadowNodeInstance()");
+  }
+  
+  @NonNull
+  public C createShadowNodeInstance(@NonNull ReactApplicationContext paramReactApplicationContext)
+  {
+    return createShadowNodeInstance();
+  }
+  
+  @NonNull
+  public T createView(@NonNull ThemedReactContext paramThemedReactContext, @Nullable ReactStylesDiffMap paramReactStylesDiffMap, @Nullable StateWrapper paramStateWrapper, JSResponderHandler paramJSResponderHandler)
+  {
+    paramReactStylesDiffMap = createViewInstance(paramThemedReactContext, paramReactStylesDiffMap, paramStateWrapper);
+    addEventEmitters(paramThemedReactContext, paramReactStylesDiffMap);
+    if ((paramReactStylesDiffMap instanceof ReactInterceptingViewGroup)) {
+      ((ReactInterceptingViewGroup)paramReactStylesDiffMap).setOnInterceptTouchEventListener(paramJSResponderHandler);
+    }
+    return paramReactStylesDiffMap;
+  }
+  
+  @NonNull
+  protected abstract T createViewInstance(@NonNull ThemedReactContext paramThemedReactContext);
+  
+  @NonNull
+  protected T createViewInstance(@NonNull ThemedReactContext paramThemedReactContext, @Nullable ReactStylesDiffMap paramReactStylesDiffMap, @Nullable StateWrapper paramStateWrapper)
+  {
+    paramThemedReactContext = createViewInstance(paramThemedReactContext);
+    if (paramReactStylesDiffMap != null) {
+      updateProperties(paramThemedReactContext, paramReactStylesDiffMap);
+    }
+    if (paramStateWrapper != null)
+    {
+      paramReactStylesDiffMap = updateState(paramThemedReactContext, paramReactStylesDiffMap, paramStateWrapper);
+      if (paramReactStylesDiffMap != null) {
+        updateExtraData(paramThemedReactContext, paramReactStylesDiffMap);
+      }
+    }
+    return paramThemedReactContext;
+  }
+  
+  @Nullable
+  public Map<String, Integer> getCommandsMap()
+  {
+    return null;
+  }
+  
+  @Nullable
+  protected ViewManagerDelegate<T> getDelegate()
+  {
+    return null;
+  }
+  
+  @Nullable
+  public Map<String, Object> getExportedCustomBubblingEventTypeConstants()
+  {
+    return null;
+  }
+  
+  @Nullable
+  public Map<String, Object> getExportedCustomDirectEventTypeConstants()
+  {
+    return null;
+  }
+  
+  @Nullable
+  public Map<String, Object> getExportedViewConstants()
+  {
+    return null;
+  }
+  
+  @NonNull
+  public abstract String getName();
+  
+  public Map<String, String> getNativeProps()
+  {
+    return ViewManagerPropertyUpdater.getNativeProps(getClass(), getShadowNodeClass());
+  }
+  
+  public abstract Class<? extends C> getShadowNodeClass();
+  
+  public long measure(Context paramContext, ReadableMap paramReadableMap1, ReadableMap paramReadableMap2, ReadableMap paramReadableMap3, float paramFloat1, YogaMeasureMode paramYogaMeasureMode1, float paramFloat2, YogaMeasureMode paramYogaMeasureMode2)
+  {
+    return 0L;
+  }
+  
+  protected void onAfterUpdateTransaction(@NonNull T paramT) {}
+  
+  public void onDropViewInstance(@NonNull T paramT) {}
+  
+  @Deprecated
+  public void receiveCommand(@NonNull T paramT, int paramInt, @Nullable ReadableArray paramReadableArray) {}
+  
+  public void receiveCommand(@NonNull T paramT, String paramString, @Nullable ReadableArray paramReadableArray) {}
+  
+  public abstract void updateExtraData(@NonNull T paramT, Object paramObject);
+  
+  @Nullable
+  public Object updateLocalData(@NonNull T paramT, ReactStylesDiffMap paramReactStylesDiffMap1, ReactStylesDiffMap paramReactStylesDiffMap2)
+  {
+    return null;
+  }
+  
+  public void updateProperties(@NonNull T paramT, ReactStylesDiffMap paramReactStylesDiffMap)
+  {
+    if (ReactFeatureFlags.useViewManagerDelegates)
+    {
+      ViewManagerDelegate localViewManagerDelegate = getDelegate();
+      if (localViewManagerDelegate != null)
+      {
+        ViewManagerPropertyUpdater.updateProps(localViewManagerDelegate, paramT, paramReactStylesDiffMap);
+        break label30;
+      }
+    }
+    ViewManagerPropertyUpdater.updateProps(this, paramT, paramReactStylesDiffMap);
+    label30:
+    onAfterUpdateTransaction(paramT);
+  }
+  
+  @Nullable
+  public Object updateState(@NonNull T paramT, ReactStylesDiffMap paramReactStylesDiffMap, StateWrapper paramStateWrapper)
+  {
+    return null;
+  }
+}

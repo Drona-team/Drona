@@ -1,0 +1,701 @@
+package com.google.android.exoplayer2.source.chunk;
+
+import androidx.annotation.Nullable;
+import com.google.android.exoplayer2.Format;
+import com.google.android.exoplayer2.FormatHolder;
+import com.google.android.exoplayer2.SeekParameters;
+import com.google.android.exoplayer2.decoder.DecoderInputBuffer;
+import com.google.android.exoplayer2.source.MediaSourceEventListener.EventDispatcher;
+import com.google.android.exoplayer2.source.SampleQueue;
+import com.google.android.exoplayer2.source.SampleStream;
+import com.google.android.exoplayer2.source.SequenceableLoader;
+import com.google.android.exoplayer2.source.SequenceableLoader.Callback;
+import com.google.android.exoplayer2.upstream.Allocator;
+import com.google.android.exoplayer2.upstream.DefaultLoadErrorHandlingPolicy;
+import com.google.android.exoplayer2.upstream.LoadErrorHandlingPolicy;
+import com.google.android.exoplayer2.upstream.Loader;
+import com.google.android.exoplayer2.upstream.Loader.Callback;
+import com.google.android.exoplayer2.upstream.Loader.LoadErrorAction;
+import com.google.android.exoplayer2.upstream.Loader.Loadable;
+import com.google.android.exoplayer2.upstream.Loader.ReleaseCallback;
+import com.google.android.exoplayer2.util.Assertions;
+import com.google.android.exoplayer2.util.Log;
+import com.google.android.exoplayer2.util.Util;
+import java.io.IOException;
+import java.util.ArrayList;
+import java.util.Collections;
+import java.util.List;
+
+public class ChunkSampleStream<T extends ChunkSource>
+  implements SampleStream, SequenceableLoader, Loader.Callback<Chunk>, Loader.ReleaseCallback
+{
+  private static final String PAGE_KEY = "ChunkSampleStream";
+  private final SequenceableLoader.Callback<ChunkSampleStream<T>> callback;
+  private final T chunkSource;
+  long decodeOnlyUntilPositionUs;
+  private final SampleQueue[] embeddedSampleQueues;
+  private final Format[] embeddedTrackFormats;
+  private final int[] embeddedTrackTypes;
+  private final boolean[] embeddedTracksSelected;
+  private final MediaSourceEventListener.EventDispatcher eventDispatcher;
+  private long lastSeekPositionUs;
+  private final LoadErrorHandlingPolicy loadErrorHandlingPolicy;
+  private final Loader loader;
+  boolean loadingFinished;
+  private final BaseMediaChunkOutput mediaChunkOutput;
+  private final ArrayList<BaseMediaChunk> mediaChunks;
+  private final ChunkHolder nextChunkHolder;
+  private int nextNotifyPrimaryFormatMediaChunkIndex;
+  private long pendingResetPositionUs;
+  private Format primaryDownstreamTrackFormat;
+  private final SampleQueue primarySampleQueue;
+  public final int primaryTrackType;
+  private final List<BaseMediaChunk> readOnlyMediaChunks;
+  @Nullable
+  private ReleaseCallback<T> releaseCallback;
+  
+  public ChunkSampleStream(int paramInt1, int[] paramArrayOfInt, Format[] paramArrayOfFormat, ChunkSource paramChunkSource, SequenceableLoader.Callback paramCallback, Allocator paramAllocator, long paramLong, int paramInt2, MediaSourceEventListener.EventDispatcher paramEventDispatcher)
+  {
+    this(paramInt1, paramArrayOfInt, paramArrayOfFormat, paramChunkSource, paramCallback, paramAllocator, paramLong, new DefaultLoadErrorHandlingPolicy(paramInt2), paramEventDispatcher);
+  }
+  
+  public ChunkSampleStream(int paramInt, int[] paramArrayOfInt, Format[] paramArrayOfFormat, ChunkSource paramChunkSource, SequenceableLoader.Callback paramCallback, Allocator paramAllocator, long paramLong, LoadErrorHandlingPolicy paramLoadErrorHandlingPolicy, MediaSourceEventListener.EventDispatcher paramEventDispatcher)
+  {
+    primaryTrackType = paramInt;
+    embeddedTrackTypes = paramArrayOfInt;
+    embeddedTrackFormats = paramArrayOfFormat;
+    chunkSource = paramChunkSource;
+    callback = paramCallback;
+    eventDispatcher = paramEventDispatcher;
+    loadErrorHandlingPolicy = paramLoadErrorHandlingPolicy;
+    loader = new Loader("Loader:ChunkSampleStream");
+    nextChunkHolder = new ChunkHolder();
+    mediaChunks = new ArrayList();
+    readOnlyMediaChunks = Collections.unmodifiableList(mediaChunks);
+    int j = 0;
+    int i;
+    if (paramArrayOfInt == null) {
+      i = 0;
+    } else {
+      i = paramArrayOfInt.length;
+    }
+    embeddedSampleQueues = new SampleQueue[i];
+    embeddedTracksSelected = new boolean[i];
+    int k = i + 1;
+    paramArrayOfFormat = new int[k];
+    paramChunkSource = new SampleQueue[k];
+    primarySampleQueue = new SampleQueue(paramAllocator);
+    paramArrayOfFormat[0] = paramInt;
+    paramChunkSource[0] = primarySampleQueue;
+    for (paramInt = j; paramInt < i; paramInt = j)
+    {
+      paramCallback = new SampleQueue(paramAllocator);
+      embeddedSampleQueues[paramInt] = paramCallback;
+      j = paramInt + 1;
+      paramChunkSource[j] = paramCallback;
+      paramArrayOfFormat[j] = paramArrayOfInt[paramInt];
+    }
+    mediaChunkOutput = new BaseMediaChunkOutput(paramArrayOfFormat, paramChunkSource);
+    pendingResetPositionUs = paramLong;
+    lastSeekPositionUs = paramLong;
+  }
+  
+  private void discardDownstreamMediaChunks(int paramInt)
+  {
+    paramInt = Math.min(primarySampleIndexToMediaChunkIndex(paramInt, 0), nextNotifyPrimaryFormatMediaChunkIndex);
+    if (paramInt > 0)
+    {
+      Util.removeRange(mediaChunks, 0, paramInt);
+      nextNotifyPrimaryFormatMediaChunkIndex -= paramInt;
+    }
+  }
+  
+  private BaseMediaChunk discardUpstreamMediaChunksFromIndex(int paramInt)
+  {
+    BaseMediaChunk localBaseMediaChunk = (BaseMediaChunk)mediaChunks.get(paramInt);
+    Util.removeRange(mediaChunks, paramInt, mediaChunks.size());
+    nextNotifyPrimaryFormatMediaChunkIndex = Math.max(nextNotifyPrimaryFormatMediaChunkIndex, mediaChunks.size());
+    SampleQueue localSampleQueue = primarySampleQueue;
+    paramInt = 0;
+    localSampleQueue.discardUpstreamSamples(localBaseMediaChunk.getFirstSampleIndex(0));
+    while (paramInt < embeddedSampleQueues.length)
+    {
+      localSampleQueue = embeddedSampleQueues[paramInt];
+      paramInt += 1;
+      localSampleQueue.discardUpstreamSamples(localBaseMediaChunk.getFirstSampleIndex(paramInt));
+    }
+    return localBaseMediaChunk;
+  }
+  
+  private BaseMediaChunk getLastMediaChunk()
+  {
+    return (BaseMediaChunk)mediaChunks.get(mediaChunks.size() - 1);
+  }
+  
+  private boolean haveReadFromMediaChunk(int paramInt)
+  {
+    BaseMediaChunk localBaseMediaChunk = (BaseMediaChunk)mediaChunks.get(paramInt);
+    if (primarySampleQueue.getReadIndex() > localBaseMediaChunk.getFirstSampleIndex(0)) {
+      return true;
+    }
+    paramInt = 0;
+    while (paramInt < embeddedSampleQueues.length)
+    {
+      int j = embeddedSampleQueues[paramInt].getReadIndex();
+      int i = paramInt + 1;
+      paramInt = i;
+      if (j > localBaseMediaChunk.getFirstSampleIndex(i)) {
+        return true;
+      }
+    }
+    return false;
+  }
+  
+  private boolean isMediaChunk(Chunk paramChunk)
+  {
+    return paramChunk instanceof BaseMediaChunk;
+  }
+  
+  private void maybeNotifyPrimaryTrackFormatChanged()
+  {
+    int i = primarySampleIndexToMediaChunkIndex(primarySampleQueue.getReadIndex(), nextNotifyPrimaryFormatMediaChunkIndex - 1);
+    while (nextNotifyPrimaryFormatMediaChunkIndex <= i)
+    {
+      int j = nextNotifyPrimaryFormatMediaChunkIndex;
+      nextNotifyPrimaryFormatMediaChunkIndex = (j + 1);
+      maybeNotifyPrimaryTrackFormatChanged(j);
+    }
+  }
+  
+  private void maybeNotifyPrimaryTrackFormatChanged(int paramInt)
+  {
+    BaseMediaChunk localBaseMediaChunk = (BaseMediaChunk)mediaChunks.get(paramInt);
+    Format localFormat = trackFormat;
+    if (!localFormat.equals(primaryDownstreamTrackFormat)) {
+      eventDispatcher.downstreamFormatChanged(primaryTrackType, localFormat, trackSelectionReason, trackSelectionData, startTimeUs);
+    }
+    primaryDownstreamTrackFormat = localFormat;
+  }
+  
+  private int primarySampleIndexToMediaChunkIndex(int paramInt1, int paramInt2)
+  {
+    int i;
+    do
+    {
+      i = paramInt2 + 1;
+      if (i >= mediaChunks.size()) {
+        break;
+      }
+      paramInt2 = i;
+    } while (((BaseMediaChunk)mediaChunks.get(i)).getFirstSampleIndex(0) <= paramInt1);
+    return i - 1;
+    return mediaChunks.size() - 1;
+  }
+  
+  public boolean continueLoading(long paramLong)
+  {
+    boolean bool1 = loadingFinished;
+    int i = 0;
+    if (!bool1)
+    {
+      if (loader.isLoading()) {
+        return false;
+      }
+      bool1 = isPendingReset();
+      if (bool1) {
+        localObject = Collections.emptyList();
+      }
+      for (long l = pendingResetPositionUs;; l = getLastMediaChunkendTimeUs)
+      {
+        break;
+        localObject = readOnlyMediaChunks;
+      }
+      chunkSource.getNextChunk(paramLong, l, (List)localObject, nextChunkHolder);
+      boolean bool2 = nextChunkHolder.endOfStream;
+      Object localObject = nextChunkHolder.chunk;
+      nextChunkHolder.clear();
+      if (bool2)
+      {
+        pendingResetPositionUs = -9223372036854775807L;
+        loadingFinished = true;
+        return true;
+      }
+      if (localObject == null) {
+        return false;
+      }
+      if (isMediaChunk((Chunk)localObject))
+      {
+        BaseMediaChunk localBaseMediaChunk = (BaseMediaChunk)localObject;
+        if (bool1)
+        {
+          if (startTimeUs == pendingResetPositionUs) {
+            i = 1;
+          }
+          if (i != 0) {
+            paramLong = 0L;
+          } else {
+            paramLong = pendingResetPositionUs;
+          }
+          decodeOnlyUntilPositionUs = paramLong;
+          pendingResetPositionUs = -9223372036854775807L;
+        }
+        localBaseMediaChunk.init(mediaChunkOutput);
+        mediaChunks.add(localBaseMediaChunk);
+      }
+      paramLong = loader.startLoading((Loader.Loadable)localObject, this, loadErrorHandlingPolicy.getMinimumLoadableRetryCount(type));
+      eventDispatcher.loadStarted(dataSpec, type, primaryTrackType, trackFormat, trackSelectionReason, trackSelectionData, startTimeUs, endTimeUs, paramLong);
+      return true;
+    }
+    return false;
+  }
+  
+  public void discardBuffer(long paramLong, boolean paramBoolean)
+  {
+    if (isPendingReset()) {
+      return;
+    }
+    int i = primarySampleQueue.getFirstIndex();
+    primarySampleQueue.discardTo(paramLong, paramBoolean, true);
+    int j = primarySampleQueue.getFirstIndex();
+    if (j > i)
+    {
+      paramLong = primarySampleQueue.getFirstTimestampUs();
+      i = 0;
+      while (i < embeddedSampleQueues.length)
+      {
+        embeddedSampleQueues[i].discardTo(paramLong, paramBoolean, embeddedTracksSelected[i]);
+        i += 1;
+      }
+    }
+    discardDownstreamMediaChunks(j);
+  }
+  
+  public long getAdjustedSeekPositionUs(long paramLong, SeekParameters paramSeekParameters)
+  {
+    return chunkSource.getAdjustedSeekPositionUs(paramLong, paramSeekParameters);
+  }
+  
+  public long getBufferedPositionUs()
+  {
+    if (loadingFinished) {
+      return Long.MIN_VALUE;
+    }
+    if (isPendingReset()) {
+      return pendingResetPositionUs;
+    }
+    long l2 = lastSeekPositionUs;
+    BaseMediaChunk localBaseMediaChunk2 = getLastMediaChunk();
+    BaseMediaChunk localBaseMediaChunk1 = localBaseMediaChunk2;
+    if (!localBaseMediaChunk2.isLoadCompleted()) {
+      if (mediaChunks.size() > 1) {
+        localBaseMediaChunk1 = (BaseMediaChunk)mediaChunks.get(mediaChunks.size() - 2);
+      } else {
+        localBaseMediaChunk1 = null;
+      }
+    }
+    long l1 = l2;
+    if (localBaseMediaChunk1 != null) {
+      l1 = Math.max(l2, endTimeUs);
+    }
+    return Math.max(l1, primarySampleQueue.getLargestQueuedTimestampUs());
+  }
+  
+  public ChunkSource getChunkSource()
+  {
+    return chunkSource;
+  }
+  
+  public long getNextLoadPositionUs()
+  {
+    if (isPendingReset()) {
+      return pendingResetPositionUs;
+    }
+    if (loadingFinished) {
+      return Long.MIN_VALUE;
+    }
+    return getLastMediaChunkendTimeUs;
+  }
+  
+  boolean isPendingReset()
+  {
+    return pendingResetPositionUs != -9223372036854775807L;
+  }
+  
+  public boolean isReady()
+  {
+    return (loadingFinished) || ((!isPendingReset()) && (primarySampleQueue.hasNextSample()));
+  }
+  
+  public void maybeThrowError()
+    throws IOException
+  {
+    loader.maybeThrowError();
+    if (!loader.isLoading()) {
+      chunkSource.maybeThrowError();
+    }
+  }
+  
+  public void onLoadCanceled(Chunk paramChunk, long paramLong1, long paramLong2, boolean paramBoolean)
+  {
+    eventDispatcher.loadCanceled(dataSpec, paramChunk.getUri(), paramChunk.getResponseHeaders(), type, primaryTrackType, trackFormat, trackSelectionReason, trackSelectionData, startTimeUs, endTimeUs, paramLong1, paramLong2, paramChunk.bytesLoaded());
+    if (!paramBoolean)
+    {
+      primarySampleQueue.reset();
+      paramChunk = embeddedSampleQueues;
+      int j = paramChunk.length;
+      int i = 0;
+      while (i < j)
+      {
+        paramChunk[i].reset();
+        i += 1;
+      }
+      callback.onContinueLoadingRequested(this);
+    }
+  }
+  
+  public void onLoadCompleted(Chunk paramChunk, long paramLong1, long paramLong2)
+  {
+    chunkSource.onChunkLoadCompleted(paramChunk);
+    eventDispatcher.loadCompleted(dataSpec, paramChunk.getUri(), paramChunk.getResponseHeaders(), type, primaryTrackType, trackFormat, trackSelectionReason, trackSelectionData, startTimeUs, endTimeUs, paramLong1, paramLong2, paramChunk.bytesLoaded());
+    callback.onContinueLoadingRequested(this);
+  }
+  
+  public Loader.LoadErrorAction onLoadError(Chunk paramChunk, long paramLong1, long paramLong2, IOException paramIOException, int paramInt)
+  {
+    long l2 = paramChunk.bytesLoaded();
+    boolean bool2 = isMediaChunk(paramChunk);
+    int i = mediaChunks.size() - 1;
+    if ((l2 != 0L) && (bool2) && (haveReadFromMediaChunk(i))) {
+      bool1 = false;
+    } else {
+      bool1 = true;
+    }
+    long l1;
+    if (bool1) {
+      l1 = loadErrorHandlingPolicy.getBlacklistDurationMsFor(type, paramLong2, paramIOException, paramInt);
+    } else {
+      l1 = -9223372036854775807L;
+    }
+    Object localObject2 = null;
+    Object localObject1 = localObject2;
+    if (chunkSource.onChunkLoadError(paramChunk, bool1, paramIOException, l1)) {
+      if (bool1)
+      {
+        localObject2 = Loader.DONT_RETRY;
+        localObject1 = localObject2;
+        if (bool2)
+        {
+          if (discardUpstreamMediaChunksFromIndex(i) == paramChunk) {
+            bool1 = true;
+          } else {
+            bool1 = false;
+          }
+          Assertions.checkState(bool1);
+          localObject1 = localObject2;
+          if (mediaChunks.isEmpty())
+          {
+            pendingResetPositionUs = lastSeekPositionUs;
+            localObject1 = localObject2;
+          }
+        }
+      }
+      else
+      {
+        Log.w("ChunkSampleStream", "Ignoring attempt to cancel non-cancelable load.");
+        localObject1 = localObject2;
+      }
+    }
+    localObject2 = localObject1;
+    if (localObject1 == null)
+    {
+      l1 = loadErrorHandlingPolicy.getRetryDelayMsFor(type, paramLong2, paramIOException, paramInt);
+      if (l1 != -9223372036854775807L) {}
+      for (localObject1 = Loader.createRetryAction(false, l1);; localObject1 = Loader.DONT_RETRY_FATAL)
+      {
+        localObject2 = localObject1;
+        break;
+      }
+    }
+    boolean bool1 = ((Loader.LoadErrorAction)localObject2).isRetry() ^ true;
+    eventDispatcher.loadError(dataSpec, paramChunk.getUri(), paramChunk.getResponseHeaders(), type, primaryTrackType, trackFormat, trackSelectionReason, trackSelectionData, startTimeUs, endTimeUs, paramLong1, paramLong2, l2, paramIOException, bool1);
+    if (bool1) {
+      callback.onContinueLoadingRequested(this);
+    }
+    return localObject2;
+  }
+  
+  public void onLoaderReleased()
+  {
+    primarySampleQueue.reset();
+    SampleQueue[] arrayOfSampleQueue = embeddedSampleQueues;
+    int j = arrayOfSampleQueue.length;
+    int i = 0;
+    while (i < j)
+    {
+      arrayOfSampleQueue[i].reset();
+      i += 1;
+    }
+    if (releaseCallback != null) {
+      releaseCallback.onSampleStreamReleased(this);
+    }
+  }
+  
+  public int readData(FormatHolder paramFormatHolder, DecoderInputBuffer paramDecoderInputBuffer, boolean paramBoolean)
+  {
+    if (isPendingReset()) {
+      return -3;
+    }
+    maybeNotifyPrimaryTrackFormatChanged();
+    return primarySampleQueue.read(paramFormatHolder, paramDecoderInputBuffer, paramBoolean, loadingFinished, decodeOnlyUntilPositionUs);
+  }
+  
+  public void reevaluateBuffer(long paramLong)
+  {
+    if (!loader.isLoading())
+    {
+      if (isPendingReset()) {
+        return;
+      }
+      int j = mediaChunks.size();
+      int k = chunkSource.getPreferredQueueSize(paramLong, readOnlyMediaChunks);
+      int i = k;
+      if (j <= k) {
+        return;
+      }
+      while (i < j)
+      {
+        if (!haveReadFromMediaChunk(i)) {
+          break label81;
+        }
+        i += 1;
+      }
+      i = j;
+      label81:
+      if (i == j) {
+        return;
+      }
+      paramLong = getLastMediaChunkendTimeUs;
+      BaseMediaChunk localBaseMediaChunk = discardUpstreamMediaChunksFromIndex(i);
+      if (mediaChunks.isEmpty()) {
+        pendingResetPositionUs = lastSeekPositionUs;
+      }
+      loadingFinished = false;
+      eventDispatcher.upstreamDiscarded(primaryTrackType, startTimeUs, paramLong);
+    }
+  }
+  
+  public void release()
+  {
+    release(null);
+  }
+  
+  public void release(ReleaseCallback paramReleaseCallback)
+  {
+    releaseCallback = paramReleaseCallback;
+    primarySampleQueue.discardToEnd();
+    paramReleaseCallback = embeddedSampleQueues;
+    int j = paramReleaseCallback.length;
+    int i = 0;
+    while (i < j)
+    {
+      paramReleaseCallback[i].discardToEnd();
+      i += 1;
+    }
+    loader.release(this);
+  }
+  
+  public void seekToUs(long paramLong)
+  {
+    lastSeekPositionUs = paramLong;
+    if (isPendingReset())
+    {
+      pendingResetPositionUs = paramLong;
+      return;
+    }
+    Object localObject2 = null;
+    int j = 0;
+    int i = 0;
+    for (;;)
+    {
+      localObject1 = localObject2;
+      if (i >= mediaChunks.size()) {
+        break;
+      }
+      localObject1 = (BaseMediaChunk)mediaChunks.get(i);
+      boolean bool1 = startTimeUs < paramLong;
+      if ((!bool1) && (clippedStartTimeUs == -9223372036854775807L)) {
+        break;
+      }
+      if (bool1)
+      {
+        localObject1 = localObject2;
+        break;
+      }
+      i += 1;
+    }
+    primarySampleQueue.rewind();
+    boolean bool2;
+    if (localObject1 != null)
+    {
+      bool2 = primarySampleQueue.setReadPosition(((BaseMediaChunk)localObject1).getFirstSampleIndex(0));
+      decodeOnlyUntilPositionUs = 0L;
+    }
+    else
+    {
+      localObject1 = primarySampleQueue;
+      if (paramLong < getNextLoadPositionUs()) {
+        bool2 = true;
+      } else {
+        bool2 = false;
+      }
+      if (((SampleQueue)localObject1).advanceTo(paramLong, true, bool2) != -1) {
+        bool2 = true;
+      } else {
+        bool2 = false;
+      }
+      decodeOnlyUntilPositionUs = lastSeekPositionUs;
+    }
+    if (bool2)
+    {
+      nextNotifyPrimaryFormatMediaChunkIndex = primarySampleIndexToMediaChunkIndex(primarySampleQueue.getReadIndex(), 0);
+      localObject1 = embeddedSampleQueues;
+      j = localObject1.length;
+      i = 0;
+      while (i < j)
+      {
+        localObject2 = localObject1[i];
+        localObject2.rewind();
+        localObject2.advanceTo(paramLong, true, false);
+        i += 1;
+      }
+    }
+    pendingResetPositionUs = paramLong;
+    loadingFinished = false;
+    mediaChunks.clear();
+    nextNotifyPrimaryFormatMediaChunkIndex = 0;
+    if (loader.isLoading())
+    {
+      loader.cancelLoading();
+      return;
+    }
+    primarySampleQueue.reset();
+    Object localObject1 = embeddedSampleQueues;
+    int k = localObject1.length;
+    i = j;
+    while (i < k)
+    {
+      localObject1[i].reset();
+      i += 1;
+    }
+  }
+  
+  public EmbeddedSampleStream selectEmbeddedTrack(long paramLong, int paramInt)
+  {
+    int i = 0;
+    while (i < embeddedSampleQueues.length)
+    {
+      if (embeddedTrackTypes[i] == paramInt)
+      {
+        Assertions.checkState(embeddedTracksSelected[i] ^ 0x1);
+        embeddedTracksSelected[i] = true;
+        embeddedSampleQueues[i].rewind();
+        embeddedSampleQueues[i].advanceTo(paramLong, true, true);
+        return new EmbeddedSampleStream(this, embeddedSampleQueues[i], i);
+      }
+      i += 1;
+    }
+    throw new IllegalStateException();
+  }
+  
+  public int skipData(long paramLong)
+  {
+    boolean bool = isPendingReset();
+    int i = 0;
+    if (bool) {
+      return 0;
+    }
+    if ((loadingFinished) && (paramLong > primarySampleQueue.getLargestQueuedTimestampUs()))
+    {
+      i = primarySampleQueue.advanceToEnd();
+    }
+    else
+    {
+      int j = primarySampleQueue.advanceTo(paramLong, true, true);
+      if (j != -1) {
+        i = j;
+      }
+    }
+    maybeNotifyPrimaryTrackFormatChanged();
+    return i;
+  }
+  
+  public final class EmbeddedSampleStream
+    implements SampleStream
+  {
+    private final int index;
+    private boolean notifiedDownstreamFormat;
+    public final ChunkSampleStream<T> parent;
+    private final SampleQueue sampleQueue;
+    
+    public EmbeddedSampleStream(ChunkSampleStream paramChunkSampleStream, SampleQueue paramSampleQueue, int paramInt)
+    {
+      parent = paramChunkSampleStream;
+      sampleQueue = paramSampleQueue;
+      index = paramInt;
+    }
+    
+    private void maybeNotifyDownstreamFormat()
+    {
+      if (!notifiedDownstreamFormat)
+      {
+        eventDispatcher.downstreamFormatChanged(embeddedTrackTypes[index], embeddedTrackFormats[index], 0, null, lastSeekPositionUs);
+        notifiedDownstreamFormat = true;
+      }
+    }
+    
+    public boolean isReady()
+    {
+      return (loadingFinished) || ((!isPendingReset()) && (sampleQueue.hasNextSample()));
+    }
+    
+    public void maybeThrowError()
+      throws IOException
+    {}
+    
+    public int readData(FormatHolder paramFormatHolder, DecoderInputBuffer paramDecoderInputBuffer, boolean paramBoolean)
+    {
+      if (isPendingReset()) {
+        return -3;
+      }
+      maybeNotifyDownstreamFormat();
+      return sampleQueue.read(paramFormatHolder, paramDecoderInputBuffer, paramBoolean, loadingFinished, decodeOnlyUntilPositionUs);
+    }
+    
+    public void release()
+    {
+      Assertions.checkState(embeddedTracksSelected[index]);
+      embeddedTracksSelected[index] = 0;
+    }
+    
+    public int skipData(long paramLong)
+    {
+      if (isPendingReset()) {
+        return 0;
+      }
+      maybeNotifyDownstreamFormat();
+      if ((loadingFinished) && (paramLong > sampleQueue.getLargestQueuedTimestampUs())) {
+        return sampleQueue.advanceToEnd();
+      }
+      int i = sampleQueue.advanceTo(paramLong, true, true);
+      if (i == -1) {
+        return 0;
+      }
+      return i;
+    }
+  }
+  
+  public static abstract interface ReleaseCallback<T extends ChunkSource>
+  {
+    public abstract void onSampleStreamReleased(ChunkSampleStream paramChunkSampleStream);
+  }
+}

@@ -1,0 +1,282 @@
+package com.bumptech.glide.request;
+
+import android.graphics.drawable.Drawable;
+import androidx.annotation.NonNull;
+import androidx.annotation.Nullable;
+import androidx.annotation.VisibleForTesting;
+import com.bumptech.glide.load.DataSource;
+import com.bumptech.glide.load.engine.GlideException;
+import com.bumptech.glide.request.target.SizeReadyCallback;
+import com.bumptech.glide.request.target.Target;
+import com.bumptech.glide.request.transition.Transition;
+import com.bumptech.glide.util.Util;
+import java.util.concurrent.CancellationException;
+import java.util.concurrent.ExecutionException;
+import java.util.concurrent.TimeUnit;
+import java.util.concurrent.TimeoutException;
+
+public class RequestFutureTarget<R>
+  implements FutureTarget<R>, RequestListener<R>
+{
+  private static final Waiter DEFAULT_WAITER = new Waiter();
+  private final boolean assertBackgroundThread;
+  @Nullable
+  private GlideException exception;
+  private final int height;
+  private boolean isCancelled;
+  private boolean loadFailed;
+  @Nullable
+  private Request request;
+  @Nullable
+  private R resource;
+  private boolean resultReceived;
+  private final Waiter waiter;
+  private final int width;
+  
+  public RequestFutureTarget(int paramInt1, int paramInt2)
+  {
+    this(paramInt1, paramInt2, true, DEFAULT_WAITER);
+  }
+  
+  RequestFutureTarget(int paramInt1, int paramInt2, boolean paramBoolean, Waiter paramWaiter)
+  {
+    width = paramInt1;
+    height = paramInt2;
+    assertBackgroundThread = paramBoolean;
+    waiter = paramWaiter;
+  }
+  
+  private R doGet(Long paramLong)
+    throws ExecutionException, InterruptedException, TimeoutException
+  {
+    try
+    {
+      if ((assertBackgroundThread) && (!isDone())) {
+        Util.assertBackgroundThread();
+      }
+      if (!isCancelled)
+      {
+        if (!loadFailed)
+        {
+          if (resultReceived)
+          {
+            paramLong = resource;
+            return paramLong;
+          }
+          if (paramLong == null)
+          {
+            waiter.waitForTimeout(this, 0L);
+          }
+          else if (paramLong.longValue() > 0L)
+          {
+            long l1 = System.currentTimeMillis();
+            long l2 = paramLong.longValue() + l1;
+            while ((!isDone()) && (l1 < l2))
+            {
+              waiter.waitForTimeout(this, l2 - l1);
+              l1 = System.currentTimeMillis();
+            }
+          }
+          if (!Thread.interrupted())
+          {
+            if (!loadFailed)
+            {
+              if (!isCancelled)
+              {
+                if (resultReceived)
+                {
+                  paramLong = resource;
+                  return paramLong;
+                }
+                throw new TimeoutException();
+              }
+              throw new CancellationException();
+            }
+            throw new ExecutionException(exception);
+          }
+          throw new InterruptedException();
+        }
+        throw new ExecutionException(exception);
+      }
+      throw new CancellationException();
+    }
+    finally {}
+  }
+  
+  public boolean cancel(boolean paramBoolean)
+  {
+    try
+    {
+      boolean bool = isDone();
+      if (bool) {
+        return false;
+      }
+      isCancelled = true;
+      waiter.notifyAll(this);
+      if ((paramBoolean) && (request != null))
+      {
+        request.clear();
+        request = null;
+      }
+      return true;
+    }
+    finally {}
+  }
+  
+  public R get()
+    throws InterruptedException, ExecutionException
+  {
+    try
+    {
+      Object localObject = doGet(null);
+      return localObject;
+    }
+    catch (TimeoutException localTimeoutException)
+    {
+      throw new AssertionError(localTimeoutException);
+    }
+  }
+  
+  public R get(long paramLong, @NonNull TimeUnit paramTimeUnit)
+    throws InterruptedException, ExecutionException, TimeoutException
+  {
+    return doGet(Long.valueOf(paramTimeUnit.toMillis(paramLong)));
+  }
+  
+  @Nullable
+  public Request getRequest()
+  {
+    try
+    {
+      Request localRequest = request;
+      return localRequest;
+    }
+    finally
+    {
+      localObject = finally;
+      throw localObject;
+    }
+  }
+  
+  public void getSize(@NonNull SizeReadyCallback paramSizeReadyCallback)
+  {
+    paramSizeReadyCallback.onSizeReady(width, height);
+  }
+  
+  public boolean isCancelled()
+  {
+    try
+    {
+      boolean bool = isCancelled;
+      return bool;
+    }
+    finally
+    {
+      localObject = finally;
+      throw localObject;
+    }
+  }
+  
+  public boolean isDone()
+  {
+    try
+    {
+      if ((!isCancelled) && (!resultReceived))
+      {
+        bool = loadFailed;
+        if (!bool)
+        {
+          bool = false;
+          break label35;
+        }
+      }
+      boolean bool = true;
+      label35:
+      return bool;
+    }
+    finally
+    {
+      localObject = finally;
+      throw localObject;
+    }
+  }
+  
+  public void onDestroy() {}
+  
+  public void onLoadCleared(@Nullable Drawable paramDrawable) {}
+  
+  public void onLoadFailed(@Nullable Drawable paramDrawable) {}
+  
+  public boolean onLoadFailed(@Nullable GlideException paramGlideException, Object paramObject, Target<R> paramTarget, boolean paramBoolean)
+  {
+    try
+    {
+      loadFailed = true;
+      exception = paramGlideException;
+      waiter.notifyAll(this);
+      return false;
+    }
+    finally
+    {
+      paramGlideException = finally;
+      throw paramGlideException;
+    }
+  }
+  
+  public void onLoadStarted(@Nullable Drawable paramDrawable) {}
+  
+  public void onResourceReady(@NonNull R paramR, @Nullable Transition<? super R> paramTransition) {}
+  
+  public boolean onResourceReady(R paramR, Object paramObject, Target<R> paramTarget, DataSource paramDataSource, boolean paramBoolean)
+  {
+    try
+    {
+      resultReceived = true;
+      resource = paramR;
+      waiter.notifyAll(this);
+      return false;
+    }
+    finally
+    {
+      paramR = finally;
+      throw paramR;
+    }
+  }
+  
+  public void onStart() {}
+  
+  public void onStop() {}
+  
+  public void removeCallback(@NonNull SizeReadyCallback paramSizeReadyCallback) {}
+  
+  public void setRequest(@Nullable Request paramRequest)
+  {
+    try
+    {
+      request = paramRequest;
+      return;
+    }
+    finally
+    {
+      paramRequest = finally;
+      throw paramRequest;
+    }
+  }
+  
+  @VisibleForTesting
+  static class Waiter
+  {
+    Waiter() {}
+    
+    void notifyAll(Object paramObject)
+    {
+      paramObject.notifyAll();
+    }
+    
+    void waitForTimeout(Object paramObject, long paramLong)
+      throws InterruptedException
+    {
+      paramObject.wait(paramLong);
+    }
+  }
+}

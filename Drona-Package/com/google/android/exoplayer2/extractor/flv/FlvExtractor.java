@@ -1,0 +1,238 @@
+package com.google.android.exoplayer2.extractor.flv;
+
+import com.google.android.exoplayer2.extractor.Extractor;
+import com.google.android.exoplayer2.extractor.ExtractorInput;
+import com.google.android.exoplayer2.extractor.ExtractorOutput;
+import com.google.android.exoplayer2.extractor.ExtractorsFactory;
+import com.google.android.exoplayer2.extractor.PositionHolder;
+import com.google.android.exoplayer2.extractor.SeekMap.Unseekable;
+import com.google.android.exoplayer2.util.ParsableByteArray;
+import com.google.android.exoplayer2.util.Util;
+import java.io.IOException;
+
+public final class FlvExtractor
+  implements Extractor
+{
+  public static final ExtractorsFactory FACTORY = -..Lambda.FlvExtractor.bd1zICO7f-FQot_hbozdu7LjVyE.INSTANCE;
+  private static final int FLV_HEADER_SIZE = 9;
+  private static final int FLV_TAG = Util.getIntegerCodeForString("FLV");
+  private static final int FLV_TAG_HEADER_SIZE = 11;
+  private static final int STATE_READING_FLV_HEADER = 1;
+  private static final int STATE_READING_TAG_DATA = 4;
+  private static final int STATE_READING_TAG_HEADER = 3;
+  private static final int STATE_SKIPPING_TO_TAG_HEADER = 2;
+  private static final int TAG_TYPE_AUDIO = 8;
+  private static final int TAG_TYPE_SCRIPT_DATA = 18;
+  private static final int TAG_TYPE_VIDEO = 9;
+  private AudioTagPayloadReader audioReader;
+  private int bytesToNextTagHeader;
+  private ExtractorOutput extractorOutput;
+  private final ParsableByteArray headerBuffer = new ParsableByteArray(9);
+  private long mediaTagTimestampOffsetUs = -9223372036854775807L;
+  private final ScriptTagPayloadReader metadataReader = new ScriptTagPayloadReader();
+  private boolean outputSeekMap;
+  private final ParsableByteArray scratch = new ParsableByteArray(4);
+  private int state = 1;
+  private final ParsableByteArray tagData = new ParsableByteArray();
+  private int tagDataSize;
+  private final ParsableByteArray tagHeaderBuffer = new ParsableByteArray(11);
+  private long tagTimestampUs;
+  private int tagType;
+  private VideoTagPayloadReader videoReader;
+  
+  public FlvExtractor() {}
+  
+  private void ensureReadyForMediaOutput()
+  {
+    if (!outputSeekMap)
+    {
+      extractorOutput.seekMap(new SeekMap.Unseekable(-9223372036854775807L));
+      outputSeekMap = true;
+    }
+    if (mediaTagTimestampOffsetUs == -9223372036854775807L)
+    {
+      long l;
+      if (metadataReader.getDurationUs() == -9223372036854775807L) {
+        l = -tagTimestampUs;
+      } else {
+        l = 0L;
+      }
+      mediaTagTimestampOffsetUs = l;
+    }
+  }
+  
+  private ParsableByteArray prepareTagData(ExtractorInput paramExtractorInput)
+    throws IOException, InterruptedException
+  {
+    if (tagDataSize > tagData.capacity()) {
+      tagData.reset(new byte[Math.max(tagData.capacity() * 2, tagDataSize)], 0);
+    } else {
+      tagData.setPosition(0);
+    }
+    tagData.setLimit(tagDataSize);
+    paramExtractorInput.readFully(tagData.data, 0, tagDataSize);
+    return tagData;
+  }
+  
+  private boolean readFlvHeader(ExtractorInput paramExtractorInput)
+    throws IOException, InterruptedException
+  {
+    byte[] arrayOfByte = headerBuffer.data;
+    int j = 0;
+    if (!paramExtractorInput.readFully(arrayOfByte, 0, 9, true)) {
+      return false;
+    }
+    headerBuffer.setPosition(0);
+    headerBuffer.skipBytes(4);
+    int k = headerBuffer.readUnsignedByte();
+    int i;
+    if ((k & 0x4) != 0) {
+      i = 1;
+    } else {
+      i = 0;
+    }
+    if ((k & 0x1) != 0) {
+      j = 1;
+    }
+    if ((i != 0) && (audioReader == null)) {
+      audioReader = new AudioTagPayloadReader(extractorOutput.track(8, 1));
+    }
+    if ((j != 0) && (videoReader == null)) {
+      videoReader = new VideoTagPayloadReader(extractorOutput.track(9, 2));
+    }
+    extractorOutput.endTracks();
+    bytesToNextTagHeader = (headerBuffer.readInt() - 9 + 4);
+    state = 2;
+    return true;
+  }
+  
+  private boolean readTagData(ExtractorInput paramExtractorInput)
+    throws IOException, InterruptedException
+  {
+    int i = tagType;
+    boolean bool2 = true;
+    boolean bool1;
+    if ((i == 8) && (audioReader != null))
+    {
+      ensureReadyForMediaOutput();
+      audioReader.consume(prepareTagData(paramExtractorInput), mediaTagTimestampOffsetUs + tagTimestampUs);
+      bool1 = bool2;
+    }
+    else if ((tagType == 9) && (videoReader != null))
+    {
+      ensureReadyForMediaOutput();
+      videoReader.consume(prepareTagData(paramExtractorInput), mediaTagTimestampOffsetUs + tagTimestampUs);
+      bool1 = bool2;
+    }
+    else if ((tagType == 18) && (!outputSeekMap))
+    {
+      metadataReader.consume(prepareTagData(paramExtractorInput), tagTimestampUs);
+      long l = metadataReader.getDurationUs();
+      bool1 = bool2;
+      if (l != -9223372036854775807L)
+      {
+        extractorOutput.seekMap(new SeekMap.Unseekable(l));
+        outputSeekMap = true;
+        bool1 = bool2;
+      }
+    }
+    else
+    {
+      paramExtractorInput.skipFully(tagDataSize);
+      bool1 = false;
+    }
+    bytesToNextTagHeader = 4;
+    state = 2;
+    return bool1;
+  }
+  
+  private boolean readTagHeader(ExtractorInput paramExtractorInput)
+    throws IOException, InterruptedException
+  {
+    if (!paramExtractorInput.readFully(tagHeaderBuffer.data, 0, 11, true)) {
+      return false;
+    }
+    tagHeaderBuffer.setPosition(0);
+    tagType = tagHeaderBuffer.readUnsignedByte();
+    tagDataSize = tagHeaderBuffer.readUnsignedInt24();
+    tagTimestampUs = tagHeaderBuffer.readUnsignedInt24();
+    tagTimestampUs = ((tagHeaderBuffer.readUnsignedByte() << 24 | tagTimestampUs) * 1000L);
+    tagHeaderBuffer.skipBytes(3);
+    state = 4;
+    return true;
+  }
+  
+  private void skipToTagHeader(ExtractorInput paramExtractorInput)
+    throws IOException, InterruptedException
+  {
+    paramExtractorInput.skipFully(bytesToNextTagHeader);
+    bytesToNextTagHeader = 0;
+    state = 3;
+  }
+  
+  public void init(ExtractorOutput paramExtractorOutput)
+  {
+    extractorOutput = paramExtractorOutput;
+  }
+  
+  public int read(ExtractorInput paramExtractorInput, PositionHolder paramPositionHolder)
+    throws IOException, InterruptedException
+  {
+    do
+    {
+      for (;;)
+      {
+        switch (state)
+        {
+        default: 
+          throw new IllegalStateException();
+        case 4: 
+          if (readTagData(paramExtractorInput)) {
+            return 0;
+          }
+          break;
+        case 3: 
+          if (!readTagHeader(paramExtractorInput)) {
+            return -1;
+          }
+          break;
+        case 2: 
+          skipToTagHeader(paramExtractorInput);
+        }
+      }
+    } while (readFlvHeader(paramExtractorInput));
+    return -1;
+  }
+  
+  public void release() {}
+  
+  public void seek(long paramLong1, long paramLong2)
+  {
+    state = 1;
+    mediaTagTimestampOffsetUs = -9223372036854775807L;
+    bytesToNextTagHeader = 0;
+  }
+  
+  public boolean sniff(ExtractorInput paramExtractorInput)
+    throws IOException, InterruptedException
+  {
+    paramExtractorInput.peekFully(scratch.data, 0, 3);
+    scratch.setPosition(0);
+    if (scratch.readUnsignedInt24() != FLV_TAG) {
+      return false;
+    }
+    paramExtractorInput.peekFully(scratch.data, 0, 2);
+    scratch.setPosition(0);
+    if ((scratch.readUnsignedShort() & 0xFA) != 0) {
+      return false;
+    }
+    paramExtractorInput.peekFully(scratch.data, 0, 4);
+    scratch.setPosition(0);
+    int i = scratch.readInt();
+    paramExtractorInput.resetPeekPosition();
+    paramExtractorInput.advancePeekPosition(i);
+    paramExtractorInput.peekFully(scratch.data, 0, 4);
+    scratch.setPosition(0);
+    return scratch.readInt() == 0;
+  }
+}

@@ -1,0 +1,1296 @@
+package expo.modules.filesystem;
+
+import android.app.Activity;
+import android.app.Application;
+import android.content.ContentResolver;
+import android.content.Context;
+import android.content.res.AssetManager;
+import android.content.res.Resources;
+import android.net.Uri;
+import android.os.AsyncTask;
+import android.os.Build.VERSION;
+import android.os.Bundle;
+import android.os.Environment;
+import android.os.StatFs;
+import android.util.Base64;
+import android.util.Log;
+import java.io.BufferedInputStream;
+import java.io.File;
+import java.io.FileInputStream;
+import java.io.FileNotFoundException;
+import java.io.FileOutputStream;
+import java.io.IOException;
+import java.io.InputStream;
+import java.io.OutputStream;
+import java.io.OutputStreamWriter;
+import java.math.BigInteger;
+import java.net.CookieHandler;
+import java.util.ArrayList;
+import java.util.EnumSet;
+import java.util.HashMap;
+import java.util.Iterator;
+import java.util.List;
+import java.util.Map;
+import java.util.Set;
+import java.util.concurrent.TimeUnit;
+import okhttp3.Call;
+import okhttp3.Callback;
+import okhttp3.Headers;
+import okhttp3.Interceptor;
+import okhttp3.Interceptor.Chain;
+import okhttp3.JavaNetCookieJar;
+import okhttp3.MediaType;
+import okhttp3.OkHttpClient;
+import okhttp3.OkHttpClient.Builder;
+import okhttp3.Request.Builder;
+import okhttp3.Response;
+import okhttp3.Response.Builder;
+import okhttp3.ResponseBody;
+import okio.Buffer;
+import okio.BufferedSink;
+import okio.BufferedSource;
+import okio.ForwardingSource;
+import okio.Okio;
+import okio.Source;
+import org.apache.commons.codec.binary.Hex;
+import org.apache.commons.codec.digest.DigestUtils;
+import org.apache.commons.io.FileUtils;
+import org.apache.commons.io.IOUtils;
+import org.unimodules.core.ExportedModule;
+import org.unimodules.core.ModuleRegistry;
+import org.unimodules.core.Promise;
+import org.unimodules.core.interfaces.ActivityProvider;
+import org.unimodules.core.interfaces.ExpoMethod;
+import org.unimodules.core.interfaces.services.EventEmitter;
+import org.unimodules.interfaces.filesystem.FilePermissionModuleInterface;
+import org.unimodules.interfaces.filesystem.Permission;
+
+public class FileSystemModule
+  extends ExportedModule
+{
+  private static final String EXDownloadProgressEventName = "Exponent.downloadProgress";
+  private static final String HEADER_KEY = "headers";
+  private static final long MIN_EVENT_DT_MS = 100L;
+  private static final String NAME = "ExponentFileSystem";
+  private static final String TAG = "FileSystemModule";
+  private OkHttpClient mClient;
+  private final Map<String, DownloadResumable> mDownloadResumableMap = new HashMap();
+  private ModuleRegistry mModuleRegistry;
+  
+  public FileSystemModule(Context paramContext)
+  {
+    super(paramContext);
+    try
+    {
+      ensureDirExists(getContext().getFilesDir());
+      ensureDirExists(getContext().getCacheDir());
+      return;
+    }
+    catch (IOException paramContext)
+    {
+      paramContext.printStackTrace();
+    }
+  }
+  
+  private void checkIfFileDirExists(Uri paramUri)
+    throws IOException
+  {
+    paramUri = uriToFile(paramUri);
+    if (paramUri.getParentFile().exists()) {
+      return;
+    }
+    StringBuilder localStringBuilder = new StringBuilder();
+    localStringBuilder.append("Directory for ");
+    localStringBuilder.append(paramUri.getPath());
+    localStringBuilder.append(" doesn't exist.");
+    throw new IOException(localStringBuilder.toString());
+  }
+  
+  private Uri contentUriFromFile(File paramFile)
+  {
+    try
+    {
+      Application localApplication = ((ActivityProvider)mModuleRegistry.getModule(ActivityProvider.class)).getCurrentActivity().getApplication();
+      StringBuilder localStringBuilder = new StringBuilder();
+      localStringBuilder.append(localApplication.getPackageName());
+      localStringBuilder.append(".FileSystemFileProvider");
+      paramFile = FileSystemFileProvider.getUriForFile(localApplication, localStringBuilder.toString(), paramFile);
+      return paramFile;
+    }
+    catch (Exception paramFile)
+    {
+      throw paramFile;
+    }
+  }
+  
+  private void ensureDirExists(File paramFile)
+    throws IOException
+  {
+    if (!paramFile.isDirectory())
+    {
+      if (paramFile.mkdirs()) {
+        return;
+      }
+      StringBuilder localStringBuilder = new StringBuilder();
+      localStringBuilder.append("Couldn't create directory '");
+      localStringBuilder.append(paramFile);
+      localStringBuilder.append("'");
+      throw new IOException(localStringBuilder.toString());
+    }
+  }
+  
+  private void ensurePermission(Uri paramUri, Permission paramPermission)
+    throws IOException
+  {
+    if (paramPermission.equals(Permission.READ))
+    {
+      localStringBuilder = new StringBuilder();
+      localStringBuilder.append("Location '");
+      localStringBuilder.append(paramUri);
+      localStringBuilder.append("' isn't readable.");
+      ensurePermission(paramUri, paramPermission, localStringBuilder.toString());
+    }
+    if (paramPermission.equals(Permission.WRITE))
+    {
+      localStringBuilder = new StringBuilder();
+      localStringBuilder.append("Location '");
+      localStringBuilder.append(paramUri);
+      localStringBuilder.append("' isn't writable.");
+      ensurePermission(paramUri, paramPermission, localStringBuilder.toString());
+    }
+    StringBuilder localStringBuilder = new StringBuilder();
+    localStringBuilder.append("Location '");
+    localStringBuilder.append(paramUri);
+    localStringBuilder.append("' doesn't have permission '");
+    localStringBuilder.append(paramPermission.name());
+    localStringBuilder.append("'.");
+    ensurePermission(paramUri, paramPermission, localStringBuilder.toString());
+  }
+  
+  private void ensurePermission(Uri paramUri, Permission paramPermission, String paramString)
+    throws IOException
+  {
+    if (permissionsForUri(paramUri).contains(paramPermission)) {
+      return;
+    }
+    throw new IOException(paramString);
+  }
+  
+  private void forceDelete(File paramFile)
+    throws IOException
+  {
+    if (paramFile.isDirectory())
+    {
+      File[] arrayOfFile = paramFile.listFiles();
+      if (arrayOfFile != null)
+      {
+        Object localObject = null;
+        int j = arrayOfFile.length;
+        int i = 0;
+        while (i < j)
+        {
+          File localFile = arrayOfFile[i];
+          try
+          {
+            forceDelete(localFile);
+          }
+          catch (IOException localIOException) {}
+          i += 1;
+        }
+        if (localIOException == null)
+        {
+          if (paramFile.delete()) {
+            return;
+          }
+          localStringBuilder = new StringBuilder();
+          localStringBuilder.append("Unable to delete directory ");
+          localStringBuilder.append(paramFile);
+          localStringBuilder.append(".");
+          throw new IOException(localStringBuilder.toString());
+        }
+        throw localStringBuilder;
+      }
+      localStringBuilder = new StringBuilder();
+      localStringBuilder.append("Failed to list contents of ");
+      localStringBuilder.append(paramFile);
+      throw new IOException(localStringBuilder.toString());
+    }
+    if (paramFile.delete()) {
+      return;
+    }
+    StringBuilder localStringBuilder = new StringBuilder();
+    localStringBuilder.append("Unable to delete file: ");
+    localStringBuilder.append(paramFile);
+    throw new IOException(localStringBuilder.toString());
+  }
+  
+  /* Error */
+  private static byte[] getInputStreamBytes(InputStream paramInputStream)
+    throws IOException
+  {
+    // Byte code:
+    //   0: new 253	java/io/ByteArrayOutputStream
+    //   3: dup
+    //   4: invokespecial 254	java/io/ByteArrayOutputStream:<init>	()V
+    //   7: astore_2
+    //   8: sipush 1024
+    //   11: newarray byte
+    //   13: astore_3
+    //   14: aload_0
+    //   15: aload_3
+    //   16: invokevirtual 260	java/io/InputStream:read	([B)I
+    //   19: istore_1
+    //   20: iload_1
+    //   21: iconst_m1
+    //   22: if_icmpeq +13 -> 35
+    //   25: aload_2
+    //   26: aload_3
+    //   27: iconst_0
+    //   28: iload_1
+    //   29: invokevirtual 264	java/io/ByteArrayOutputStream:write	([BII)V
+    //   32: goto -18 -> 14
+    //   35: aload_2
+    //   36: invokevirtual 268	java/io/ByteArrayOutputStream:toByteArray	()[B
+    //   39: astore_0
+    //   40: aload_2
+    //   41: invokevirtual 271	java/io/ByteArrayOutputStream:close	()V
+    //   44: aload_0
+    //   45: areturn
+    //   46: astore_0
+    //   47: aload_2
+    //   48: invokevirtual 271	java/io/ByteArrayOutputStream:close	()V
+    //   51: aload_0
+    //   52: athrow
+    //   53: astore_2
+    //   54: aload_0
+    //   55: areturn
+    //   56: astore_2
+    //   57: goto -6 -> 51
+    // Local variable table:
+    //   start	length	slot	name	signature
+    //   0	60	0	paramInputStream	InputStream
+    //   19	10	1	i	int
+    //   7	41	2	localByteArrayOutputStream	java.io.ByteArrayOutputStream
+    //   53	1	2	localIOException1	IOException
+    //   56	1	2	localIOException2	IOException
+    //   13	14	3	arrayOfByte	byte[]
+    // Exception table:
+    //   from	to	target	type
+    //   14	20	46	finally
+    //   25	32	46	finally
+    //   35	40	46	finally
+    //   40	44	53	java/io/IOException
+    //   47	51	56	java/io/IOException
+  }
+  
+  private OkHttpClient getOkHttpClient()
+  {
+    try
+    {
+      if (mClient == null)
+      {
+        localObject1 = new OkHttpClient.Builder().connectTimeout(60L, TimeUnit.SECONDS).readTimeout(60L, TimeUnit.SECONDS).writeTimeout(60L, TimeUnit.SECONDS);
+        CookieHandler localCookieHandler = (CookieHandler)mModuleRegistry.getModule(CookieHandler.class);
+        if (localCookieHandler != null) {
+          ((OkHttpClient.Builder)localObject1).cookieJar(new JavaNetCookieJar(localCookieHandler));
+        }
+        mClient = ((OkHttpClient.Builder)localObject1).build();
+      }
+      Object localObject1 = mClient;
+      return localObject1;
+    }
+    finally {}
+  }
+  
+  private String md5(File paramFile)
+    throws IOException
+  {
+    paramFile = new FileInputStream(paramFile);
+    try
+    {
+      String str = String.valueOf(Hex.encodeHex(DigestUtils.md5(paramFile)));
+      return str;
+    }
+    finally
+    {
+      paramFile.close();
+    }
+  }
+  
+  private InputStream openAssetInputStream(Uri paramUri)
+    throws IOException
+  {
+    paramUri = paramUri.getPath().substring(1);
+    return getContext().getAssets().open(paramUri);
+  }
+  
+  private EnumSet<Permission> permissionsForPath(String paramString)
+  {
+    return ((FilePermissionModuleInterface)mModuleRegistry.getModule(FilePermissionModuleInterface.class)).getPathPermissions(getContext(), paramString);
+  }
+  
+  private EnumSet<Permission> permissionsForUri(Uri paramUri)
+  {
+    if ("content".equals(paramUri.getScheme())) {
+      return EnumSet.of(Permission.READ);
+    }
+    if ("asset".equals(paramUri.getScheme())) {
+      return EnumSet.of(Permission.READ);
+    }
+    if ("file".equals(paramUri.getScheme())) {
+      return permissionsForPath(paramUri.getPath());
+    }
+    return EnumSet.noneOf(Permission.class);
+  }
+  
+  private static Bundle translateHeaders(Headers paramHeaders)
+  {
+    Bundle localBundle = new Bundle();
+    int i = 0;
+    while (i < paramHeaders.size())
+    {
+      String str = paramHeaders.name(i);
+      if (localBundle.get(str) != null)
+      {
+        StringBuilder localStringBuilder = new StringBuilder();
+        localStringBuilder.append(localBundle.getString(str));
+        localStringBuilder.append(", ");
+        localStringBuilder.append(paramHeaders.value(i));
+        localBundle.putString(str, localStringBuilder.toString());
+      }
+      else
+      {
+        localBundle.putString(str, paramHeaders.value(i));
+      }
+      i += 1;
+    }
+    return localBundle;
+  }
+  
+  private File uriToFile(Uri paramUri)
+  {
+    return new File(paramUri.getPath());
+  }
+  
+  @ExpoMethod
+  public void copyAsync(Map<String, Object> paramMap, Promise paramPromise)
+  {
+    try
+    {
+      if (!paramMap.containsKey("from"))
+      {
+        paramPromise.reject("E_MISSING_PARAMETER", "`FileSystem.moveAsync` needs a `from` path.");
+        return;
+      }
+      Object localObject = Uri.parse((String)paramMap.get("from"));
+      ensurePermission((Uri)localObject, Permission.READ);
+      if (!paramMap.containsKey("to"))
+      {
+        paramPromise.reject("E_MISSING_PARAMETER", "`FileSystem.moveAsync` needs a `to` path.");
+        return;
+      }
+      paramMap = Uri.parse((String)paramMap.get("to"));
+      ensurePermission(paramMap, Permission.WRITE);
+      if ("file".equals(((Uri)localObject).getScheme()))
+      {
+        localObject = uriToFile((Uri)localObject);
+        paramMap = uriToFile(paramMap);
+        if (((File)localObject).isDirectory())
+        {
+          FileUtils.copyDirectory((File)localObject, paramMap);
+          paramPromise.resolve(null);
+          return;
+        }
+        FileUtils.copyFile((File)localObject, paramMap);
+        paramPromise.resolve(null);
+        return;
+      }
+      if ("content".equals(((Uri)localObject).getScheme()))
+      {
+        IOUtils.copy(getContext().getContentResolver().openInputStream((Uri)localObject), new FileOutputStream(uriToFile(paramMap)));
+        paramPromise.resolve(null);
+        return;
+      }
+      if ("asset".equals(((Uri)localObject).getScheme()))
+      {
+        IOUtils.copy(openAssetInputStream((Uri)localObject), new FileOutputStream(uriToFile(paramMap)));
+        paramPromise.resolve(null);
+        return;
+      }
+      paramMap = new StringBuilder();
+      paramMap.append("Unsupported scheme for location '");
+      paramMap.append(localObject);
+      paramMap.append("'.");
+      throw new IOException(paramMap.toString());
+    }
+    catch (Exception paramMap)
+    {
+      Log.e(TAG, paramMap.getMessage());
+      paramPromise.reject(paramMap);
+    }
+  }
+  
+  @ExpoMethod
+  public void deleteAsync(String paramString, Map<String, Object> paramMap, Promise paramPromise)
+  {
+    try
+    {
+      paramString = Uri.parse(paramString);
+      Object localObject = Uri.withAppendedPath(paramString, "..");
+      Permission localPermission = Permission.WRITE;
+      StringBuilder localStringBuilder = new StringBuilder();
+      localStringBuilder.append("Location '");
+      localStringBuilder.append(paramString);
+      localStringBuilder.append("' isn't deletable.");
+      ensurePermission((Uri)localObject, localPermission, localStringBuilder.toString());
+      if ("file".equals(paramString.getScheme()))
+      {
+        localObject = uriToFile(paramString);
+        if (((File)localObject).exists())
+        {
+          if (Build.VERSION.SDK_INT >= 26) {
+            FileUtils.forceDelete((File)localObject);
+          } else {
+            forceDelete((File)localObject);
+          }
+          paramPromise.resolve(null);
+          return;
+        }
+        if ((paramMap.containsKey("idempotent")) && (((Boolean)paramMap.get("idempotent")).booleanValue()))
+        {
+          paramPromise.resolve(null);
+          return;
+        }
+        paramMap = new StringBuilder();
+        paramMap.append("File '");
+        paramMap.append(paramString);
+        paramMap.append("' could not be deleted because it could not be found");
+        paramPromise.reject("E_FILE_NOT_FOUND", paramMap.toString());
+        return;
+      }
+      paramMap = new StringBuilder();
+      paramMap.append("Unsupported scheme for location '");
+      paramMap.append(paramString);
+      paramMap.append("'.");
+      throw new IOException(paramMap.toString());
+    }
+    catch (Exception paramString)
+    {
+      Log.e(TAG, paramString.getMessage());
+      paramPromise.reject(paramString);
+    }
+  }
+  
+  @ExpoMethod
+  public void downloadAsync(String paramString1, final String paramString2, final Map<String, Object> paramMap, final Promise paramPromise)
+  {
+    try
+    {
+      paramString2 = Uri.parse(paramString2);
+      ensurePermission(paramString2, Permission.WRITE);
+      checkIfFileDirExists(paramString2);
+      Object localObject;
+      if (!paramString1.contains(":"))
+      {
+        localObject = getContext();
+        int i = ((Context)localObject).getResources().getIdentifier(paramString1, "raw", ((Context)localObject).getPackageName());
+        paramString1 = Okio.buffer(Okio.source(((Context)localObject).getResources().openRawResource(i)));
+        paramString2 = uriToFile(paramString2);
+        paramString2.delete();
+        localObject = Okio.buffer(Okio.sink(paramString2));
+        ((BufferedSink)localObject).writeAll(paramString1);
+        ((BufferedSink)localObject).close();
+        paramString1 = new Bundle();
+        paramString1.putString("uri", Uri.fromFile(paramString2).toString());
+        if ((paramMap != null) && (paramMap.containsKey("md5")) && (((Boolean)paramMap.get("md5")).booleanValue())) {
+          paramString1.putString("md5", md5(paramString2));
+        }
+        paramPromise.resolve(paramString1);
+        return;
+      }
+      if ("file".equals(paramString2.getScheme()))
+      {
+        paramString1 = new Request.Builder().url(paramString1);
+        if ((paramMap != null) && (paramMap.containsKey("headers")))
+        {
+          localObject = (Map)paramMap.get("headers");
+          Iterator localIterator = ((Map)localObject).keySet().iterator();
+          while (localIterator.hasNext())
+          {
+            String str = (String)localIterator.next();
+            paramString1.addHeader(str, ((Map)localObject).get(str).toString());
+          }
+        }
+        getOkHttpClient().newCall(paramString1.build()).enqueue(new Callback()
+        {
+          public void onFailure(Call paramAnonymousCall, IOException paramAnonymousIOException)
+          {
+            Log.e(FileSystemModule.TAG, String.valueOf(paramAnonymousIOException.getMessage()));
+            paramPromise.reject(paramAnonymousIOException);
+          }
+          
+          public void onResponse(Call paramAnonymousCall, Response paramAnonymousResponse)
+            throws IOException
+          {
+            paramAnonymousCall = FileSystemModule.this.uriToFile(paramString2);
+            paramAnonymousCall.delete();
+            Object localObject = Okio.buffer(Okio.sink(paramAnonymousCall));
+            ((BufferedSink)localObject).writeAll(paramAnonymousResponse.body().source());
+            ((BufferedSink)localObject).close();
+            localObject = new Bundle();
+            ((Bundle)localObject).putString("uri", Uri.fromFile(paramAnonymousCall).toString());
+            if ((paramMap != null) && (paramMap.containsKey("md5")) && (((Boolean)paramMap.get("md5")).booleanValue())) {
+              ((Bundle)localObject).putString("md5", FileSystemModule.this.md5(paramAnonymousCall));
+            }
+            ((Bundle)localObject).putInt("status", paramAnonymousResponse.code());
+            ((Bundle)localObject).putBundle("headers", FileSystemModule.translateHeaders(paramAnonymousResponse.headers()));
+            paramAnonymousResponse.close();
+            paramPromise.resolve(localObject);
+          }
+        });
+        return;
+      }
+      paramString1 = new StringBuilder();
+      paramString1.append("Unsupported scheme for location '");
+      paramString1.append(paramString2);
+      paramString1.append("'.");
+      throw new IOException(paramString1.toString());
+    }
+    catch (Exception paramString1)
+    {
+      Log.e(TAG, paramString1.getMessage());
+      paramPromise.reject(paramString1);
+    }
+  }
+  
+  @ExpoMethod
+  public void downloadResumablePauseAsync(String paramString, Promise paramPromise)
+  {
+    paramString = (DownloadResumable)mDownloadResumableMap.get(paramString);
+    if (paramString != null)
+    {
+      call.cancel();
+      mDownloadResumableMap.remove(uuid);
+      try
+      {
+        paramString = uriToFile(fileUri);
+        Bundle localBundle = new Bundle();
+        localBundle.putString("resumeData", String.valueOf(paramString.length()));
+        paramPromise.resolve(localBundle);
+        return;
+      }
+      catch (Exception paramString)
+      {
+        Log.e(TAG, paramString.getMessage());
+        paramPromise.reject(paramString);
+        return;
+      }
+    }
+    paramString = new IOException("No download object available");
+    Log.e(TAG, paramString.getMessage());
+    paramPromise.reject(paramString);
+  }
+  
+  @ExpoMethod
+  public void downloadResumableStartAsync(String paramString1, String paramString2, final String paramString3, Map<String, Object> paramMap, final String paramString4, Promise paramPromise)
+  {
+    for (;;)
+    {
+      try
+      {
+        paramString2 = Uri.parse(paramString2);
+        checkIfFileDirExists(paramString2);
+        if ("file".equals(paramString2.getScheme()))
+        {
+          if (paramString4 != null)
+          {
+            bool = true;
+            Object localObject1 = new ProgressListener()
+            {
+              long mLastUpdate = -1L;
+              
+              public void update(long paramAnonymousLong1, long paramAnonymousLong2, boolean paramAnonymousBoolean)
+              {
+                EventEmitter localEventEmitter = (EventEmitter)mModuleRegistry.getModule(EventEmitter.class);
+                if (localEventEmitter != null)
+                {
+                  Bundle localBundle1 = new Bundle();
+                  Bundle localBundle2 = new Bundle();
+                  long l = paramAnonymousLong1;
+                  if (bool) {
+                    l = paramAnonymousLong1 + Long.parseLong(paramString4);
+                  }
+                  paramAnonymousLong1 = paramAnonymousLong2;
+                  if (bool) {
+                    paramAnonymousLong1 = paramAnonymousLong2 + Long.parseLong(paramString4);
+                  }
+                  paramAnonymousLong2 = System.currentTimeMillis();
+                  if ((paramAnonymousLong2 > mLastUpdate + 100L) || (l == paramAnonymousLong1))
+                  {
+                    mLastUpdate = paramAnonymousLong2;
+                    localBundle2.putDouble("totalBytesWritten", l);
+                    localBundle2.putDouble("totalBytesExpectedToWrite", paramAnonymousLong1);
+                    localBundle1.putString("uuid", paramString3);
+                    localBundle1.putBundle("data", localBundle2);
+                    localEventEmitter.emit("Exponent.downloadProgress", localBundle1);
+                  }
+                }
+              }
+            };
+            localObject1 = getOkHttpClient().newBuilder().addNetworkInterceptor(new Interceptor()
+            {
+              public Response intercept(Interceptor.Chain paramAnonymousChain)
+                throws IOException
+              {
+                paramAnonymousChain = paramAnonymousChain.proceed(paramAnonymousChain.request());
+                return paramAnonymousChain.newBuilder().body(new FileSystemModule.ProgressResponseBody(paramAnonymousChain.body(), val$progressListener)).build();
+              }
+            }).build();
+            Request.Builder localBuilder = new Request.Builder();
+            Object localObject2;
+            if (bool)
+            {
+              localObject2 = new StringBuilder();
+              ((StringBuilder)localObject2).append("bytes=");
+              ((StringBuilder)localObject2).append(paramString4);
+              ((StringBuilder)localObject2).append("-");
+              localBuilder.addHeader("Range", ((StringBuilder)localObject2).toString());
+            }
+            if ((paramMap != null) && (paramMap.containsKey("headers")))
+            {
+              paramString4 = (Map)paramMap.get("headers");
+              localObject2 = paramString4.keySet().iterator();
+              if (((Iterator)localObject2).hasNext())
+              {
+                String str = (String)((Iterator)localObject2).next();
+                localBuilder.addHeader(str, paramString4.get(str).toString());
+                continue;
+              }
+            }
+            paramString4 = ((OkHttpClient)localObject1).newCall(localBuilder.url(paramString1).build());
+            paramString1 = new DownloadResumable(paramString3, paramString1, paramString2, paramString4);
+            mDownloadResumableMap.put(paramString3, paramString1);
+            paramString1 = new DownloadResumableTaskParams(paramMap, paramString4, uriToFile(paramString2), bool, paramPromise);
+            new DownloadResumableTask(null).execute(new DownloadResumableTaskParams[] { paramString1 });
+          }
+        }
+        else
+        {
+          paramString1 = new StringBuilder();
+          paramString1.append("Unsupported scheme for location '");
+          paramString1.append(paramString2);
+          paramString1.append("'.");
+          throw new IOException(paramString1.toString());
+        }
+      }
+      catch (Exception paramString1)
+      {
+        Log.e(TAG, paramString1.getMessage());
+        paramPromise.reject(paramString1);
+        return;
+      }
+      final boolean bool = false;
+    }
+  }
+  
+  public Map<String, Object> getConstants()
+  {
+    HashMap localHashMap = new HashMap();
+    StringBuilder localStringBuilder = new StringBuilder();
+    localStringBuilder.append(Uri.fromFile(getContext().getFilesDir()).toString());
+    localStringBuilder.append("/");
+    localHashMap.put("documentDirectory", localStringBuilder.toString());
+    localStringBuilder = new StringBuilder();
+    localStringBuilder.append(Uri.fromFile(getContext().getCacheDir()).toString());
+    localStringBuilder.append("/");
+    localHashMap.put("cacheDirectory", localStringBuilder.toString());
+    localHashMap.put("bundleDirectory", "asset:///");
+    return localHashMap;
+  }
+  
+  @ExpoMethod
+  public void getContentUriAsync(String paramString, Promise paramPromise)
+  {
+    try
+    {
+      Object localObject = Uri.parse(paramString);
+      ensurePermission((Uri)localObject, Permission.WRITE);
+      ensurePermission((Uri)localObject, Permission.READ);
+      checkIfFileDirExists((Uri)localObject);
+      if ("file".equals(((Uri)localObject).getScheme()))
+      {
+        paramString = uriToFile((Uri)localObject);
+        localObject = new Bundle();
+        ((Bundle)localObject).putString("uri", contentUriFromFile(paramString).toString());
+        paramPromise.resolve(localObject);
+        return;
+      }
+      localObject = new StringBuilder();
+      ((StringBuilder)localObject).append("No readable files with the uri: ");
+      ((StringBuilder)localObject).append(paramString);
+      ((StringBuilder)localObject).append(". Please use other uri.");
+      paramPromise.reject("E_DIRECTORY_NOT_READ", ((StringBuilder)localObject).toString());
+      return;
+    }
+    catch (Exception paramString)
+    {
+      Log.e(TAG, paramString.getMessage());
+      paramPromise.reject(paramString);
+    }
+  }
+  
+  @ExpoMethod
+  public void getFreeDiskStorageAsync(Promise paramPromise)
+  {
+    try
+    {
+      StatFs localStatFs = new StatFs(Environment.getDataDirectory().getAbsolutePath());
+      long l1 = localStatFs.getAvailableBlocksLong();
+      long l2 = localStatFs.getBlockSizeLong();
+      paramPromise.resolve(Double.valueOf(Math.min(BigInteger.valueOf(l1).multiply(BigInteger.valueOf(l2)).doubleValue(), Math.pow(2.0D, 53.0D) - 1.0D)));
+      return;
+    }
+    catch (Exception localException)
+    {
+      Log.e(TAG, localException.getMessage());
+      paramPromise.reject("ERR_FILESYSTEM", "Unable to determine free disk storage capacity", localException);
+    }
+  }
+  
+  @ExpoMethod
+  public void getInfoAsync(String paramString, Map<String, Object> paramMap, Promise paramPromise)
+  {
+    for (;;)
+    {
+      try
+      {
+        localObject = Uri.parse(paramString);
+        ensurePermission((Uri)localObject, Permission.READ);
+        if ("file".equals(((Uri)localObject).getScheme()))
+        {
+          paramString = uriToFile((Uri)localObject);
+          localObject = new Bundle();
+          if (paramString.exists())
+          {
+            ((Bundle)localObject).putBoolean("exists", true);
+            ((Bundle)localObject).putBoolean("isDirectory", paramString.isDirectory());
+            ((Bundle)localObject).putString("uri", Uri.fromFile(paramString).toString());
+            if ((paramMap.containsKey("md5")) && (((Boolean)paramMap.get("md5")).booleanValue())) {
+              ((Bundle)localObject).putString("md5", md5(paramString));
+            }
+            ((Bundle)localObject).putDouble("size", paramString.length());
+            ((Bundle)localObject).putDouble("modificationTime", paramString.lastModified() * 0.001D);
+            paramPromise.resolve(localObject);
+            return;
+          }
+          ((Bundle)localObject).putBoolean("exists", false);
+          ((Bundle)localObject).putBoolean("isDirectory", false);
+          paramPromise.resolve(localObject);
+          return;
+        }
+        if ((!"content".equals(((Uri)localObject).getScheme())) && (!"asset".equals(((Uri)localObject).getScheme())))
+        {
+          paramString = new StringBuilder();
+          paramString.append("Unsupported scheme for location '");
+          paramString.append(localObject);
+          paramString.append("'.");
+          throw new IOException(paramString.toString());
+        }
+        localBundle = new Bundle();
+      }
+      catch (Exception paramString)
+      {
+        Object localObject;
+        Bundle localBundle;
+        Log.e(TAG, paramString.getMessage());
+        paramPromise.reject(paramString);
+        return;
+      }
+      try
+      {
+        if ("content".equals(((Uri)localObject).getScheme())) {
+          paramString = getContext().getContentResolver().openInputStream((Uri)localObject);
+        } else {
+          paramString = openAssetInputStream((Uri)localObject);
+        }
+        if (paramString != null)
+        {
+          localBundle.putBoolean("exists", true);
+          localBundle.putBoolean("isDirectory", false);
+          localBundle.putString("uri", ((Uri)localObject).toString());
+          localBundle.putDouble("size", paramString.available());
+          if ((paramMap.containsKey("md5")) && (((Boolean)paramMap.get("md5")).booleanValue())) {
+            localBundle.putString("md5", String.valueOf(Hex.encodeHex(DigestUtils.md5(paramString))));
+          }
+          paramPromise.resolve(localBundle);
+          return;
+        }
+        throw new FileNotFoundException();
+      }
+      catch (FileNotFoundException paramString) {}
+    }
+    localBundle.putBoolean("exists", false);
+    localBundle.putBoolean("isDirectory", false);
+    paramPromise.resolve(localBundle);
+  }
+  
+  public String getName()
+  {
+    return "ExponentFileSystem";
+  }
+  
+  @ExpoMethod
+  public void getTotalDiskCapacityAsync(Promise paramPromise)
+  {
+    try
+    {
+      StatFs localStatFs = new StatFs(Environment.getDataDirectory().getAbsolutePath());
+      long l1 = localStatFs.getBlockCountLong();
+      long l2 = localStatFs.getBlockSizeLong();
+      paramPromise.resolve(Double.valueOf(Math.min(BigInteger.valueOf(l1).multiply(BigInteger.valueOf(l2)).doubleValue(), Math.pow(2.0D, 53.0D) - 1.0D)));
+      return;
+    }
+    catch (Exception localException)
+    {
+      Log.e(TAG, localException.getMessage());
+      paramPromise.reject("ERR_FILESYSTEM", "Unable to access total disk capacity", localException);
+    }
+  }
+  
+  @ExpoMethod
+  public void makeDirectoryAsync(String paramString, Map<String, Object> paramMap, Promise paramPromise)
+  {
+    for (;;)
+    {
+      boolean bool2;
+      boolean bool1;
+      try
+      {
+        paramString = Uri.parse(paramString);
+        ensurePermission(paramString, Permission.WRITE);
+        if ("file".equals(paramString.getScheme()))
+        {
+          File localFile = uriToFile(paramString);
+          bool2 = localFile.isDirectory();
+          if ((paramMap.containsKey("intermediates")) && (((Boolean)paramMap.get("intermediates")).booleanValue()))
+          {
+            i = 1;
+            if (i != 0)
+            {
+              bool1 = localFile.mkdirs();
+              break label214;
+            }
+            bool1 = localFile.mkdir();
+            break label214;
+            paramMap = new StringBuilder();
+            paramMap.append("Directory '");
+            paramMap.append(paramString);
+            paramMap.append("' could not be created or already exists.");
+            paramPromise.reject("E_DIRECTORY_NOT_CREATED", paramMap.toString());
+            return;
+            paramPromise.resolve(null);
+          }
+        }
+        else
+        {
+          paramMap = new StringBuilder();
+          paramMap.append("Unsupported scheme for location '");
+          paramMap.append(paramString);
+          paramMap.append("'.");
+          throw new IOException(paramMap.toString());
+        }
+      }
+      catch (Exception paramString)
+      {
+        Log.e(TAG, paramString.getMessage());
+        paramPromise.reject(paramString);
+        return;
+      }
+      int i = 0;
+      continue;
+      label214:
+      if (!bool1) {
+        if ((i == 0) || (!bool2)) {}
+      }
+    }
+  }
+  
+  @ExpoMethod
+  public void moveAsync(Map<String, Object> paramMap, Promise paramPromise)
+  {
+    try
+    {
+      if (!paramMap.containsKey("from"))
+      {
+        paramPromise.reject("E_MISSING_PARAMETER", "`FileSystem.moveAsync` needs a `from` path.");
+        return;
+      }
+      Uri localUri = Uri.parse((String)paramMap.get("from"));
+      Object localObject = Uri.withAppendedPath(localUri, "..");
+      Permission localPermission = Permission.WRITE;
+      StringBuilder localStringBuilder = new StringBuilder();
+      localStringBuilder.append("Location '");
+      localStringBuilder.append(localUri);
+      localStringBuilder.append("' isn't movable.");
+      ensurePermission((Uri)localObject, localPermission, localStringBuilder.toString());
+      if (!paramMap.containsKey("to"))
+      {
+        paramPromise.reject("E_MISSING_PARAMETER", "`FileSystem.moveAsync` needs a `to` path.");
+        return;
+      }
+      paramMap = Uri.parse((String)paramMap.get("to"));
+      ensurePermission(paramMap, Permission.WRITE);
+      if ("file".equals(localUri.getScheme()))
+      {
+        if (uriToFile(localUri).renameTo(uriToFile(paramMap)))
+        {
+          paramPromise.resolve(null);
+          return;
+        }
+        localObject = new StringBuilder();
+        ((StringBuilder)localObject).append("File '");
+        ((StringBuilder)localObject).append(localUri);
+        ((StringBuilder)localObject).append("' could not be moved to '");
+        ((StringBuilder)localObject).append(paramMap);
+        ((StringBuilder)localObject).append("'");
+        paramPromise.reject("E_FILE_NOT_MOVED", ((StringBuilder)localObject).toString());
+        return;
+      }
+      paramMap = new StringBuilder();
+      paramMap.append("Unsupported scheme for location '");
+      paramMap.append(localUri);
+      paramMap.append("'.");
+      throw new IOException(paramMap.toString());
+    }
+    catch (Exception paramMap)
+    {
+      Log.e(TAG, paramMap.getMessage());
+      paramPromise.reject(paramMap);
+    }
+  }
+  
+  public void onCreate(ModuleRegistry paramModuleRegistry)
+  {
+    mModuleRegistry = paramModuleRegistry;
+  }
+  
+  @ExpoMethod
+  public void readAsStringAsync(String paramString, Map<String, Object> paramMap, Promise paramPromise)
+  {
+    try
+    {
+      Uri localUri = Uri.parse(paramString);
+      ensurePermission(localUri, Permission.READ);
+      String str = "utf8";
+      paramString = str;
+      if (paramMap.containsKey("encoding"))
+      {
+        paramString = str;
+        if ((paramMap.get("encoding") instanceof String)) {
+          paramString = ((String)paramMap.get("encoding")).toLowerCase();
+        }
+      }
+      if (paramString.equalsIgnoreCase("base64"))
+      {
+        if ("file".equals(localUri.getScheme()))
+        {
+          paramString = new FileInputStream(uriToFile(localUri));
+        }
+        else
+        {
+          if (!"asset".equals(localUri.getScheme())) {
+            break label232;
+          }
+          paramString = openAssetInputStream(localUri);
+        }
+        if ((paramMap.containsKey("length")) && (paramMap.containsKey("position")))
+        {
+          int i = ((Number)paramMap.get("length")).intValue();
+          int j = ((Number)paramMap.get("position")).intValue();
+          paramMap = new byte[i];
+          paramString.skip(j);
+          paramString = Base64.encodeToString(paramMap, 0, paramString.read(paramMap, 0, i), 2);
+        }
+        else
+        {
+          paramString = Base64.encodeToString(getInputStreamBytes(paramString), 2);
+          break label332;
+          label232:
+          paramString = new StringBuilder();
+          paramString.append("Unsupported scheme for location '");
+          paramString.append(localUri);
+          paramString.append("'.");
+          throw new IOException(paramString.toString());
+        }
+      }
+      else if ("file".equals(localUri.getScheme()))
+      {
+        paramString = IOUtils.toString(new FileInputStream(uriToFile(localUri)));
+      }
+      else
+      {
+        if (!"asset".equals(localUri.getScheme())) {
+          break label338;
+        }
+        paramString = IOUtils.toString(openAssetInputStream(localUri));
+      }
+      label332:
+      paramPromise.resolve(paramString);
+      return;
+      label338:
+      paramString = new StringBuilder();
+      paramString.append("Unsupported scheme for location '");
+      paramString.append(localUri);
+      paramString.append("'.");
+      throw new IOException(paramString.toString());
+    }
+    catch (Exception paramString)
+    {
+      Log.e(TAG, paramString.getMessage());
+      paramPromise.reject(paramString);
+    }
+  }
+  
+  @ExpoMethod
+  public void readDirectoryAsync(String paramString, Map<String, Object> paramMap, Promise paramPromise)
+  {
+    try
+    {
+      paramString = Uri.parse(paramString);
+      ensurePermission(paramString, Permission.READ);
+      if ("file".equals(paramString.getScheme()))
+      {
+        paramMap = uriToFile(paramString).listFiles();
+        if (paramMap != null)
+        {
+          paramString = new ArrayList();
+          int j = paramMap.length;
+          int i = 0;
+          while (i < j)
+          {
+            paramString.add(paramMap[i].getName());
+            i += 1;
+          }
+          paramPromise.resolve(paramString);
+          return;
+        }
+        paramMap = new StringBuilder();
+        paramMap.append("Directory '");
+        paramMap.append(paramString);
+        paramMap.append("' could not be read.");
+        paramPromise.reject("E_DIRECTORY_NOT_READ", paramMap.toString());
+        return;
+      }
+      paramMap = new StringBuilder();
+      paramMap.append("Unsupported scheme for location '");
+      paramMap.append(paramString);
+      paramMap.append("'.");
+      throw new IOException(paramMap.toString());
+    }
+    catch (Exception paramString)
+    {
+      Log.e(TAG, paramString.getMessage());
+      paramPromise.reject(paramString);
+    }
+  }
+  
+  @ExpoMethod
+  public void writeAsStringAsync(String paramString1, String paramString2, Map<String, Object> paramMap, Promise paramPromise)
+  {
+    try
+    {
+      Uri localUri = Uri.parse(paramString1);
+      ensurePermission(localUri, Permission.WRITE);
+      if ("file".equals(localUri.getScheme()))
+      {
+        String str = "utf8";
+        paramString1 = str;
+        if (paramMap.containsKey("encoding"))
+        {
+          paramString1 = str;
+          if ((paramMap.get("encoding") instanceof String)) {
+            paramString1 = ((String)paramMap.get("encoding")).toLowerCase();
+          }
+        }
+        paramMap = new FileOutputStream(uriToFile(localUri));
+        if (paramString1.equals("base64"))
+        {
+          paramMap.write(Base64.decode(paramString2, 0));
+        }
+        else
+        {
+          paramString1 = new OutputStreamWriter(paramMap);
+          paramString1.write(paramString2);
+          paramString1.close();
+        }
+        paramMap.close();
+        paramPromise.resolve(null);
+        return;
+      }
+      paramString1 = new StringBuilder();
+      paramString1.append("Unsupported scheme for location '");
+      paramString1.append(localUri);
+      paramString1.append("'.");
+      throw new IOException(paramString1.toString());
+    }
+    catch (Exception paramString1)
+    {
+      Log.e(TAG, paramString1.getMessage());
+      paramPromise.reject(paramString1);
+    }
+  }
+  
+  private static class DownloadResumable
+  {
+    public final Call call;
+    public final Uri fileUri;
+    public final String url;
+    public final String uuid;
+    
+    public DownloadResumable(String paramString1, String paramString2, Uri paramUri, Call paramCall)
+    {
+      uuid = paramString1;
+      url = paramString2;
+      fileUri = paramUri;
+      call = paramCall;
+    }
+  }
+  
+  private class DownloadResumableTask
+    extends AsyncTask<FileSystemModule.DownloadResumableTaskParams, Void, Void>
+  {
+    private DownloadResumableTask() {}
+    
+    protected Void doInBackground(FileSystemModule.DownloadResumableTaskParams... paramVarArgs)
+    {
+      Object localObject = 0call;
+      Promise localPromise = 0promise;
+      File localFile = 0file;
+      boolean bool = 0isResume;
+      Map localMap = 0options;
+      try
+      {
+        localObject = ((Call)localObject).execute();
+        BufferedInputStream localBufferedInputStream = new BufferedInputStream(((Response)localObject).body().byteStream());
+        if (bool) {
+          paramVarArgs = new FileOutputStream(localFile, true);
+        } else {
+          paramVarArgs = new FileOutputStream(localFile, false);
+        }
+        byte[] arrayOfByte = new byte['?'];
+        for (;;)
+        {
+          int i = localBufferedInputStream.read(arrayOfByte);
+          if (i == -1) {
+            break;
+          }
+          paramVarArgs.write(arrayOfByte, 0, i);
+        }
+        paramVarArgs = new Bundle();
+        paramVarArgs.putString("uri", Uri.fromFile(localFile).toString());
+        if ((localMap != null) && (localMap.containsKey("md5")) && (((Boolean)localMap.get("md5")).booleanValue())) {
+          paramVarArgs.putString("md5", FileSystemModule.this.md5(localFile));
+        }
+        paramVarArgs.putInt("status", ((Response)localObject).code());
+        paramVarArgs.putBundle("headers", FileSystemModule.translateHeaders(((Response)localObject).headers()));
+        ((Response)localObject).close();
+        localPromise.resolve(paramVarArgs);
+        return null;
+      }
+      catch (Exception paramVarArgs)
+      {
+        Log.e(FileSystemModule.TAG, paramVarArgs.getMessage());
+        localPromise.reject(paramVarArgs);
+      }
+      return null;
+    }
+  }
+  
+  private static class DownloadResumableTaskParams
+  {
+    Call call;
+    File file;
+    boolean isResume;
+    Map<String, Object> options;
+    Promise promise;
+    
+    DownloadResumableTaskParams(Map<String, Object> paramMap, Call paramCall, File paramFile, boolean paramBoolean, Promise paramPromise)
+    {
+      options = paramMap;
+      call = paramCall;
+      file = paramFile;
+      isResume = paramBoolean;
+      promise = paramPromise;
+    }
+  }
+  
+  static abstract interface ProgressListener
+  {
+    public abstract void update(long paramLong1, long paramLong2, boolean paramBoolean);
+  }
+  
+  private static class ProgressResponseBody
+    extends ResponseBody
+  {
+    private BufferedSource bufferedSource;
+    private final FileSystemModule.ProgressListener progressListener;
+    private final ResponseBody responseBody;
+    
+    ProgressResponseBody(ResponseBody paramResponseBody, FileSystemModule.ProgressListener paramProgressListener)
+    {
+      responseBody = paramResponseBody;
+      progressListener = paramProgressListener;
+    }
+    
+    private Source source(Source paramSource)
+    {
+      new ForwardingSource(paramSource)
+      {
+        long totalBytesRead = 0L;
+        
+        public long read(Buffer paramAnonymousBuffer, long paramAnonymousLong)
+          throws IOException
+        {
+          long l1 = super.read(paramAnonymousBuffer, paramAnonymousLong);
+          long l2 = totalBytesRead;
+          boolean bool1 = l1 < -1L;
+          if (bool1) {
+            paramAnonymousLong = l1;
+          } else {
+            paramAnonymousLong = 0L;
+          }
+          totalBytesRead = (l2 + paramAnonymousLong);
+          paramAnonymousBuffer = progressListener;
+          paramAnonymousLong = totalBytesRead;
+          l2 = responseBody.contentLength();
+          boolean bool2;
+          if (!bool1) {
+            bool2 = true;
+          } else {
+            bool2 = false;
+          }
+          paramAnonymousBuffer.update(paramAnonymousLong, l2, bool2);
+          return l1;
+        }
+      };
+    }
+    
+    public long contentLength()
+    {
+      return responseBody.contentLength();
+    }
+    
+    public MediaType contentType()
+    {
+      return responseBody.contentType();
+    }
+    
+    public BufferedSource source()
+    {
+      if (bufferedSource == null) {
+        bufferedSource = Okio.buffer(source(responseBody.source()));
+      }
+      return bufferedSource;
+    }
+  }
+}

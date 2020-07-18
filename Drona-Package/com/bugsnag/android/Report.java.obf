@@ -1,0 +1,108 @@
+package com.bugsnag.android;
+
+import androidx.annotation.NonNull;
+import androidx.annotation.Nullable;
+import java.io.File;
+import java.io.IOException;
+
+public class Report
+  implements JsonStream.Streamable
+{
+  @NonNull
+  private String apiKey;
+  private transient boolean cachingDisabled;
+  @Nullable
+  private final Error error;
+  @Nullable
+  private final File errorFile;
+  @NonNull
+  private final Notifier notifier;
+  
+  Report(@NonNull String paramString, @NonNull Error paramError)
+  {
+    this(paramString, null, paramError);
+  }
+  
+  Report(@NonNull String paramString, @Nullable File paramFile)
+  {
+    this(paramString, paramFile, null);
+  }
+  
+  private Report(@NonNull String paramString, @Nullable File paramFile, @Nullable Error paramError)
+  {
+    error = paramError;
+    errorFile = paramFile;
+    notifier = Notifier.getInstance();
+    apiKey = paramString;
+  }
+  
+  @NonNull
+  public String getApiKey()
+  {
+    return apiKey;
+  }
+  
+  @NonNull
+  public Error getError()
+  {
+    return error;
+  }
+  
+  @NonNull
+  public Notifier getNotifier()
+  {
+    return notifier;
+  }
+  
+  boolean isCachingDisabled()
+  {
+    return cachingDisabled;
+  }
+  
+  public void setApiKey(@NonNull String paramString)
+  {
+    apiKey = paramString;
+  }
+  
+  void setCachingDisabled(boolean paramBoolean)
+  {
+    cachingDisabled = paramBoolean;
+  }
+  
+  @Deprecated
+  public void setNotifierName(@NonNull String paramString)
+  {
+    notifier.setName(paramString);
+  }
+  
+  @Deprecated
+  public void setNotifierURL(@NonNull String paramString)
+  {
+    notifier.setURL(paramString);
+  }
+  
+  @Deprecated
+  public void setNotifierVersion(@NonNull String paramString)
+  {
+    notifier.setVersion(paramString);
+  }
+  
+  public void toStream(@NonNull JsonStream paramJsonStream)
+    throws IOException
+  {
+    paramJsonStream.beginObject();
+    paramJsonStream.name("apiKey").value(apiKey);
+    paramJsonStream.name("payloadVersion").value("4.0");
+    paramJsonStream.name("notifier").value(notifier);
+    paramJsonStream.name("events").beginArray();
+    if (error != null) {
+      paramJsonStream.value(error);
+    } else if (errorFile != null) {
+      paramJsonStream.value(errorFile);
+    } else {
+      Logger.warn("Expected error or errorFile, found empty payload instead");
+    }
+    paramJsonStream.endArray();
+    paramJsonStream.endObject();
+  }
+}

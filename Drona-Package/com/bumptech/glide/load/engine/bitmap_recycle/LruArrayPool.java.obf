@@ -1,0 +1,387 @@
+package com.bumptech.glide.load.engine.bitmap_recycle;
+
+import android.util.Log;
+import androidx.annotation.Nullable;
+import androidx.annotation.VisibleForTesting;
+import com.bumptech.glide.util.Preconditions;
+import java.util.HashMap;
+import java.util.Iterator;
+import java.util.Map;
+import java.util.NavigableMap;
+import java.util.Set;
+import java.util.TreeMap;
+
+public final class LruArrayPool
+  implements ArrayPool
+{
+  private static final int DEFAULT_SIZE = 4194304;
+  @VisibleForTesting
+  static final int MAX_OVER_SIZE_MULTIPLE = 8;
+  private static final int SINGLE_ARRAY_MAX_SIZE_DIVISOR = 2;
+  private final Map<Class<?>, ArrayAdapterInterface<?>> adapters = new HashMap();
+  private int currentSize;
+  private final GroupedLinkedMap<Key, Object> groupedMap = new GroupedLinkedMap();
+  private final KeyPool keyPool = new KeyPool();
+  private final int maxSize;
+  private final Map<Class<?>, NavigableMap<Integer, Integer>> sortedSizes = new HashMap();
+  
+  @VisibleForTesting
+  public LruArrayPool()
+  {
+    maxSize = 4194304;
+  }
+  
+  public LruArrayPool(int paramInt)
+  {
+    maxSize = paramInt;
+  }
+  
+  private void decrementArrayOfSize(int paramInt, Class<?> paramClass)
+  {
+    paramClass = getSizesForAdapter(paramClass);
+    Integer localInteger = (Integer)paramClass.get(Integer.valueOf(paramInt));
+    if (localInteger != null)
+    {
+      if (localInteger.intValue() == 1)
+      {
+        paramClass.remove(Integer.valueOf(paramInt));
+        return;
+      }
+      paramClass.put(Integer.valueOf(paramInt), Integer.valueOf(localInteger.intValue() - 1));
+      return;
+    }
+    paramClass = new StringBuilder();
+    paramClass.append("Tried to decrement empty size, size: ");
+    paramClass.append(paramInt);
+    paramClass.append(", this: ");
+    paramClass.append(this);
+    throw new NullPointerException(paramClass.toString());
+  }
+  
+  private void evict()
+  {
+    evictToSize(maxSize);
+  }
+  
+  private void evictToSize(int paramInt)
+  {
+    while (currentSize > paramInt)
+    {
+      Object localObject = groupedMap.removeLast();
+      Preconditions.checkNotNull(localObject);
+      ArrayAdapterInterface localArrayAdapterInterface = getAdapterFromObject(localObject);
+      currentSize -= localArrayAdapterInterface.getArrayLength(localObject) * localArrayAdapterInterface.getElementSizeInBytes();
+      decrementArrayOfSize(localArrayAdapterInterface.getArrayLength(localObject), localObject.getClass());
+      if (Log.isLoggable(localArrayAdapterInterface.getTag(), 2))
+      {
+        String str = localArrayAdapterInterface.getTag();
+        StringBuilder localStringBuilder = new StringBuilder();
+        localStringBuilder.append("evicted: ");
+        localStringBuilder.append(localArrayAdapterInterface.getArrayLength(localObject));
+        Log.v(str, localStringBuilder.toString());
+      }
+    }
+  }
+  
+  private <T> ArrayAdapterInterface<T> getAdapterFromObject(T paramT)
+  {
+    return getAdapterFromType(paramT.getClass());
+  }
+  
+  private <T> ArrayAdapterInterface<T> getAdapterFromType(Class<T> paramClass)
+  {
+    Object localObject = (ArrayAdapterInterface)adapters.get(paramClass);
+    if (localObject == null)
+    {
+      if (paramClass.equals([I.class))
+      {
+        localObject = new IntegerArrayAdapter();
+      }
+      else
+      {
+        if (!paramClass.equals([B.class)) {
+          break label69;
+        }
+        localObject = new ByteArrayAdapter();
+      }
+      adapters.put(paramClass, localObject);
+      return localObject;
+      label69:
+      localObject = new StringBuilder();
+      ((StringBuilder)localObject).append("No array pool found for: ");
+      ((StringBuilder)localObject).append(paramClass.getSimpleName());
+      throw new IllegalArgumentException(((StringBuilder)localObject).toString());
+    }
+    return localObject;
+  }
+  
+  @Nullable
+  private <T> T getArrayForKey(Key paramKey)
+  {
+    return groupedMap.get(paramKey);
+  }
+  
+  private <T> T getForKey(Key paramKey, Class<T> paramClass)
+  {
+    ArrayAdapterInterface localArrayAdapterInterface = getAdapterFromType(paramClass);
+    Object localObject = getArrayForKey(paramKey);
+    if (localObject != null)
+    {
+      currentSize -= localArrayAdapterInterface.getArrayLength(localObject) * localArrayAdapterInterface.getElementSizeInBytes();
+      decrementArrayOfSize(localArrayAdapterInterface.getArrayLength(localObject), paramClass);
+    }
+    paramClass = (Class<T>)localObject;
+    if (localObject == null)
+    {
+      if (Log.isLoggable(localArrayAdapterInterface.getTag(), 2))
+      {
+        paramClass = localArrayAdapterInterface.getTag();
+        localObject = new StringBuilder();
+        ((StringBuilder)localObject).append("Allocated ");
+        ((StringBuilder)localObject).append(size);
+        ((StringBuilder)localObject).append(" bytes");
+        Log.v(paramClass, ((StringBuilder)localObject).toString());
+      }
+      paramClass = localArrayAdapterInterface.newArray(size);
+    }
+    return paramClass;
+  }
+  
+  private NavigableMap<Integer, Integer> getSizesForAdapter(Class<?> paramClass)
+  {
+    NavigableMap localNavigableMap = (NavigableMap)sortedSizes.get(paramClass);
+    Object localObject = localNavigableMap;
+    if (localNavigableMap == null)
+    {
+      localObject = new TreeMap();
+      sortedSizes.put(paramClass, localObject);
+    }
+    return localObject;
+  }
+  
+  private boolean isNoMoreThanHalfFull()
+  {
+    return (currentSize == 0) || (maxSize / currentSize >= 2);
+  }
+  
+  private boolean isSmallEnoughForReuse(int paramInt)
+  {
+    return paramInt <= maxSize / 2;
+  }
+  
+  private boolean mayFillRequest(int paramInt, Integer paramInteger)
+  {
+    return (paramInteger != null) && ((isNoMoreThanHalfFull()) || (paramInteger.intValue() <= paramInt * 8));
+  }
+  
+  public void clearMemory()
+  {
+    try
+    {
+      evictToSize(0);
+      return;
+    }
+    finally
+    {
+      localObject = finally;
+      throw localObject;
+    }
+  }
+  
+  public <T> T get(int paramInt, Class<T> paramClass)
+  {
+    try
+    {
+      Object localObject = (Integer)getSizesForAdapter(paramClass).ceilingKey(Integer.valueOf(paramInt));
+      if (mayFillRequest(paramInt, (Integer)localObject)) {
+        localObject = keyPool.get(((Integer)localObject).intValue(), paramClass);
+      } else {
+        localObject = keyPool.get(paramInt, paramClass);
+      }
+      paramClass = getForKey((Key)localObject, paramClass);
+      return paramClass;
+    }
+    finally {}
+  }
+  
+  int getCurrentSize()
+  {
+    Iterator localIterator1 = sortedSizes.keySet().iterator();
+    int i = 0;
+    if (localIterator1.hasNext())
+    {
+      Class localClass = (Class)localIterator1.next();
+      Iterator localIterator2 = ((NavigableMap)sortedSizes.get(localClass)).keySet().iterator();
+      int j = i;
+      for (;;)
+      {
+        i = j;
+        if (!localIterator2.hasNext()) {
+          break;
+        }
+        Integer localInteger = (Integer)localIterator2.next();
+        ArrayAdapterInterface localArrayAdapterInterface = getAdapterFromType(localClass);
+        j += localInteger.intValue() * ((Integer)((NavigableMap)sortedSizes.get(localClass)).get(localInteger)).intValue() * localArrayAdapterInterface.getElementSizeInBytes();
+      }
+    }
+    return i;
+  }
+  
+  public <T> T getExact(int paramInt, Class<T> paramClass)
+  {
+    try
+    {
+      paramClass = getForKey(keyPool.get(paramInt, paramClass), paramClass);
+      return paramClass;
+    }
+    finally
+    {
+      paramClass = finally;
+      throw paramClass;
+    }
+  }
+  
+  public <T> void put(T paramT)
+  {
+    try
+    {
+      Object localObject2 = paramT.getClass();
+      Object localObject1 = getAdapterFromType((Class)localObject2);
+      int i = ((ArrayAdapterInterface)localObject1).getArrayLength(paramT);
+      int j = ((ArrayAdapterInterface)localObject1).getElementSizeInBytes() * i;
+      boolean bool = isSmallEnoughForReuse(j);
+      if (!bool) {
+        return;
+      }
+      localObject1 = keyPool.get(i, (Class)localObject2);
+      groupedMap.put((Poolable)localObject1, paramT);
+      paramT = getSizesForAdapter((Class)localObject2);
+      localObject2 = (Integer)paramT.get(Integer.valueOf(size));
+      int k = size;
+      i = 1;
+      if (localObject2 != null) {
+        i = 1 + ((Integer)localObject2).intValue();
+      }
+      paramT.put(Integer.valueOf(k), Integer.valueOf(i));
+      currentSize += j;
+      evict();
+      return;
+    }
+    finally {}
+  }
+  
+  @Deprecated
+  public <T> void put(T paramT, Class<T> paramClass)
+  {
+    put(paramT);
+  }
+  
+  public void trimMemory(int paramInt)
+  {
+    if (paramInt >= 40) {}
+    for (;;)
+    {
+      try
+      {
+        clearMemory();
+        continue;
+        evictToSize(maxSize / 2);
+        return;
+      }
+      finally
+      {
+        Object localObject1;
+        continue;
+      }
+      throw localObject1;
+      if (paramInt < 20) {
+        if (paramInt != 15) {}
+      }
+    }
+  }
+  
+  private static final class Key
+    implements Poolable
+  {
+    private Class<?> arrayClass;
+    private final LruArrayPool.KeyPool pool;
+    int size;
+    
+    Key(LruArrayPool.KeyPool paramKeyPool)
+    {
+      pool = paramKeyPool;
+    }
+    
+    public boolean equals(Object paramObject)
+    {
+      boolean bool1 = paramObject instanceof Key;
+      boolean bool2 = false;
+      if (bool1)
+      {
+        paramObject = (Key)paramObject;
+        bool1 = bool2;
+        if (size == size)
+        {
+          bool1 = bool2;
+          if (arrayClass == arrayClass) {
+            bool1 = true;
+          }
+        }
+        return bool1;
+      }
+      return false;
+    }
+    
+    public int hashCode()
+    {
+      int j = size;
+      int i;
+      if (arrayClass != null) {
+        i = arrayClass.hashCode();
+      } else {
+        i = 0;
+      }
+      return j * 31 + i;
+    }
+    
+    void init(int paramInt, Class<?> paramClass)
+    {
+      size = paramInt;
+      arrayClass = paramClass;
+    }
+    
+    public void offer()
+    {
+      pool.offer(this);
+    }
+    
+    public String toString()
+    {
+      StringBuilder localStringBuilder = new StringBuilder();
+      localStringBuilder.append("Key{size=");
+      localStringBuilder.append(size);
+      localStringBuilder.append("array=");
+      localStringBuilder.append(arrayClass);
+      localStringBuilder.append('}');
+      return localStringBuilder.toString();
+    }
+  }
+  
+  private static final class KeyPool
+    extends BaseKeyPool<LruArrayPool.Key>
+  {
+    KeyPool() {}
+    
+    protected LruArrayPool.Key create()
+    {
+      return new LruArrayPool.Key(this);
+    }
+    
+    LruArrayPool.Key get(int paramInt, Class<?> paramClass)
+    {
+      LruArrayPool.Key localKey = (LruArrayPool.Key)get();
+      localKey.init(paramInt, paramClass);
+      return localKey;
+    }
+  }
+}

@@ -1,0 +1,67 @@
+package expo.modules.barcodescanner;
+
+import android.os.Bundle;
+import android.os.Parcelable;
+import android.util.Pair;
+import androidx.core.util.Pools.SynchronizedPool;
+import expo.modules.barcodescanner.utils.BarCodeScannerEventHelper;
+import java.util.List;
+import org.unimodules.core.interfaces.services.EventEmitter.BaseEvent;
+import org.unimodules.interfaces.barcodescanner.BarCodeScannerResult;
+
+public class BarCodeScannedEvent
+  extends EventEmitter.BaseEvent
+{
+  private static final Pools.SynchronizedPool<BarCodeScannedEvent> EVENTS_POOL = new Pools.SynchronizedPool(3);
+  private BarCodeScannerResult mBarCode;
+  private Bundle mBoundingBox;
+  private List<Bundle> mCornerPoints;
+  private int mViewTag;
+  
+  private BarCodeScannedEvent() {}
+  
+  private void init(int paramInt, BarCodeScannerResult paramBarCodeScannerResult, float paramFloat)
+  {
+    mViewTag = paramInt;
+    mBarCode = paramBarCodeScannerResult;
+    paramBarCodeScannerResult = BarCodeScannerEventHelper.getCornerPointsAndBoundingBox(paramBarCodeScannerResult.getCornerPoints(), paramFloat);
+    mCornerPoints = ((List)first);
+    mBoundingBox = ((Bundle)second);
+  }
+  
+  public static BarCodeScannedEvent obtain(int paramInt, BarCodeScannerResult paramBarCodeScannerResult, float paramFloat)
+  {
+    BarCodeScannedEvent localBarCodeScannedEvent2 = (BarCodeScannedEvent)EVENTS_POOL.acquire();
+    BarCodeScannedEvent localBarCodeScannedEvent1 = localBarCodeScannedEvent2;
+    if (localBarCodeScannedEvent2 == null) {
+      localBarCodeScannedEvent1 = new BarCodeScannedEvent();
+    }
+    localBarCodeScannedEvent1.init(paramInt, paramBarCodeScannerResult, paramFloat);
+    return localBarCodeScannedEvent1;
+  }
+  
+  public short getCoalescingKey()
+  {
+    return (short)(mBarCode.getValue().hashCode() % 32767);
+  }
+  
+  public Bundle getEventBody()
+  {
+    Bundle localBundle = new Bundle();
+    localBundle.putInt("target", mViewTag);
+    localBundle.putString("data", mBarCode.getValue());
+    localBundle.putInt("type", mBarCode.getType());
+    if (!mCornerPoints.isEmpty())
+    {
+      Bundle[] arrayOfBundle = new Bundle[mCornerPoints.size()];
+      localBundle.putParcelableArray("cornerPoints", (Parcelable[])mCornerPoints.toArray(arrayOfBundle));
+      localBundle.putBundle("bounds", mBoundingBox);
+    }
+    return localBundle;
+  }
+  
+  public String getEventName()
+  {
+    return BarCodeScannerViewManager.Events.EVENT_ON_BAR_CODE_SCANNED.toString();
+  }
+}

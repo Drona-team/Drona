@@ -1,0 +1,341 @@
+package com.airbnb.android.react.maps;
+
+import android.app.Activity;
+import android.content.ContextWrapper;
+import android.content.res.Resources;
+import android.graphics.Bitmap;
+import android.graphics.Bitmap.CompressFormat;
+import android.graphics.Point;
+import android.net.Uri;
+import android.util.Base64;
+import android.util.DisplayMetrics;
+import com.facebook.react.bridge.Promise;
+import com.facebook.react.bridge.ReactApplicationContext;
+import com.facebook.react.bridge.ReactContext;
+import com.facebook.react.bridge.ReactContextBaseJavaModule;
+import com.facebook.react.bridge.ReadableMap;
+import com.facebook.react.bridge.WritableMap;
+import com.facebook.react.bridge.WritableNativeMap;
+import com.facebook.react.module.annotations.ReactModule;
+import com.facebook.react.uimanager.NativeViewHierarchyManager;
+import com.facebook.react.uimanager.UIBlock;
+import com.facebook.react.uimanager.UIManagerModule;
+import com.google.android.gms.maps.GoogleMap;
+import com.google.android.gms.maps.GoogleMap.SnapshotReadyCallback;
+import com.google.android.gms.maps.Projection;
+import com.google.android.gms.maps.model.CameraPosition;
+import com.google.android.gms.maps.model.LatLng;
+import java.io.ByteArrayOutputStream;
+import java.io.Closeable;
+import java.io.File;
+import java.io.FileOutputStream;
+import java.io.IOException;
+import java.io.OutputStream;
+import java.util.HashMap;
+import java.util.Map;
+
+@ReactModule(name="AirMapModule")
+public class AirMapModule
+  extends ReactContextBaseJavaModule
+{
+  public static final String NAME = "AirMapModule";
+  private static final String SNAPSHOT_FORMAT_JPG = "jpg";
+  private static final String SNAPSHOT_FORMAT_PNG = "png";
+  private static final String SNAPSHOT_RESULT_BASE64 = "base64";
+  private static final String SNAPSHOT_RESULT_FILE = "file";
+  
+  public AirMapModule(ReactApplicationContext paramReactApplicationContext)
+  {
+    super(paramReactApplicationContext);
+  }
+  
+  public static void closeQuietly(Closeable paramCloseable)
+  {
+    if (paramCloseable == null) {
+      return;
+    }
+    try
+    {
+      paramCloseable.close();
+      return;
+    }
+    catch (IOException paramCloseable) {}
+  }
+  
+  public void coordinateForPoint(final int paramInt, final ReadableMap paramReadableMap, final Promise paramPromise)
+  {
+    ReactApplicationContext localReactApplicationContext = getReactApplicationContext();
+    double d = getResourcesgetDisplayMetricsdensity;
+    boolean bool = paramReadableMap.hasKey("x");
+    int j = 0;
+    int i;
+    if (bool) {
+      i = (int)(paramReadableMap.getDouble("x") * d);
+    } else {
+      i = 0;
+    }
+    if (paramReadableMap.hasKey("y")) {
+      j = (int)(paramReadableMap.getDouble("y") * d);
+    }
+    paramReadableMap = new Point(i, j);
+    ((UIManagerModule)localReactApplicationContext.getNativeModule(UIManagerModule.class)).addUIBlock(new UIBlock()
+    {
+      public void execute(NativeViewHierarchyManager paramAnonymousNativeViewHierarchyManager)
+      {
+        paramAnonymousNativeViewHierarchyManager = (AirMapView)paramAnonymousNativeViewHierarchyManager.resolveView(paramInt);
+        if (paramAnonymousNativeViewHierarchyManager == null)
+        {
+          paramPromise.reject("AirMapView not found");
+          return;
+        }
+        if (record == null)
+        {
+          paramPromise.reject("AirMapView.map is not valid");
+          return;
+        }
+        paramAnonymousNativeViewHierarchyManager = record.getProjection().fromScreenLocation(paramReadableMap);
+        WritableNativeMap localWritableNativeMap = new WritableNativeMap();
+        localWritableNativeMap.putDouble("latitude", latitude);
+        localWritableNativeMap.putDouble("longitude", longitude);
+        paramPromise.resolve(localWritableNativeMap);
+      }
+    });
+  }
+  
+  public Activity getActivity()
+  {
+    return getCurrentActivity();
+  }
+  
+  public void getCamera(final int paramInt, final Promise paramPromise)
+  {
+    ((UIManagerModule)getReactApplicationContext().getNativeModule(UIManagerModule.class)).addUIBlock(new UIBlock()
+    {
+      public void execute(NativeViewHierarchyManager paramAnonymousNativeViewHierarchyManager)
+      {
+        paramAnonymousNativeViewHierarchyManager = (AirMapView)paramAnonymousNativeViewHierarchyManager.resolveView(paramInt);
+        if (paramAnonymousNativeViewHierarchyManager == null)
+        {
+          paramPromise.reject("AirMapView not found");
+          return;
+        }
+        if (record == null)
+        {
+          paramPromise.reject("AirMapView.map is not valid");
+          return;
+        }
+        paramAnonymousNativeViewHierarchyManager = record.getCameraPosition();
+        WritableNativeMap localWritableNativeMap1 = new WritableNativeMap();
+        localWritableNativeMap1.putDouble("latitude", target.latitude);
+        localWritableNativeMap1.putDouble("longitude", target.longitude);
+        WritableNativeMap localWritableNativeMap2 = new WritableNativeMap();
+        localWritableNativeMap2.putMap("center", localWritableNativeMap1);
+        localWritableNativeMap2.putDouble("heading", bearing);
+        localWritableNativeMap2.putDouble("zoom", zoom);
+        localWritableNativeMap2.putDouble("pitch", tilt);
+        paramPromise.resolve(localWritableNativeMap2);
+      }
+    });
+  }
+  
+  public Map getConstants()
+  {
+    HashMap localHashMap = new HashMap();
+    localHashMap.put("legalNotice", "This license information is displayed in Settings > Google > Open Source on any device running Google Play services.");
+    return localHashMap;
+  }
+  
+  public void getMapBoundaries(final int paramInt, final Promise paramPromise)
+  {
+    ((UIManagerModule)getReactApplicationContext().getNativeModule(UIManagerModule.class)).addUIBlock(new UIBlock()
+    {
+      public void execute(NativeViewHierarchyManager paramAnonymousNativeViewHierarchyManager)
+      {
+        paramAnonymousNativeViewHierarchyManager = (AirMapView)paramAnonymousNativeViewHierarchyManager.resolveView(paramInt);
+        if (paramAnonymousNativeViewHierarchyManager == null)
+        {
+          paramPromise.reject("AirMapView not found");
+          return;
+        }
+        if (record == null)
+        {
+          paramPromise.reject("AirMapView.map is not valid");
+          return;
+        }
+        paramAnonymousNativeViewHierarchyManager = paramAnonymousNativeViewHierarchyManager.getMapBoundaries();
+        WritableNativeMap localWritableNativeMap1 = new WritableNativeMap();
+        WritableNativeMap localWritableNativeMap2 = new WritableNativeMap();
+        WritableNativeMap localWritableNativeMap3 = new WritableNativeMap();
+        localWritableNativeMap2.putDouble("longitude", paramAnonymousNativeViewHierarchyManager[0][0]);
+        localWritableNativeMap2.putDouble("latitude", paramAnonymousNativeViewHierarchyManager[0][1]);
+        localWritableNativeMap3.putDouble("longitude", paramAnonymousNativeViewHierarchyManager[1][0]);
+        localWritableNativeMap3.putDouble("latitude", paramAnonymousNativeViewHierarchyManager[1][1]);
+        localWritableNativeMap1.putMap("northEast", localWritableNativeMap2);
+        localWritableNativeMap1.putMap("southWest", localWritableNativeMap3);
+        paramPromise.resolve(localWritableNativeMap1);
+      }
+    });
+  }
+  
+  public String getName()
+  {
+    return "AirMapModule";
+  }
+  
+  public void pointForCoordinate(final int paramInt, final ReadableMap paramReadableMap, final Promise paramPromise)
+  {
+    ReactApplicationContext localReactApplicationContext = getReactApplicationContext();
+    final double d3 = getResourcesgetDisplayMetricsdensity;
+    boolean bool = paramReadableMap.hasKey("latitude");
+    double d2 = 0.0D;
+    double d1;
+    if (bool) {
+      d1 = paramReadableMap.getDouble("latitude");
+    } else {
+      d1 = 0.0D;
+    }
+    if (paramReadableMap.hasKey("longitude")) {
+      d2 = paramReadableMap.getDouble("longitude");
+    }
+    paramReadableMap = new LatLng(d1, d2);
+    ((UIManagerModule)localReactApplicationContext.getNativeModule(UIManagerModule.class)).addUIBlock(new UIBlock()
+    {
+      public void execute(NativeViewHierarchyManager paramAnonymousNativeViewHierarchyManager)
+      {
+        paramAnonymousNativeViewHierarchyManager = (AirMapView)paramAnonymousNativeViewHierarchyManager.resolveView(paramInt);
+        if (paramAnonymousNativeViewHierarchyManager == null)
+        {
+          paramPromise.reject("AirMapView not found");
+          return;
+        }
+        if (record == null)
+        {
+          paramPromise.reject("AirMapView.map is not valid");
+          return;
+        }
+        paramAnonymousNativeViewHierarchyManager = record.getProjection().toScreenLocation(paramReadableMap);
+        WritableNativeMap localWritableNativeMap = new WritableNativeMap();
+        localWritableNativeMap.putDouble("x", x / d3);
+        localWritableNativeMap.putDouble("y", y / d3);
+        paramPromise.resolve(localWritableNativeMap);
+      }
+    });
+  }
+  
+  public void takeSnapshot(final int paramInt, final ReadableMap paramReadableMap, final Promise paramPromise)
+  {
+    final ReactApplicationContext localReactApplicationContext = getReactApplicationContext();
+    if (paramReadableMap.hasKey("format")) {}
+    for (final String str = paramReadableMap.getString("format");; str = "png") {
+      break;
+    }
+    final Bitmap.CompressFormat localCompressFormat;
+    if (str.equals("png")) {
+      localCompressFormat = Bitmap.CompressFormat.PNG;
+    }
+    for (;;)
+    {
+      break;
+      if (str.equals("jpg")) {
+        localCompressFormat = Bitmap.CompressFormat.JPEG;
+      } else {
+        localCompressFormat = null;
+      }
+    }
+    if (paramReadableMap.hasKey("quality")) {}
+    for (final double d = paramReadableMap.getDouble("quality");; d = 1.0D) {
+      break;
+    }
+    DisplayMetrics localDisplayMetrics = localReactApplicationContext.getResources().getDisplayMetrics();
+    boolean bool = paramReadableMap.hasKey("width");
+    int j = 0;
+    int i;
+    if (bool) {
+      i = (int)(density * paramReadableMap.getDouble("width"));
+    } else {
+      i = 0;
+    }
+    if (paramReadableMap.hasKey("height")) {
+      j = (int)(density * paramReadableMap.getDouble("height"));
+    }
+    if (paramReadableMap.hasKey("result")) {}
+    for (paramReadableMap = paramReadableMap.getString("result");; paramReadableMap = "file") {
+      break;
+    }
+    ((UIManagerModule)localReactApplicationContext.getNativeModule(UIManagerModule.class)).addUIBlock(new UIBlock()
+    {
+      public void execute(NativeViewHierarchyManager paramAnonymousNativeViewHierarchyManager)
+      {
+        paramAnonymousNativeViewHierarchyManager = (AirMapView)paramAnonymousNativeViewHierarchyManager.resolveView(paramInt);
+        if (paramAnonymousNativeViewHierarchyManager == null)
+        {
+          paramPromise.reject("AirMapView not found");
+          return;
+        }
+        if (record == null)
+        {
+          paramPromise.reject("AirMapView.map is not valid");
+          return;
+        }
+        record.snapshot(new GoogleMap.SnapshotReadyCallback()
+        {
+          public void onSnapshotReady(Bitmap paramAnonymous2Bitmap)
+          {
+            if (paramAnonymous2Bitmap == null)
+            {
+              val$promise.reject("Failed to generate bitmap, snapshot = null");
+              return;
+            }
+            Bitmap localBitmap = paramAnonymous2Bitmap;
+            if (val$width.intValue() != 0)
+            {
+              localBitmap = paramAnonymous2Bitmap;
+              if (val$height.intValue() != 0) {
+                if (val$width.intValue() == paramAnonymous2Bitmap.getWidth())
+                {
+                  localBitmap = paramAnonymous2Bitmap;
+                  if (val$height.intValue() == paramAnonymous2Bitmap.getHeight()) {}
+                }
+                else
+                {
+                  localBitmap = Bitmap.createScaledBitmap(paramAnonymous2Bitmap, val$width.intValue(), val$height.intValue(), true);
+                }
+              }
+            }
+            if (val$result.equals("file")) {
+              try
+              {
+                paramAnonymous2Bitmap = new StringBuilder();
+                paramAnonymous2Bitmap.append(".");
+                Object localObject = val$format;
+                paramAnonymous2Bitmap.append((String)localObject);
+                paramAnonymous2Bitmap = paramAnonymous2Bitmap.toString();
+                localObject = val$context;
+                paramAnonymous2Bitmap = File.createTempFile("AirMapSnapshot", paramAnonymous2Bitmap, ((ContextWrapper)localObject).getCacheDir());
+                localObject = new FileOutputStream(paramAnonymous2Bitmap);
+                localBitmap.compress(val$compressFormat, (int)(val$quality * 100.0D), (OutputStream)localObject);
+                AirMapModule.closeQuietly((Closeable)localObject);
+                paramAnonymous2Bitmap = Uri.fromFile(paramAnonymous2Bitmap).toString();
+                val$promise.resolve(paramAnonymous2Bitmap);
+                return;
+              }
+              catch (Exception paramAnonymous2Bitmap)
+              {
+                val$promise.reject(paramAnonymous2Bitmap);
+                return;
+              }
+            }
+            if (val$result.equals("base64"))
+            {
+              paramAnonymous2Bitmap = new ByteArrayOutputStream();
+              localBitmap.compress(val$compressFormat, (int)(val$quality * 100.0D), paramAnonymous2Bitmap);
+              AirMapModule.closeQuietly(paramAnonymous2Bitmap);
+              paramAnonymous2Bitmap = Base64.encodeToString(paramAnonymous2Bitmap.toByteArray(), 2);
+              val$promise.resolve(paramAnonymous2Bitmap);
+            }
+          }
+        });
+      }
+    });
+  }
+}

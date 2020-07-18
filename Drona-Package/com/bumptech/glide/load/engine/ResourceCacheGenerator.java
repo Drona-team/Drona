@@ -1,0 +1,123 @@
+package com.bumptech.glide.load.engine;
+
+import com.bumptech.glide.load.DataSource;
+import com.bumptech.glide.load.Key;
+import com.bumptech.glide.load.Transformation;
+import com.bumptech.glide.load.data.DataFetcher;
+import com.bumptech.glide.load.data.DataFetcher.DataCallback;
+import com.bumptech.glide.load.engine.cache.DiskCache;
+import com.bumptech.glide.load.model.ModelLoader;
+import com.bumptech.glide.load.model.ModelLoader.LoadData;
+import java.io.File;
+import java.util.List;
+
+class ResourceCacheGenerator
+  implements DataFetcherGenerator, DataFetcher.DataCallback<Object>
+{
+  private File cacheFile;
+  private ResourceCacheKey currentKey;
+  private final DecodeHelper<?> helper;
+  private volatile ModelLoader.LoadData<?> loadData;
+  private int modelLoaderIndex;
+  private List<ModelLoader<File, ?>> modelLoaders;
+  private int resourceClassIndex = -1;
+  private int sourceIdIndex;
+  private Key sourceKey;
+  private final DataFetcherGenerator.FetcherReadyCallback vector;
+  
+  ResourceCacheGenerator(DecodeHelper paramDecodeHelper, DataFetcherGenerator.FetcherReadyCallback paramFetcherReadyCallback)
+  {
+    helper = paramDecodeHelper;
+    vector = paramFetcherReadyCallback;
+  }
+  
+  private boolean hasNextModelLoader()
+  {
+    return modelLoaderIndex < modelLoaders.size();
+  }
+  
+  public void cancel()
+  {
+    ModelLoader.LoadData localLoadData = loadData;
+    if (localLoadData != null) {
+      fetcher.cancel();
+    }
+  }
+  
+  public void onDataReady(Object paramObject)
+  {
+    vector.onDataFetcherReady(sourceKey, paramObject, loadData.fetcher, DataSource.RESOURCE_DISK_CACHE, currentKey);
+  }
+  
+  public void onLoadFailed(Exception paramException)
+  {
+    vector.onDataFetcherFailed(currentKey, paramException, loadData.fetcher, DataSource.RESOURCE_DISK_CACHE);
+  }
+  
+  public boolean startNext()
+  {
+    Object localObject = helper.getCacheKeys();
+    boolean bool2 = ((List)localObject).isEmpty();
+    boolean bool1 = false;
+    if (bool2) {
+      return false;
+    }
+    List localList = helper.getRegisteredResourceClasses();
+    if (localList.isEmpty())
+    {
+      if (File.class.equals(helper.getTranscodeClass())) {
+        return false;
+      }
+      localObject = new StringBuilder();
+      ((StringBuilder)localObject).append("Failed to find any load path from ");
+      ((StringBuilder)localObject).append(helper.getModelClass());
+      ((StringBuilder)localObject).append(" to ");
+      ((StringBuilder)localObject).append(helper.getTranscodeClass());
+      throw new IllegalStateException(((StringBuilder)localObject).toString());
+    }
+    for (;;)
+    {
+      if ((modelLoaders != null) && (hasNextModelLoader()))
+      {
+        loadData = null;
+        while (!bool1)
+        {
+          if (!hasNextModelLoader()) {
+            return bool1;
+          }
+          localObject = modelLoaders;
+          int i = modelLoaderIndex;
+          modelLoaderIndex = (i + 1);
+          loadData = ((ModelLoader)((List)localObject).get(i)).buildLoadData(cacheFile, helper.getWidth(), helper.getHeight(), helper.getOptions());
+          if ((loadData != null) && (helper.hasLoadPath(loadData.fetcher.getDataClass())))
+          {
+            loadData.fetcher.loadData(helper.getPriority(), this);
+            bool1 = true;
+          }
+        }
+        return bool1;
+      }
+      resourceClassIndex += 1;
+      if (resourceClassIndex >= localList.size())
+      {
+        sourceIdIndex += 1;
+        if (sourceIdIndex >= ((List)localObject).size()) {
+          return false;
+        }
+        resourceClassIndex = 0;
+      }
+      Key localKey = (Key)((List)localObject).get(sourceIdIndex);
+      Class localClass = (Class)localList.get(resourceClassIndex);
+      Transformation localTransformation = helper.getTransformation(localClass);
+      currentKey = new ResourceCacheKey(helper.getArrayPool(), localKey, helper.getSignature(), helper.getWidth(), helper.getHeight(), localTransformation, localClass, helper.getOptions());
+      cacheFile = helper.getDiskCache().get(currentKey);
+      if (cacheFile != null)
+      {
+        sourceKey = localKey;
+        modelLoaders = helper.getModelLoaders(cacheFile);
+        modelLoaderIndex = 0;
+      }
+    }
+    return bool1;
+  }
+}

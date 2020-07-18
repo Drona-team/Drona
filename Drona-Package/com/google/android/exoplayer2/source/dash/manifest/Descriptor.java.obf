@@ -1,0 +1,60 @@
+package com.google.android.exoplayer2.source.dash.manifest;
+
+import androidx.annotation.NonNull;
+import androidx.annotation.Nullable;
+import com.google.android.exoplayer2.util.Util;
+
+public final class Descriptor
+{
+  @Nullable
+  public final String id;
+  @NonNull
+  public final String schemeIdUri;
+  @Nullable
+  public final String value;
+  
+  public Descriptor(@NonNull String paramString1, @Nullable String paramString2, @Nullable String paramString3)
+  {
+    schemeIdUri = paramString1;
+    value = paramString2;
+    id = paramString3;
+  }
+  
+  public boolean equals(@Nullable Object paramObject)
+  {
+    if (this == paramObject) {
+      return true;
+    }
+    if (paramObject != null)
+    {
+      if (getClass() != paramObject.getClass()) {
+        return false;
+      }
+      paramObject = (Descriptor)paramObject;
+      return (Util.areEqual(schemeIdUri, schemeIdUri)) && (Util.areEqual(value, value)) && (Util.areEqual(id, id));
+    }
+    return false;
+  }
+  
+  public int hashCode()
+  {
+    String str = schemeIdUri;
+    int k = 0;
+    int i;
+    if (str != null) {
+      i = schemeIdUri.hashCode();
+    } else {
+      i = 0;
+    }
+    int j;
+    if (value != null) {
+      j = value.hashCode();
+    } else {
+      j = 0;
+    }
+    if (id != null) {
+      k = id.hashCode();
+    }
+    return (i * 31 + j) * 31 + k;
+  }
+}

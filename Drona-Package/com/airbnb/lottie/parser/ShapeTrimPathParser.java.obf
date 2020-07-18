@@ -1,0 +1,53 @@
+package com.airbnb.lottie.parser;
+
+import com.airbnb.lottie.LottieComposition;
+import com.airbnb.lottie.model.animatable.AnimatableFloatValue;
+import com.airbnb.lottie.model.content.ShapeTrimPath;
+import com.airbnb.lottie.model.content.ShapeTrimPath.Type;
+import com.airbnb.lottie.parser.moshi.JsonReader;
+import com.airbnb.lottie.parser.moshi.JsonReader.Options;
+import java.io.IOException;
+
+class ShapeTrimPathParser
+{
+  private static JsonReader.Options NAMES = JsonReader.Options.of(new String[] { "s", "e", "o", "nm", "m", "hd" });
+  
+  private ShapeTrimPathParser() {}
+  
+  static ShapeTrimPath parse(JsonReader paramJsonReader, LottieComposition paramLottieComposition)
+    throws IOException
+  {
+    String str = null;
+    Object localObject1 = str;
+    Object localObject2 = localObject1;
+    Object localObject3 = localObject2;
+    Object localObject4 = localObject3;
+    boolean bool = false;
+    while (paramJsonReader.hasNext()) {
+      switch (paramJsonReader.selectName(NAMES))
+      {
+      default: 
+        paramJsonReader.skipValue();
+        break;
+      case 5: 
+        bool = paramJsonReader.nextBoolean();
+        break;
+      case 4: 
+        localObject1 = ShapeTrimPath.Type.forId(paramJsonReader.nextInt());
+        break;
+      case 3: 
+        str = paramJsonReader.nextString();
+        break;
+      case 2: 
+        localObject4 = AnimatableValueParser.parseFloat(paramJsonReader, paramLottieComposition, false);
+        break;
+      case 1: 
+        localObject3 = AnimatableValueParser.parseFloat(paramJsonReader, paramLottieComposition, false);
+        break;
+      case 0: 
+        localObject2 = AnimatableValueParser.parseFloat(paramJsonReader, paramLottieComposition, false);
+      }
+    }
+    return new ShapeTrimPath(str, (ShapeTrimPath.Type)localObject1, (AnimatableFloatValue)localObject2, (AnimatableFloatValue)localObject3, (AnimatableFloatValue)localObject4, bool);
+  }
+}

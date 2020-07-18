@@ -1,0 +1,56 @@
+package androidx.room;
+
+import androidx.annotation.RestrictTo;
+import androidx.sqlite.db.SupportSQLiteStatement;
+import java.util.concurrent.atomic.AtomicBoolean;
+
+@RestrictTo({androidx.annotation.RestrictTo.Scope.LIBRARY_GROUP_PREFIX})
+public abstract class SharedSQLiteStatement
+{
+  private final RoomDatabase mDatabase;
+  private final AtomicBoolean mLock = new AtomicBoolean(false);
+  private volatile SupportSQLiteStatement mStmt;
+  
+  public SharedSQLiteStatement(RoomDatabase paramRoomDatabase)
+  {
+    mDatabase = paramRoomDatabase;
+  }
+  
+  private SupportSQLiteStatement createNewStatement()
+  {
+    String str = createQuery();
+    return mDatabase.compileStatement(str);
+  }
+  
+  private SupportSQLiteStatement getStmt(boolean paramBoolean)
+  {
+    if (paramBoolean)
+    {
+      if (mStmt == null) {
+        mStmt = createNewStatement();
+      }
+      return mStmt;
+    }
+    return createNewStatement();
+  }
+  
+  public SupportSQLiteStatement acquire()
+  {
+    assertNotMainThread();
+    return getStmt(mLock.compareAndSet(false, true));
+  }
+  
+  protected void assertNotMainThread()
+  {
+    mDatabase.assertNotMainThread();
+  }
+  
+  protected abstract String createQuery();
+  
+  public void release(SupportSQLiteStatement paramSupportSQLiteStatement)
+  {
+    if (paramSupportSQLiteStatement == mStmt) {
+      mLock.set(false);
+    }
+  }
+}

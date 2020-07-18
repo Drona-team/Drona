@@ -1,0 +1,110 @@
+package com.bugsnag.android;
+
+import android.content.Context;
+import android.net.ConnectivityManager;
+import android.os.Build.VERSION;
+import kotlin.Metadata;
+import kotlin.Result;
+import kotlin.Result.Companion;
+import kotlin.ResultKt;
+import kotlin.TypeCastException;
+import kotlin.Unit;
+import kotlin.jvm.functions.Function1;
+import org.jetbrains.annotations.NotNull;
+import org.jetbrains.annotations.Nullable;
+
+@Metadata(bv={1, 0, 3}, d1={"\000<\n\002\030\002\n\002\030\002\n\000\n\002\030\002\n\000\n\002\030\002\n\002\020\013\n\002\030\002\n\002\b\002\n\002\020\002\n\002\030\002\n\002\b\002\n\002\030\002\n\002\b\004\n\002\020\016\n\002\b\002\b\000\030\0002\0020\001B8\022\006\020\002\032\0020\003\022)\020\004\032%\022\023\022\0210\006?\006\f\b\007\022\b\b\b\022\004\b\b(\t\022\004\022\0020\n\030\0010\005j\004\030\001`\013?\006\002\020\fJ\b\020\020\032\0020\006H\026J\b\020\021\032\0020\nH\026J\b\020\022\032\0020\023H\026J\b\020\024\032\0020\nH\026R\016\020\r\032\0020\016X?\004?\006\002\n\000R\016\020\017\032\0020\001X?\004?\006\002\n\000?\006\025"}, d2={"Lcom/bugsnag/android/ConnectivityCompat;", "Lcom/bugsnag/android/Connectivity;", "context", "Landroid/content/Context;", "callback", "Lkotlin/Function1;", "", "Lkotlin/ParameterName;", "name", "connected", "", "Lcom/bugsnag/android/NetworkChangeCallback;", "(Landroid/content/Context;Lkotlin/jvm/functions/Function1;)V", "cm", "Landroid/net/ConnectivityManager;", "connectivity", "hasNetworkConnection", "registerForNetworkChanges", "retrieveNetworkAccessState", "", "unregisterForNetworkChanges", "bugsnag-android-core_release"}, k=1, mv={1, 1, 16})
+public final class ConnectivityCompat
+  implements Connectivity
+{
+  private final ConnectivityManager cm;
+  private final Connectivity connectivity;
+  
+  public ConnectivityCompat(@NotNull Context paramContext, @Nullable Function1<? super Boolean, Unit> paramFunction1)
+  {
+    Object localObject = paramContext.getSystemService("connectivity");
+    if (localObject != null)
+    {
+      cm = ((ConnectivityManager)localObject);
+      if (Build.VERSION.SDK_INT >= 24) {
+        paramContext = (Connectivity)new ConnectivityApi24(cm, paramFunction1);
+      } else {
+        paramContext = (Connectivity)new ConnectivityLegacy(paramContext, cm, paramFunction1);
+      }
+      connectivity = paramContext;
+      return;
+    }
+    throw new TypeCastException("null cannot be cast to non-null type android.net.ConnectivityManager");
+  }
+  
+  public boolean hasNetworkConnection()
+  {
+    Object localObject2;
+    try
+    {
+      Object localObject1 = Result.Companion;
+      localObject1 = Result.constructor-impl(Boolean.valueOf(connectivity.hasNetworkConnection()));
+    }
+    catch (Throwable localThrowable)
+    {
+      Result.Companion localCompanion = Result.Companion;
+      localObject2 = Result.constructor-impl(ResultKt.createFailure(localThrowable));
+    }
+    if (Result.exceptionOrNull-impl(localObject2) != null) {
+      localObject2 = Boolean.valueOf(true);
+    }
+    return ((Boolean)localObject2).booleanValue();
+  }
+  
+  public void registerForNetworkChanges()
+  {
+    try
+    {
+      Result.Companion localCompanion1 = Result.Companion;
+      connectivity.registerForNetworkChanges();
+      Result.constructor-impl(Unit.INSTANCE);
+      return;
+    }
+    catch (Throwable localThrowable)
+    {
+      Result.Companion localCompanion2 = Result.Companion;
+      Result.constructor-impl(ResultKt.createFailure(localThrowable));
+    }
+  }
+  
+  @NotNull
+  public String retrieveNetworkAccessState()
+  {
+    Object localObject2;
+    try
+    {
+      Object localObject1 = Result.Companion;
+      localObject1 = Result.constructor-impl(connectivity.retrieveNetworkAccessState());
+    }
+    catch (Throwable localThrowable)
+    {
+      Result.Companion localCompanion = Result.Companion;
+      localObject2 = Result.constructor-impl(ResultKt.createFailure(localThrowable));
+    }
+    if (Result.exceptionOrNull-impl(localObject2) != null) {
+      localObject2 = "unknown";
+    }
+    return (String)localObject2;
+  }
+  
+  public void unregisterForNetworkChanges()
+  {
+    try
+    {
+      Result.Companion localCompanion1 = Result.Companion;
+      connectivity.unregisterForNetworkChanges();
+      Result.constructor-impl(Unit.INSTANCE);
+      return;
+    }
+    catch (Throwable localThrowable)
+    {
+      Result.Companion localCompanion2 = Result.Companion;
+      Result.constructor-impl(ResultKt.createFailure(localThrowable));
+    }
+  }
+}
